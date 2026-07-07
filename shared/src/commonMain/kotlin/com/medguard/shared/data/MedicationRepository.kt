@@ -119,6 +119,11 @@ class MedicationRepository(
         )
     }
 
+    /** Removes a single dose log (undo of a just-recorded take); missing id is a no-op. */
+    suspend fun deleteDoseLog(id: String) = withContext(dispatcher) {
+        queries.deleteDoseLog(id)
+    }
+
     suspend fun updateDoseStatus(id: String, status: DoseStatus, takenAt: Instant?) =
         withContext(dispatcher) {
             queries.updateDoseLogStatus(

@@ -96,6 +96,9 @@ insertDoseLog:
 INSERT INTO doseLog(id, scheduleId, plannedAt, takenAt, status)
 VALUES (?, ?, ?, ?, ?);
 
+deleteDoseLog:
+DELETE FROM doseLog WHERE id = :id;
+
 updateDoseLogStatus:
 UPDATE doseLog SET status = :status, takenAt = :takenAt WHERE id = :id;
 

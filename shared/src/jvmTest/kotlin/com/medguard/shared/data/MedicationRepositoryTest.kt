@@ -175,6 +175,32 @@ class MedicationRepositoryTest {
     }
 
     @Test
+    fun `deleteDoseLog removes the dose and latestDose falls back`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(), schedule())
+        repo.logDose(dose("d-1", plannedAtMillis = 1_000))
+        repo.logDose(dose("d-2", plannedAtMillis = 2_000))
+        assertEquals("d-2", repo.latestDose("sch-1")?.id)
+
+        repo.deleteDoseLog("d-2")
+
+        assertEquals("d-1", repo.latestDose("sch-1")?.id)
+        repo.deleteDoseLog("d-1")
+        assertNull(repo.latestDose("sch-1"))
+    }
+
+    @Test
+    fun `deleteDoseLog of a missing id is a no-op`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(), schedule())
+        repo.logDose(dose("d-1", plannedAtMillis = 1_000))
+
+        repo.deleteDoseLog("d-ghost")
+
+        assertEquals("d-1", repo.latestDose("sch-1")?.id)
+    }
+
+    @Test
     fun `updateDoseStatus records status and takenAt`() = runTest {
         val repo = repository()
         repo.insertMedication(medication(), schedule())
