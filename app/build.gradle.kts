@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -23,7 +25,16 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "PROXY_BASE_URL", "\"http://10.0.2.2:8787\"")
+            // Overridable per developer machine without touching the repo:
+            // set medguard.proxyBaseUrl in local.properties (e.g. the Mac's
+            // LAN IP for a Wi-Fi device, or 127.0.0.1 with adb reverse).
+            val localProperties = Properties().apply {
+                val file = rootProject.file("local.properties")
+                if (file.exists()) file.inputStream().use { load(it) }
+            }
+            val proxyBaseUrl =
+                localProperties.getProperty("medguard.proxyBaseUrl") ?: "http://10.0.2.2:8787"
+            buildConfigField("String", "PROXY_BASE_URL", "\"$proxyBaseUrl\"")
         }
         release {
             optimization {
