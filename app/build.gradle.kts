@@ -22,10 +22,18 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "PROXY_BASE_URL", "\"http://10.0.2.2:8787\"")
+        }
         release {
             optimization {
                 enable = false
             }
+            buildConfigField(
+                "String",
+                "PROXY_BASE_URL",
+                "\"https://medguard-proxy.example.workers.dev\"",
+            )
         }
     }
     compileOptions {
@@ -34,6 +42,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -47,7 +56,12 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.okhttp)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
