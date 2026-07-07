@@ -142,6 +142,29 @@ class ExtractionParserTest {
     }
 
     @Test
+    fun `non-finite confidence sanitizes to zero and needs review`() {
+        // "NaN"/"Infinity" string contents survive doubleOrNull as non-finite
+        // doubles; NaN defeats both coerceIn and the needsReview threshold
+        // comparison, so non-finite confidence must be forced to 0.0.
+        val payload = """
+            {"drugName":{"value":"Ibuprofen","confidence":"NaN"},
+             "activeIngredients":[],
+             "dosage":{"value":"200 mg","confidence":"Infinity"},
+             "form":{"value":"tablet","confidence":"-Infinity"},
+             "frequency":{"value":{"timesPerDay":3},"confidence":0.9},
+             "withFood":{"value":true,"confidence":0.9}}
+        """.trimIndent()
+        val extraction = parseSuccess(payload)
+
+        assertEquals(0.0, extraction.drugName.confidence)
+        assertTrue(extraction.drugName.needsReview)
+        assertEquals(0.0, extraction.dosage.confidence)
+        assertTrue(extraction.dosage.needsReview)
+        assertEquals(0.0, extraction.form.confidence)
+        assertTrue(extraction.form.needsReview)
+    }
+
+    @Test
     fun `empty activeIngredients array parses`() {
         val payload = """
             {"drugName":{"value":"Ibuprofen","confidence":0.9},

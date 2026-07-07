@@ -27,7 +27,7 @@ class ExtractionParser {
 
         val drugName = root.field("drugName") { it.stringOrNull() }
         if (drugName.value == null) {
-            return@runCatching ExtractionResult.Malformed("drugName is missing")
+            return@runCatching ExtractionResult.Malformed("drugName missing or unreadable")
         }
 
         ExtractionResult.Success(
@@ -57,8 +57,13 @@ class ExtractionParser {
     private fun <T> JsonObject?.toField(readValue: (JsonElement) -> T?): ExtractedField<T> {
         val wrapper = this ?: return ExtractedField(null, 0.0)
         val value = wrapper["value"]?.let(readValue)
-        val confidence = (wrapper["confidence"] as? JsonPrimitive)?.doubleOrNull ?: 0.0
-        return ExtractedField(value, confidence.coerceIn(0.0, 1.0))
+        val confidence = (wrapper["confidence"] as? JsonPrimitive)?.doubleOrNull
+            // NaN slips through coerceIn and compares false against the
+            // review threshold, so non-finite values are treated as 0.0.
+            ?.takeIf { it.isFinite() }
+            ?.coerceIn(0.0, 1.0)
+            ?: 0.0
+        return ExtractedField(value, confidence)
     }
 
     private fun JsonElement.stringOrNull(): String? =
