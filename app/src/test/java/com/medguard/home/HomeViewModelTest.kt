@@ -12,6 +12,7 @@ import com.medguard.shared.db.MedGuardDb
 import com.medguard.shared.extraction.Frequency
 import java.util.Properties
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +28,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.TimeZone
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -191,6 +193,144 @@ class HomeViewModelTest {
         val logged = repository.latestDose("sched-nofreq")!!
         assertEquals(fixedNow, logged.plannedAt)
         assertEquals(fixedNow, logged.takenAt)
+    }
+
+    @Test
+    fun `takeNow within 30 minutes of the last take raises the double dose guard`() = runTest(dispatcher) {
+        insert("a", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 5.hours)
+        logTaken("a", fixedNow - 29.minutes)
+        val vm = viewModel()
+        collectState(vm)
+
+        vm.takeNow(vm.state.value.taking.single())
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val confirm = vm.takeConfirm.value
+        assertEquals(29L, confirm?.minutesAgo)
+        assertEquals("a", confirm?.card?.item?.medication?.id)
+        // Nothing was logged.
+        assertEquals(fixedNow - 29.minutes, repository.latestDose("sched-a")?.takenAt)
+        assertNull(vm.recentTake.value)
+    }
+
+    @Test
+    fun `takeNow more than 30 minutes after the last take logs directly`() = runTest(dispatcher) {
+        insert("a", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 5.hours)
+        logTaken("a", fixedNow - 31.minutes)
+        val vm = viewModel()
+        collectState(vm)
+
+        vm.takeNow(vm.state.value.taking.single())
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(vm.takeConfirm.value)
+        assertEquals(fixedNow, repository.latestDose("sched-a")?.takenAt)
+    }
+
+    @Test
+    fun `confirmTakeAnyway records despite the guard`() = runTest(dispatcher) {
+        insert("a", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 5.hours)
+        logTaken("a", fixedNow - 10.minutes)
+        val vm = viewModel()
+        collectState(vm)
+        vm.takeNow(vm.state.value.taking.single())
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.confirmTakeAnyway()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(vm.takeConfirm.value)
+        assertEquals(fixedNow, repository.latestDose("sched-a")?.takenAt)
+        assertEquals(fixedNow + 6.hours, vm.state.value.taking.single().nextDoseAt)
+    }
+
+    @Test
+    fun `dismissTakeConfirm clears the guard without logging`() = runTest(dispatcher) {
+        insert("a", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 5.hours)
+        logTaken("a", fixedNow - 10.minutes)
+        val vm = viewModel()
+        collectState(vm)
+        vm.takeNow(vm.state.value.taking.single())
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.dismissTakeConfirm()
+
+        assertNull(vm.takeConfirm.value)
+        assertEquals(fixedNow - 10.minutes, repository.latestDose("sched-a")?.takenAt)
+    }
+
+    @Test
+    fun `takeNow exposes an undoable recent take`() = runTest(dispatcher) {
+        insert("a", drugName = "Ibuprofen", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 2.hours)
+        val vm = viewModel()
+        collectState(vm)
+
+        vm.takeNow(vm.state.value.taking.single())
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val recent = vm.recentTake.value
+        assertEquals("Ibuprofen", recent?.drugName)
+        assertEquals(repository.latestDose("sched-a")?.id, recent?.doseId)
+    }
+
+    @Test
+    fun `undoTake removes the log and restores the previous next dose`() = runTest(dispatcher) {
+        insert("a", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 2.hours)
+        val vm = viewModel()
+        collectState(vm)
+        vm.takeNow(vm.state.value.taking.single())
+        dispatcher.scheduler.advanceUntilIdle()
+        val doseId = vm.recentTake.value!!.doseId
+        assertEquals(fixedNow + 6.hours, vm.state.value.taking.single().nextDoseAt)
+
+        vm.undoTake(doseId)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(repository.latestDose("sched-a"))
+        assertNull(vm.recentTake.value)
+        // Back to the untaken first dose, due at startedAt.
+        assertEquals(fixedNow - 2.hours, vm.state.value.taking.single().nextDoseAt)
+    }
+
+    @Test
+    fun `dueCount counts due and overdue taking cards`() = runTest(dispatcher) {
+        insert("overdue", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 2.hours)
+        insert("due-now", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 6.hours)
+        logTaken("due-now", fixedNow - 6.hours) // next dose exactly now
+        insert("later", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 8.hours)
+        logTaken("later", fixedNow - 2.hours) // next dose in 4h
+        insert("nofreq", frequency = null, startedAt = fixedNow - 1.hours)
+        val vm = viewModel()
+        collectState(vm)
+
+        assertEquals(2, vm.state.value.dueCount)
+        val byId = vm.state.value.taking.associateBy { it.item.medication.id }
+        assertTrue(byId.getValue("overdue").isDue)
+        assertTrue(byId.getValue("due-now").isDue)
+        assertFalse(byId.getValue("later").isDue)
+        assertFalse(byId.getValue("nofreq").isDue)
+    }
+
+    @Test
+    fun `taking resorts after the most urgent dose is taken`() = runTest(dispatcher) {
+        insert("urgent", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 2.hours)
+        insert("later", frequency = Frequency.EveryHours(2), startedAt = fixedNow - 8.hours)
+        logTaken("later", fixedNow - 1.hours) // next dose in 1h
+        val vm = viewModel()
+        collectState(vm)
+        assertEquals(
+            listOf("urgent", "later"),
+            vm.state.value.taking.map { it.item.medication.id },
+        )
+
+        vm.takeNow(vm.state.value.taking.first())
+        dispatcher.scheduler.advanceUntilIdle()
+
+        // urgent's next dose is now in 6h, behind later's 1h.
+        assertEquals(
+            listOf("later", "urgent"),
+            vm.state.value.taking.map { it.item.medication.id },
+        )
     }
 
     @Test

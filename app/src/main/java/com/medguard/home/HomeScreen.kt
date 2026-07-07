@@ -28,6 +28,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,10 +36,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +56,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.medguard.dose.RecordedTake
 import com.medguard.format.countdownText
 import com.medguard.format.doseTimeText
 import com.medguard.format.toHumanText
@@ -69,7 +76,13 @@ import kotlinx.datetime.TimeZone
 @Composable
 fun HomeScreen(
     state: HomeUiState,
+    takeConfirm: TakeConfirmation?,
+    recentTake: RecordedTake?,
     onTakeNow: (DoseCard) -> Unit,
+    onConfirmTakeAnyway: () -> Unit,
+    onDismissTakeConfirm: () -> Unit,
+    onUndoTake: (String) -> Unit,
+    onRecentTakeHandled: () -> Unit,
     onPlay: (String) -> Unit,
     onDelete: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
@@ -80,14 +93,32 @@ fun HomeScreen(
     var showSourceSheet by remember { mutableStateOf(false) }
     var showDisclaimer by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<MedicationWithSchedule?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Fresh wall-clock reading per state emission: the view model re-emits at
     // least every minute, which is exactly the countdown's resolution.
     val now = remember(state) { Clock.System.now() }
     val zone = remember { TimeZone.currentSystemDefault() }
 
+    // One undo snackbar per recorded take; timing out or dismissing keeps
+    // the dose, only the explicit Undo action removes it.
+    LaunchedEffect(recentTake) {
+        val take = recentTake ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = "${take.drugName} recorded",
+            actionLabel = "Undo",
+            duration = SnackbarDuration.Short,
+        )
+        if (result == SnackbarResult.ActionPerformed) {
+            onUndoTake(take.doseId)
+        } else {
+            onRecentTakeHandled()
+        }
+    }
+
     Scaffold(
         modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("MedGuard") },
@@ -129,6 +160,7 @@ fun HomeScreen(
                 item(key = "hero") {
                     NextDoseHeroCard(
                         card = hero,
+                        moreDueCount = if (state.dueCount >= 2) state.dueCount - 1 else 0,
                         now = now,
                         zone = zone,
                         onTakeNow = { onTakeNow(hero) },
@@ -154,6 +186,7 @@ fun HomeScreen(
                             card = card,
                             now = now,
                             zone = zone,
+                            onTakeNow = { onTakeNow(card) },
                             onClick = { onOpenDetail(card.item.medication.id) },
                         )
                     }
@@ -177,6 +210,15 @@ fun HomeScreen(
             }
             item(key = "fab-spacer") { Spacer(Modifier.height(72.dp)) }
         }
+    }
+
+    takeConfirm?.let { confirm ->
+        DoubleDoseDialog(
+            drugName = confirm.card.item.medication.drugName,
+            minutesAgo = confirm.minutesAgo,
+            onConfirm = onConfirmTakeAnyway,
+            onDismiss = onDismissTakeConfirm,
+        )
     }
 
     pendingDelete?.let { row ->
@@ -262,6 +304,7 @@ private fun Urgency.countdownColor(): Color = when (this) {
 @Composable
 private fun NextDoseHeroCard(
     card: DoseCard,
+    moreDueCount: Int,
     now: Instant,
     zone: TimeZone,
     onTakeNow: () -> Unit,
@@ -316,6 +359,14 @@ private fun NextDoseHeroCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            if (moreDueCount > 0) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "and $moreDueCount more due now",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             Spacer(Modifier.height(16.dp))
             Button(
                 onClick = onTakeNow,
@@ -335,6 +386,7 @@ private fun TakingCard(
     card: DoseCard,
     now: Instant,
     zone: TimeZone,
+    onTakeNow: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -396,9 +448,50 @@ private fun TakingCard(
                     style = MaterialTheme.typography.labelLarge,
                     color = urgency.countdownColor(),
                 )
+                if (card.isDue) {
+                    Spacer(Modifier.height(4.dp))
+                    FilledTonalButton(
+                        onClick = onTakeNow,
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 48.dp)
+                            .semanticsLabel("Take ${medication.drugName} now"),
+                    ) {
+                        Text("Take")
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun DoubleDoseDialog(
+    drugName: String,
+    minutesAgo: Long,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val ago = if (minutesAgo < 1) "moments ago" else "$minutesAgo minutes ago"
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Record another dose?") },
+        text = {
+            Text(
+                "You recorded $drugName $ago. Taking it again this soon " +
+                    "may be a double dose.",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Record anyway", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 @Composable

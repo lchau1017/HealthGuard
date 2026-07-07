@@ -78,6 +78,8 @@ private fun MedGuardApp(modifier: Modifier = Modifier) {
     val homeViewModel: HomeViewModel = koinViewModel()
     val confirmState by confirmViewModel.state.collectAsState()
     val homeState by homeViewModel.state.collectAsState()
+    val homeTakeConfirm by homeViewModel.takeConfirm.collectAsState()
+    val homeRecentTake by homeViewModel.recentTake.collectAsState()
 
     fun processPickedImage(uri: Uri) {
         scope.launch {
@@ -167,7 +169,13 @@ private fun MedGuardApp(modifier: Modifier = Modifier) {
     } else {
         HomeScreen(
             state = homeState,
+            takeConfirm = homeTakeConfirm,
+            recentTake = homeRecentTake,
             onTakeNow = homeViewModel::takeNow,
+            onConfirmTakeAnyway = homeViewModel::confirmTakeAnyway,
+            onDismissTakeConfirm = homeViewModel::dismissTakeConfirm,
+            onUndoTake = homeViewModel::undoTake,
+            onRecentTakeHandled = homeViewModel::clearRecentTake,
             onPlay = homeViewModel::onPlay,
             onDelete = homeViewModel::onDelete,
             onOpenDetail = { detailMedicationId = it },

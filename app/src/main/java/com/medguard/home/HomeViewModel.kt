@@ -4,12 +4,13 @@ package com.medguard.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.medguard.shared.data.DoseStatus
+import com.medguard.dose.RecordedTake
+import com.medguard.dose.isDoubleDose
+import com.medguard.dose.recordTakenDose
 import com.medguard.shared.data.MedicationRepository
 import com.medguard.shared.data.MedicationWithSchedule
-import com.medguard.shared.data.StoredDoseLog
 import com.medguard.shared.domain.nextDose
-import java.util.UUID
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.delay
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -35,6 +37,8 @@ data class DoseCard(
     /** When the next dose is due; past = overdue; null = no frequency. */
     val nextDoseAt: Instant?,
     val lastTaken: Instant?,
+    /** Due now or overdue (as of the state's computation time). */
+    val isDue: Boolean = false,
 )
 
 data class HomeUiState(
@@ -44,7 +48,12 @@ data class HomeUiState(
     val taking: List<DoseCard> = emptyList(),
     /** Dormant or stopped medications, newest first. */
     val cabinet: List<MedicationWithSchedule> = emptyList(),
+    /** How many taking entries are due now or overdue. */
+    val dueCount: Int = 0,
 )
+
+/** A takeNow blocked by the double-dose window, awaiting user confirmation. */
+data class TakeConfirmation(val card: DoseCard, val minutesAgo: Long)
 
 /**
  * Backs the home screen. State recomputes on any of three triggers: the
@@ -61,6 +70,16 @@ class HomeViewModel(
 
     private val refresh = MutableStateFlow(0)
 
+    private val _takeConfirm = MutableStateFlow<TakeConfirmation?>(null)
+
+    /** Non-null while a double-dose confirmation dialog should be showing. */
+    val takeConfirm: StateFlow<TakeConfirmation?> = _takeConfirm.asStateFlow()
+
+    private val _recentTake = MutableStateFlow<RecordedTake?>(null)
+
+    /** Non-null while an undo snackbar for the last take should be showing. */
+    val recentTake: StateFlow<RecordedTake?> = _recentTake.asStateFlow()
+
     val state: StateFlow<HomeUiState> =
         combine(repository.medications(), ticker, refresh) { rows, _, _ -> rows }
             .map(::buildState)
@@ -75,10 +94,12 @@ class HomeViewModel(
                 // rows written by other paths — plannedAt is the best stand-in.
                 val latest = repository.latestDose(row.schedule.id)
                 val lastTaken = latest?.let { it.takenAt ?: it.plannedAt }
+                val nextDoseAt = nextDose(row.schedule, lastTaken, now, zone)
                 DoseCard(
                     item = row,
-                    nextDoseAt = nextDose(row.schedule, lastTaken, now, zone),
+                    nextDoseAt = nextDoseAt,
                     lastTaken = lastTaken,
+                    isDue = nextDoseAt != null && nextDoseAt - now < 1.minutes,
                 )
             }
             // Ascending nextDoseAt puts the most overdue (earliest) instant
@@ -88,21 +109,62 @@ class HomeViewModel(
             nextUp = taking.firstOrNull { it.nextDoseAt != null },
             taking = taking,
             cabinet = rows.filterNot { it.isActive },
+            dueCount = taking.count { it.isDue },
         )
     }
 
-    /** Records the dose as taken now and recomputes the schedule. */
+    /**
+     * Records the dose as taken now — unless the last take was within the
+     * double-dose window, in which case [takeConfirm] is raised instead and
+     * nothing is logged until [confirmTakeAnyway].
+     */
     fun takeNow(card: DoseCard) {
-        viewModelScope.launch {
-            repository.logDose(
-                StoredDoseLog(
-                    id = UUID.randomUUID().toString(),
-                    scheduleId = card.item.schedule.id,
-                    plannedAt = card.nextDoseAt ?: clock(),
-                    takenAt = clock(),
-                    status = DoseStatus.TAKEN,
-                ),
+        val now = clock()
+        val lastTaken = card.lastTaken
+        if (isDoubleDose(lastTaken, now)) {
+            _takeConfirm.value = TakeConfirmation(
+                card = card,
+                minutesAgo = (now - lastTaken!!).inWholeMinutes,
             )
+            return
+        }
+        record(card)
+    }
+
+    /** User accepted the double-dose warning: record it after all. */
+    fun confirmTakeAnyway() {
+        val pending = _takeConfirm.value ?: return
+        _takeConfirm.value = null
+        record(pending.card)
+    }
+
+    fun dismissTakeConfirm() {
+        _takeConfirm.value = null
+    }
+
+    /** Undoes a take recorded via [takeNow]/[confirmTakeAnyway]. */
+    fun undoTake(doseId: String) {
+        viewModelScope.launch {
+            repository.deleteDoseLog(doseId)
+            _recentTake.value = null
+            refresh.update { it + 1 }
+        }
+    }
+
+    /** The undo snackbar timed out or was dismissed. */
+    fun clearRecentTake() {
+        _recentTake.value = null
+    }
+
+    private fun record(card: DoseCard) {
+        viewModelScope.launch {
+            val doseId = recordTakenDose(
+                repository = repository,
+                scheduleId = card.item.schedule.id,
+                plannedAt = card.nextDoseAt,
+                now = clock(),
+            )
+            _recentTake.value = RecordedTake(doseId, card.item.medication.drugName)
             refresh.update { it + 1 }
         }
     }
