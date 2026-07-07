@@ -44,17 +44,22 @@ Create `backend/server/.env` (git-ignored) containing your key:
 OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-Then, from the repository root (this also works in Android Studio's built-in Terminal tab):
+The `run` task loads that file automatically, so starting the server is just:
 
 ```bash
-OPENROUTER_API_KEY=$(cut -d= -f2 backend/server/.env) ./gradlew :backend:server:run
+./gradlew :backend:server:run
 ```
 
-Or simply inline the key:
+**From Android Studio instead of a terminal:** open the Gradle tool window
+(the elephant icon, right edge) → `MedGuard → backend → server → Tasks →
+application → run` and double-click it. Android Studio adds it to the run
+configuration dropdown next to ▶, so from then on you can start the backend
+with the Run button and stop it with the red ■ — no terminal needed. (A
+ready-made "backend server" run configuration may already appear in the
+dropdown after a project reload.)
 
-```bash
-OPENROUTER_API_KEY=sk-or-v1-... ./gradlew :backend:server:run
-```
+An environment variable still wins over `.env` if you prefer:
+`OPENROUTER_API_KEY=sk-or-v1-... ./gradlew :backend:server:run`
 
 Success looks like:
 
