@@ -25,4 +25,4 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build and test
-        run: ./gradlew :shared:jvmTest :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+        run: ./gradlew :shared:jvmTest :app:testDebugUnitTest :backend:server:test :app:lintDebug :app:assembleDebug

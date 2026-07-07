@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 rootProject.name = "MedGuard"
 include(":app")
 include(":shared")
+include(":backend:server")
