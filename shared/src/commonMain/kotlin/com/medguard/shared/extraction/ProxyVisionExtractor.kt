@@ -16,6 +16,10 @@ import kotlinx.serialization.json.Json
  * failure (unreachable host, non-2xx status) maps to
  * [ExtractionResult.Unavailable]; a 2xx body is handed to [ExtractionParser],
  * which owns the Malformed-vs-Success decision. Never throws.
+ *
+ * The caller owns [client] configuration: install HttpTimeout (or equivalent)
+ * on it, otherwise a hung proxy suspends [extract] indefinitely — Unavailable
+ * only covers failures the client itself surfaces.
  */
 class ProxyVisionExtractor(
     private val client: HttpClient,
