@@ -3,10 +3,11 @@ package com.medguard.confirm
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -14,58 +15,87 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
 /**
- * Renders the extraction flow: progress while the label is being read, the
- * editable review list on success, and a retriable error otherwise. Fields
- * the model was unsure about are flagged and must be edited or confirmed
- * before Accept unlocks.
+ * The import/confirm flow, presented as a full-width dialog card over the
+ * home screen: progress while the label is being read, the editable review
+ * list (plus an optional category label) on success, and a retriable error
+ * otherwise. Fields the model was unsure about are flagged and must be edited
+ * or confirmed before Accept unlocks.
+ *
+ * The scrim never dismisses (an accidental tap must not throw away edits);
+ * only the back gesture or the explicit Cancel button calls [onCancel]. The
+ * host is expected to hide this dialog when the state is Idle or Saved.
  */
 @Composable
-fun ConfirmScreen(
+fun ConfirmDialog(
     viewModel: ConfirmViewModel,
-    onAccept: () -> Unit,
-    onBack: () -> Unit,
-    modifier: Modifier = Modifier,
+    onCancel: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
 
-    when (val current = state) {
-        is ConfirmUiState.Idle, is ConfirmUiState.Extracting -> ExtractingContent(modifier)
-        is ConfirmUiState.Review -> ReviewContent(
-            fields = current.fields,
-            canAccept = viewModel.canAccept,
-            onFieldEdited = viewModel::onFieldEdited,
-            onFieldConfirmed = viewModel::onFieldConfirmed,
-            onAccept = onAccept,
-            onBack = onBack,
-            modifier = modifier,
-        )
-        // The host consumes Saved (toast + reset); nothing to render here.
-        is ConfirmUiState.Saved -> Unit
-        is ConfirmUiState.Error -> ErrorContent(
-            message = current.message,
-            retriable = current.retriable,
-            onRetry = viewModel::onRetry,
-            onBack = onBack,
-            modifier = modifier,
-        )
+    Dialog(
+        onDismissRequest = onCancel,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnClickOutside = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .systemBarsPadding()
+                .imePadding()
+                .fillMaxWidth()
+                .padding(12.dp),
+        ) {
+            when (val current = state) {
+                is ConfirmUiState.Idle, is ConfirmUiState.Extracting -> ExtractingContent()
+                is ConfirmUiState.Review -> ReviewContent(
+                    fields = current.fields,
+                    canAccept = viewModel.canAccept,
+                    onFieldEdited = viewModel::onFieldEdited,
+                    onFieldConfirmed = viewModel::onFieldConfirmed,
+                    onAccept = viewModel::onAccept,
+                    onCancel = onCancel,
+                )
+                is ConfirmUiState.Error -> ErrorContent(
+                    message = current.message,
+                    retriable = current.retriable,
+                    onRetry = viewModel::onRetry,
+                    onCancel = onCancel,
+                )
+                // The host consumes Saved (toast + reset); render the spinner
+                // for the frame or two before the dialog is removed.
+                is ConfirmUiState.Saved -> ExtractingContent()
+            }
+        }
     }
 }
 
 @Composable
 private fun ExtractingContent(modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 96.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -81,15 +111,17 @@ private fun ReviewContent(
     canAccept: Boolean,
     onFieldEdited: (String, String) -> Unit,
     onFieldConfirmed: (String) -> Unit,
-    onAccept: () -> Unit,
-    onBack: () -> Unit,
+    onAccept: (String?) -> Unit,
+    onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var label by rememberSaveable { mutableStateOf("") }
+
     Column(
         modifier = modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+            .padding(horizontal = 24.dp, vertical = 20.dp),
     ) {
         Text("Check the details", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(4.dp))
@@ -109,17 +141,25 @@ private fun ReviewContent(
             Spacer(Modifier.height(12.dp))
         }
 
-        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = label,
+            onValueChange = { label = it },
+            label = { Text("Label (optional)") },
+            supportingText = { Text("A category chip for your list, e.g. Heart") },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(Modifier.height(20.dp))
         Button(
-            onClick = onAccept,
+            onClick = { onAccept(label) },
             enabled = canAccept,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Accept")
         }
         Spacer(Modifier.height(8.dp))
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-            Text("Back")
+        OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+            Text("Cancel")
         }
     }
 }
@@ -165,13 +205,13 @@ private fun ErrorContent(
     message: String,
     retriable: Boolean,
     onRetry: () -> Unit,
-    onBack: () -> Unit,
+    onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp),
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -193,8 +233,8 @@ private fun ErrorContent(
             }
             Spacer(Modifier.height(8.dp))
         }
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-            Text("Back")
+        OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+            Text("Cancel")
         }
     }
 }

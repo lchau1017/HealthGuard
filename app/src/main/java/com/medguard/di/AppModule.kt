@@ -4,6 +4,7 @@ package com.medguard.di
 
 import com.medguard.BuildConfig
 import com.medguard.confirm.ConfirmViewModel
+import com.medguard.home.HomeViewModel
 import com.medguard.shared.data.DriverFactory
 import com.medguard.shared.data.MedicationRepository
 import com.medguard.shared.db.MedGuardDb
@@ -41,4 +42,5 @@ val appModule = module {
     single<() -> Instant> { { Clock.System.now() } }
 
     viewModel { ConfirmViewModel(get(), get(), Dispatchers.IO, get()) }
+    viewModel { HomeViewModel(get(), get()) }
 }
