@@ -40,6 +40,7 @@ data class DetailUiState(
     val frequencyText: String = "",
     val withFood: Boolean? = null,
     val nextDoseAt: Instant? = null,
+    val lastTakenAt: Instant? = null,
     val finished: DetailFinished? = null,
 ) {
     val isActive: Boolean get() = item?.isActive == true
@@ -72,6 +73,7 @@ class DetailViewModel(
                     val tracked = current.copy(
                         item = item,
                         nextDoseAt = nextDose(item.schedule, lastTaken, clock(), zone),
+                        lastTakenAt = lastTaken,
                     )
                     if (fieldsSeeded) {
                         tracked

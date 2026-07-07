@@ -60,6 +60,76 @@ class CountdownTextTest {
         assertEquals("overdue by 3h 15m", at(-(3.hours + 15.minutes)))
     }
 
+    private fun atSeconds(offset: kotlin.time.Duration) =
+        countdownTextSeconds(now + offset, now, zone)
+
+    @Test
+    fun `seconds variant renders empty for null and due now within a second`() {
+        assertEquals("", countdownTextSeconds(null, now, zone))
+        assertEquals("due now", atSeconds(0.seconds))
+    }
+
+    @Test
+    fun `seconds variant counts single seconds`() {
+        assertEquals("in 59s", atSeconds(59.seconds))
+        assertEquals("in 1s", atSeconds(1.seconds))
+    }
+
+    @Test
+    fun `seconds variant pads seconds when minutes are present`() {
+        assertEquals("in 1m 00s", atSeconds(60.seconds))
+        assertEquals("in 45m 10s", atSeconds(45.minutes + 10.seconds))
+    }
+
+    @Test
+    fun `seconds variant pads minutes and seconds when hours are present`() {
+        assertEquals("in 1h 04m 32s", atSeconds(1.hours + 4.minutes + 32.seconds))
+    }
+
+    @Test
+    fun `seconds variant drops detail on multi day spans`() {
+        assertEquals("in 2d 3h", atSeconds(2.days + 3.hours + 12.minutes))
+    }
+
+    @Test
+    fun `seconds variant mirrors formatting when overdue`() {
+        assertEquals("overdue by 20m 15s", atSeconds(-(20.minutes + 15.seconds)))
+        assertEquals("overdue by 5s", atSeconds((-5).seconds))
+    }
+
+    @Test
+    fun `last taken today is time only`() {
+        assertEquals(
+            "08:30",
+            lastTakenText(Instant.parse("2024-07-03T08:30:00Z"), now, zone),
+        )
+    }
+
+    @Test
+    fun `last taken yesterday is prefixed`() {
+        assertEquals(
+            "yesterday 21:15",
+            lastTakenText(Instant.parse("2024-07-02T21:15:00Z"), now, zone),
+        )
+    }
+
+    @Test
+    fun `last taken earlier shows the date`() {
+        assertEquals(
+            "12 Jun 09:00",
+            lastTakenText(Instant.parse("2024-06-12T09:00:00Z"), now, zone),
+        )
+    }
+
+    @Test
+    fun `last taken respects the zone for day boundaries`() {
+        // 23:30Z on July 2nd is already July 3rd ("today") in UTC+8.
+        assertEquals(
+            "07:30",
+            lastTakenText(Instant.parse("2024-07-02T23:30:00Z"), now, TimeZone.of("UTC+8")),
+        )
+    }
+
     @Test
     fun `dose time renders zero padded local HH mm`() {
         assertEquals("14:00", doseTimeText(Instant.parse("2024-07-03T14:00:00Z"), zone))

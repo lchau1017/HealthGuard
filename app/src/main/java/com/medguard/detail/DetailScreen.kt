@@ -33,6 +33,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,8 +42,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.medguard.format.countdownText
+import com.medguard.format.countdownTextSeconds
 import com.medguard.format.doseTimeText
+import com.medguard.format.lastTakenText
+import kotlinx.coroutines.delay
 import com.medguard.ui.DeleteConfirmationDialog
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -63,7 +66,14 @@ fun DetailScreen(
     val state by viewModel.state.collectAsState()
     var confirmingDelete by remember { mutableStateOf(false) }
 
-    val now = remember(state) { Clock.System.now() }
+    // Per-second countdown: the detail page is where precision matters.
+    var now by remember { mutableStateOf(Clock.System.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1_000)
+            now = Clock.System.now()
+        }
+    }
     val zone = remember { TimeZone.currentSystemDefault() }
 
     Scaffold(
@@ -107,7 +117,8 @@ fun DetailScreen(
             ScheduleStatusCard(
                 state = state,
                 nowText = state.nextDoseAt?.let { doseTimeText(it, zone) }.orEmpty(),
-                countdown = countdownText(state.nextDoseAt, now, zone),
+                countdown = countdownTextSeconds(state.nextDoseAt, now, zone),
+                lastTaken = state.lastTakenAt?.let { lastTakenText(it, now, zone) },
                 onToggleTaking = viewModel::toggleTaking,
             )
 
@@ -213,6 +224,7 @@ private fun ScheduleStatusCard(
     state: DetailUiState,
     nowText: String,
     countdown: String,
+    lastTaken: String?,
     onToggleTaking: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -249,6 +261,14 @@ private fun ScheduleStatusCard(
                 Text(
                     text = "Next dose",
                     style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (state.isActive && lastTaken != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Last taken: $lastTaken",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
