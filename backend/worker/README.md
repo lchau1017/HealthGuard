@@ -3,7 +3,8 @@
 Cloudflare Worker that sits between the MedGuard Android app and OpenRouter, so the
 OpenRouter API key never ships inside the client. It forwards a medication-label photo
 to a vision model (Qwen 2.5 VL by default) and returns the structured extraction
-produced by a forced `report_extraction` tool call.
+produced via OpenRouter structured outputs (a strict `json_schema` response format
+named `report_extraction`).
 
 ## Endpoints
 
@@ -16,7 +17,7 @@ Errors:
 - Missing/invalid `imageJpegBase64` or unparseable JSON body: `400 {"error":"imageJpegBase64 required"}`
 - Any other route or method: `404`
 - OpenRouter unreachable or non-OK: `502 {"error":"upstream"}`
-- Model answered without a tool call: `502 {"error":"no tool call"}`
+- Model answered without message content: `502 {"error":"no content"}`
 
 ## Local development
 

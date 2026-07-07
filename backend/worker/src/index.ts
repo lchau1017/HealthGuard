@@ -95,13 +95,10 @@ export default {
               ],
             },
           ],
-          tools: [
-            {
-              type: "function",
-              function: { name: "report_extraction", parameters: SCHEMA },
-            },
-          ],
-          tool_choice: { type: "function", function: { name: "report_extraction" } },
+          response_format: {
+            type: "json_schema",
+            json_schema: { name: "report_extraction", strict: true, schema: SCHEMA },
+          },
         }),
       });
     } catch {
@@ -113,7 +110,7 @@ export default {
     }
 
     let completion: {
-      choices?: { message?: { tool_calls?: { function?: { arguments?: unknown } }[] } }[];
+      choices?: { message?: { content?: unknown } }[];
     };
     try {
       completion = await upstream.json();
@@ -121,10 +118,10 @@ export default {
       return json(502, { error: "upstream" });
     }
 
-    const args = completion?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-    if (typeof args !== "string") {
-      return json(502, { error: "no tool call" });
+    const content = completion?.choices?.[0]?.message?.content;
+    if (typeof content !== "string" || content.length === 0) {
+      return json(502, { error: "no content" });
     }
-    return new Response(args, { headers: { "content-type": "application/json" } });
+    return new Response(content, { headers: { "content-type": "application/json" } });
   },
 };

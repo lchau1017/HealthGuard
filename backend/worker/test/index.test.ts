@@ -28,17 +28,9 @@ function stubUpstream(response: Response) {
   return spy;
 }
 
-function toolCallResponse(argumentsString: string): Response {
+function contentResponse(content: string): Response {
   return Response.json({
-    choices: [
-      {
-        message: {
-          tool_calls: [
-            { function: { name: "report_extraction", arguments: argumentsString } },
-          ],
-        },
-      },
-    ],
+    choices: [{ message: { content } }],
   });
 }
 
@@ -84,10 +76,10 @@ describe("request validation", () => {
 });
 
 describe("successful extraction", () => {
-  it("returns the tool call arguments verbatim as JSON", async () => {
+  it("returns the structured-output message content verbatim as JSON", async () => {
     const args =
       '{"drugName":{"value":"Aspirin","confidence":0.97},"activeIngredients":[],"dosage":{"value":"500 mg","confidence":0.9},"form":{"value":"tablet","confidence":0.95},"frequency":{"value":{"timesPerDay":3},"confidence":0.8},"withFood":{"value":null,"confidence":0.2}}';
-    stubUpstream(toolCallResponse(args));
+    stubUpstream(contentResponse(args));
 
     const res = await postExtract(JSON.stringify({ imageJpegBase64: "aGVsbG8=" }));
 
@@ -107,15 +99,22 @@ describe("upstream failures", () => {
     expect(await res.json()).toEqual({ error: "upstream" });
   });
 
-  it("returns 502 no tool call when the completion has no tool_calls", async () => {
-    stubUpstream(
-      Response.json({ choices: [{ message: { content: "I cannot do that" } }] }),
-    );
+  it("returns 502 no content when the completion message has no content", async () => {
+    stubUpstream(Response.json({ choices: [{ message: {} }] }));
 
     const res = await postExtract(JSON.stringify({ imageJpegBase64: "aGVsbG8=" }));
 
     expect(res.status).toBe(502);
-    expect(await res.json()).toEqual({ error: "no tool call" });
+    expect(await res.json()).toEqual({ error: "no content" });
+  });
+
+  it("returns 502 no content when the completion content is empty", async () => {
+    stubUpstream(contentResponse(""));
+
+    const res = await postExtract(JSON.stringify({ imageJpegBase64: "aGVsbG8=" }));
+
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "no content" });
   });
 
   it("returns 502 upstream when fetch itself rejects", async () => {
@@ -131,8 +130,8 @@ describe("upstream failures", () => {
 });
 
 describe("upstream request shape", () => {
-  it("sends the default model, forced tool choice and image data URL", async () => {
-    const spy = stubUpstream(toolCallResponse("{}"));
+  it("sends the default model, strict json_schema response_format and image data URL", async () => {
+    const spy = stubUpstream(contentResponse("{}"));
 
     await postExtract(JSON.stringify({ imageJpegBase64: "aGVsbG8=" }));
 
@@ -145,13 +144,12 @@ describe("upstream request shape", () => {
 
     const body = JSON.parse(init.body as string);
     expect(body.model).toBe("qwen/qwen2.5-vl-72b-instruct");
-    expect(body.tool_choice).toEqual({
-      type: "function",
-      function: { name: "report_extraction" },
-    });
-    expect(body.tools).toHaveLength(1);
-    expect(body.tools[0].function.name).toBe("report_extraction");
-    expect(body.tools[0].function.parameters.required).toEqual([
+    expect(body.tools).toBeUndefined();
+    expect(body.tool_choice).toBeUndefined();
+    expect(body.response_format.type).toBe("json_schema");
+    expect(body.response_format.json_schema.name).toBe("report_extraction");
+    expect(body.response_format.json_schema.strict).toBe(true);
+    expect(body.response_format.json_schema.schema.required).toEqual([
       "drugName",
       "activeIngredients",
       "dosage",
@@ -169,7 +167,7 @@ describe("upstream request shape", () => {
   });
 
   it("uses MODEL_ID from the environment when set", async () => {
-    const spy = stubUpstream(toolCallResponse("{}"));
+    const spy = stubUpstream(contentResponse("{}"));
 
     await worker.fetch(
       new Request("https://proxy.example/extract", {
