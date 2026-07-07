@@ -1,0 +1,203 @@
+@file:OptIn(ExperimentalTime::class)
+
+package com.medguard.shared.data
+
+import app.cash.sqldelight.coroutines.asFlow
+import app.cash.sqldelight.coroutines.mapToList
+import com.medguard.shared.db.DoseLog
+import com.medguard.shared.db.MedGuardDb
+import com.medguard.shared.extraction.Frequency
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
+
+/**
+ * Persistence facade over [MedGuardDb]. All calls hop to [dispatcher]; ids are
+ * caller-provided (UUIDs in production) so tests stay deterministic.
+ */
+class MedicationRepository(
+    db: MedGuardDb,
+    private val dispatcher: CoroutineDispatcher,
+) {
+    private val queries = db.medGuardQueries
+
+    suspend fun insertMedication(medication: StoredMedication, schedule: StoredSchedule) =
+        withContext(dispatcher) {
+            queries.transaction {
+                queries.insertMedication(
+                    id = medication.id,
+                    drugName = medication.drugName,
+                    label = medication.label,
+                    activeIngredients = encodeIngredients(medication.activeIngredients),
+                    dosage = medication.dosage,
+                    form = medication.form,
+                    extractionConfidence = medication.extractionConfidence,
+                    createdAt = medication.createdAt.toEpochMilliseconds(),
+                )
+                queries.insertSchedule(
+                    id = schedule.id,
+                    medicationId = schedule.medicationId,
+                    frequencyType = schedule.frequency.typeColumn(),
+                    frequencyValue = schedule.frequency.valueColumn(),
+                    withFood = schedule.withFood.toDbBool(),
+                    startedAt = schedule.startedAt?.toEpochMilliseconds(),
+                    stoppedAt = schedule.stoppedAt?.toEpochMilliseconds(),
+                )
+            }
+        }
+
+    fun medications(): Flow<List<MedicationWithSchedule>> =
+        queries.listMedications(::rowToMedicationWithSchedule).asFlow().mapToList(dispatcher)
+
+    fun activeMedications(): Flow<List<MedicationWithSchedule>> =
+        queries.listActiveSchedulesWithMedication(::rowToMedicationWithSchedule)
+            .asFlow().mapToList(dispatcher)
+
+    suspend fun getMedication(id: String): MedicationWithSchedule? = withContext(dispatcher) {
+        queries.getMedication(id, ::rowToMedicationWithSchedule).executeAsOneOrNull()
+    }
+
+    suspend fun delete(id: String) = withContext(dispatcher) {
+        queries.deleteMedication(id)
+    }
+
+    suspend fun activate(medicationId: String, at: Instant) = withContext(dispatcher) {
+        queries.transaction {
+            queries.scheduleIdForMedication(medicationId).executeAsList().forEach { scheduleId ->
+                queries.activateSchedule(startedAt = at.toEpochMilliseconds(), id = scheduleId)
+            }
+        }
+    }
+
+    suspend fun stop(medicationId: String, at: Instant) = withContext(dispatcher) {
+        queries.transaction {
+            queries.scheduleIdForMedication(medicationId).executeAsList().forEach { scheduleId ->
+                queries.stopSchedule(stoppedAt = at.toEpochMilliseconds(), id = scheduleId)
+            }
+        }
+    }
+
+    suspend fun logDose(log: StoredDoseLog) = withContext(dispatcher) {
+        queries.insertDoseLog(
+            id = log.id,
+            scheduleId = log.scheduleId,
+            plannedAt = log.plannedAt.toEpochMilliseconds(),
+            takenAt = log.takenAt?.toEpochMilliseconds(),
+            status = log.status.name,
+        )
+    }
+
+    suspend fun updateDoseStatus(id: String, status: DoseStatus, takenAt: Instant?) =
+        withContext(dispatcher) {
+            queries.updateDoseLogStatus(
+                status = status.name,
+                takenAt = takenAt?.toEpochMilliseconds(),
+                id = id,
+            )
+        }
+
+    /** Half-open range: plannedAt in [from, to). */
+    suspend fun dosesInRange(scheduleId: String, from: Instant, to: Instant): List<StoredDoseLog> =
+        withContext(dispatcher) {
+            queries.doseLogsForScheduleInRange(
+                scheduleId = scheduleId,
+                fromMillis = from.toEpochMilliseconds(),
+                toMillis = to.toEpochMilliseconds(),
+            ).executeAsList().map { it.toStored() }
+        }
+
+    suspend fun latestDose(scheduleId: String): StoredDoseLog? = withContext(dispatcher) {
+        queries.latestDoseLogForSchedule(scheduleId).executeAsOneOrNull()?.toStored()
+    }
+}
+
+private const val FREQ_TIMES_PER_DAY = "TIMES_PER_DAY"
+private const val FREQ_EVERY_HOURS = "EVERY_HOURS"
+
+private fun Frequency?.typeColumn(): String? = when (this) {
+    is Frequency.TimesPerDay -> FREQ_TIMES_PER_DAY
+    is Frequency.EveryHours -> FREQ_EVERY_HOURS
+    null -> null
+}
+
+private fun Frequency?.valueColumn(): Long? = when (this) {
+    is Frequency.TimesPerDay -> count.toLong()
+    is Frequency.EveryHours -> hours.toLong()
+    null -> null
+}
+
+private fun frequencyFrom(type: String?, value: Long?): Frequency? = when {
+    type == FREQ_TIMES_PER_DAY && value != null -> Frequency.TimesPerDay(value.toInt())
+    type == FREQ_EVERY_HOURS && value != null -> Frequency.EveryHours(value.toInt())
+    else -> null
+}
+
+private fun Boolean?.toDbBool(): Long? = when (this) {
+    true -> 1L
+    false -> 0L
+    null -> null
+}
+
+private fun Long?.fromDbBool(): Boolean? = when (this) {
+    null -> null
+    0L -> false
+    else -> true
+}
+
+private val ingredientListSerializer = ListSerializer(String.serializer())
+
+private fun encodeIngredients(ingredients: List<String>): String =
+    Json.encodeToString(ingredientListSerializer, ingredients)
+
+private fun decodeIngredients(raw: String): List<String> =
+    runCatching { Json.decodeFromString(ingredientListSerializer, raw) }.getOrElse { emptyList() }
+
+private fun DoseLog.toStored() = StoredDoseLog(
+    id = id,
+    scheduleId = scheduleId,
+    plannedAt = Instant.fromEpochMilliseconds(plannedAt),
+    takenAt = takenAt?.let(Instant::fromEpochMilliseconds),
+    status = DoseStatus.valueOf(status),
+)
+
+@Suppress("LongParameterList") // shape dictated by the SQL join's column list
+private fun rowToMedicationWithSchedule(
+    medicationId: String,
+    drugName: String,
+    label: String?,
+    activeIngredients: String,
+    dosage: String?,
+    form: String?,
+    extractionConfidence: Double,
+    createdAt: Long,
+    scheduleId: String,
+    frequencyType: String?,
+    frequencyValue: Long?,
+    withFood: Long?,
+    startedAt: Long?,
+    stoppedAt: Long?,
+): MedicationWithSchedule = MedicationWithSchedule(
+    medication = StoredMedication(
+        id = medicationId,
+        drugName = drugName,
+        label = label,
+        activeIngredients = decodeIngredients(activeIngredients),
+        dosage = dosage,
+        form = form,
+        extractionConfidence = extractionConfidence,
+        createdAt = Instant.fromEpochMilliseconds(createdAt),
+    ),
+    schedule = StoredSchedule(
+        id = scheduleId,
+        medicationId = medicationId,
+        frequency = frequencyFrom(frequencyType, frequencyValue),
+        withFood = withFood.fromDbBool(),
+        startedAt = startedAt?.let(Instant::fromEpochMilliseconds),
+        stoppedAt = stoppedAt?.let(Instant::fromEpochMilliseconds),
+    ),
+)

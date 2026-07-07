@@ -4,6 +4,15 @@ plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.sqldelight)
+}
+
+sqldelight {
+    databases {
+        create("MedGuardDb") {
+            packageName.set("com.medguard.shared.db")
+        }
+    }
 }
 
 kotlin {

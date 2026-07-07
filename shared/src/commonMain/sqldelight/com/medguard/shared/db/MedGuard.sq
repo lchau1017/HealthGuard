@@ -1,0 +1,99 @@
+-- Timestamps (createdAt, startedAt, stoppedAt, plannedAt, takenAt) are epoch
+-- milliseconds (INTEGER). activeIngredients is a JSON array of strings
+-- (kotlinx.serialization), so ingredient names may contain any character.
+-- withFood is a nullable boolean stored as INTEGER 0/1.
+
+CREATE TABLE medication (
+    id TEXT NOT NULL PRIMARY KEY,
+    drugName TEXT NOT NULL,
+    label TEXT,
+    activeIngredients TEXT NOT NULL,
+    dosage TEXT,
+    form TEXT,
+    extractionConfidence REAL NOT NULL,
+    createdAt INTEGER NOT NULL
+);
+
+CREATE TABLE schedule (
+    id TEXT NOT NULL PRIMARY KEY,
+    medicationId TEXT NOT NULL REFERENCES medication(id) ON DELETE CASCADE,
+    frequencyType TEXT,
+    frequencyValue INTEGER,
+    withFood INTEGER,
+    -- null startedAt = dormant (imported to inventory but not yet taken).
+    startedAt INTEGER,
+    stoppedAt INTEGER
+);
+
+CREATE TABLE doseLog (
+    id TEXT NOT NULL PRIMARY KEY,
+    scheduleId TEXT NOT NULL REFERENCES schedule(id) ON DELETE CASCADE,
+    plannedAt INTEGER NOT NULL,
+    takenAt INTEGER,
+    -- TAKEN | MISSED | SKIPPED | PENDING
+    status TEXT NOT NULL
+);
+
+insertMedication:
+INSERT INTO medication(id, drugName, label, activeIngredients, dosage, form, extractionConfidence, createdAt)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+getMedication:
+SELECT m.id AS medicationId, m.drugName, m.label, m.activeIngredients, m.dosage, m.form,
+       m.extractionConfidence, m.createdAt,
+       s.id AS scheduleId, s.frequencyType, s.frequencyValue, s.withFood, s.startedAt, s.stoppedAt
+FROM medication m
+INNER JOIN schedule s ON s.medicationId = m.id
+WHERE m.id = :id;
+
+listMedications:
+SELECT m.id AS medicationId, m.drugName, m.label, m.activeIngredients, m.dosage, m.form,
+       m.extractionConfidence, m.createdAt,
+       s.id AS scheduleId, s.frequencyType, s.frequencyValue, s.withFood, s.startedAt, s.stoppedAt
+FROM medication m
+INNER JOIN schedule s ON s.medicationId = m.id
+ORDER BY m.createdAt DESC, m.id DESC;
+
+deleteMedication:
+DELETE FROM medication WHERE id = :id;
+
+insertSchedule:
+INSERT INTO schedule(id, medicationId, frequencyType, frequencyValue, withFood, startedAt, stoppedAt)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+activateSchedule:
+UPDATE schedule SET startedAt = :startedAt, stoppedAt = NULL WHERE id = :id;
+
+stopSchedule:
+UPDATE schedule SET stoppedAt = :stoppedAt WHERE id = :id;
+
+scheduleIdForMedication:
+SELECT id FROM schedule WHERE medicationId = :medicationId;
+
+listActiveSchedulesWithMedication:
+SELECT m.id AS medicationId, m.drugName, m.label, m.activeIngredients, m.dosage, m.form,
+       m.extractionConfidence, m.createdAt,
+       s.id AS scheduleId, s.frequencyType, s.frequencyValue, s.withFood, s.startedAt, s.stoppedAt
+FROM medication m
+INNER JOIN schedule s ON s.medicationId = m.id
+WHERE s.startedAt IS NOT NULL AND s.stoppedAt IS NULL
+ORDER BY m.createdAt DESC, m.id DESC;
+
+insertDoseLog:
+INSERT INTO doseLog(id, scheduleId, plannedAt, takenAt, status)
+VALUES (?, ?, ?, ?, ?);
+
+updateDoseLogStatus:
+UPDATE doseLog SET status = :status, takenAt = :takenAt WHERE id = :id;
+
+-- Half-open range: plannedAt in [from, to).
+doseLogsForScheduleInRange:
+SELECT * FROM doseLog
+WHERE scheduleId = :scheduleId AND plannedAt >= :fromMillis AND plannedAt < :toMillis
+ORDER BY plannedAt ASC;
+
+latestDoseLogForSchedule:
+SELECT * FROM doseLog
+WHERE scheduleId = :scheduleId
+ORDER BY plannedAt DESC
+LIMIT 1;
