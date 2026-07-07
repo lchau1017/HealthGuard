@@ -22,20 +22,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
 import com.medguard.capture.loadDownsampledBitmap
 import com.medguard.capture.toUploadJpegBase64
 import com.medguard.confirm.ConfirmScreen
 import com.medguard.confirm.ConfirmViewModel
-import com.medguard.di.ServiceLocator
 import com.medguard.home.HomeScreen
 import com.medguard.ui.theme.MedGuardTheme
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.koin.androidx.compose.koinViewModel
 
 private enum class Screen { Home, Confirm }
 
@@ -63,11 +60,7 @@ private fun MedGuardApp(modifier: Modifier = Modifier) {
     // Uri has no built-in saver; persist its string form instead.
     var pendingCameraUriString by rememberSaveable { mutableStateOf<String?>(null) }
 
-    val viewModel: ConfirmViewModel = viewModel(
-        factory = viewModelFactory {
-            initializer { ConfirmViewModel(ServiceLocator.visionExtractor, Dispatchers.IO) }
-        },
-    )
+    val viewModel: ConfirmViewModel = koinViewModel()
 
     fun goHome() {
         viewModel.reset()
