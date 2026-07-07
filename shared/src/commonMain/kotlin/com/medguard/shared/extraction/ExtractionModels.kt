@@ -37,4 +37,7 @@ data class MedicationExtraction(
 sealed interface ExtractionResult {
     data class Success(val extraction: MedicationExtraction) : ExtractionResult
     data class Malformed(val reason: String) : ExtractionResult
+
+    /** The extraction service could not be reached or answered with an error. */
+    data object Unavailable : ExtractionResult
 }
