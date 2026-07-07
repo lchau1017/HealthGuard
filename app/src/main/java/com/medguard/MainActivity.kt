@@ -13,8 +13,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -46,9 +44,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MedGuardTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    MedGuardApp(modifier = Modifier.padding(innerPadding))
-                }
+                // Screens carry their own Scaffold (top bar, FAB, snackbar).
+                MedGuardApp(modifier = Modifier.fillMaxSize())
             }
         }
     }
@@ -72,7 +69,7 @@ private fun MedGuardApp(modifier: Modifier = Modifier) {
     val confirmViewModel: ConfirmViewModel = koinViewModel()
     val homeViewModel: HomeViewModel = koinViewModel()
     val confirmState by confirmViewModel.state.collectAsState()
-    val medications by homeViewModel.medications.collectAsState()
+    val homeState by homeViewModel.state.collectAsState()
 
     fun processPickedImage(uri: Uri) {
         scope.launch {
@@ -108,10 +105,12 @@ private fun MedGuardApp(modifier: Modifier = Modifier) {
     }
 
     HomeScreen(
-        medications = medications,
+        state = homeState,
+        onTakeNow = homeViewModel::takeNow,
         onPlay = homeViewModel::onPlay,
-        onStop = homeViewModel::onStop,
         onDelete = homeViewModel::onDelete,
+        // Detail navigation lands with the medication detail page.
+        onOpenDetail = {},
         onTakePhoto = {
             val imagesDir = File(context.cacheDir, "images").apply { mkdirs() }
             val photoFile = File(imagesDir, "label_${System.currentTimeMillis()}.jpg")
