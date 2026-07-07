@@ -1,7 +1,10 @@
 package com.medguard
 
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -86,7 +89,13 @@ private fun MedGuardApp(modifier: Modifier = Modifier) {
         ActivityResultContracts.TakePicture(),
     ) { success ->
         val uri = pendingCameraUriString?.let(Uri::parse)
-        if (success && uri != null) processPickedImage(uri)
+        if (uri != null) {
+            context.revokeUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+            if (success) processPickedImage(uri)
+        }
         pendingCameraUriString = null
     }
 
@@ -106,6 +115,20 @@ private fun MedGuardApp(modifier: Modifier = Modifier) {
                     "${BuildConfig.APPLICATION_ID}.fileprovider",
                     photoFile,
                 )
+                // Android 18+ stops granting the capture Uri implicitly; give
+                // every resolvable camera app an explicit read/write grant
+                // (revoked again in the launcher callback).
+                val captureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+                context.packageManager
+                    .queryIntentActivities(captureIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                    .forEach { info ->
+                        context.grantUriPermission(
+                            info.activityInfo.packageName,
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                        )
+                    }
                 pendingCameraUriString = uri.toString()
                 takePictureLauncher.launch(uri)
             },
