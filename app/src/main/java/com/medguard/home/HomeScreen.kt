@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,6 +31,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,6 +63,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     var showSourceSheet by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<MedicationWithSchedule?>(null) }
 
     Column(
         modifier = modifier
@@ -102,12 +105,23 @@ fun HomeScreen(
                         row = row,
                         onPlay = { onPlay(row.medication.id) },
                         onStop = { onStop(row.medication.id) },
-                        onDelete = { onDelete(row.medication.id) },
+                        onDelete = { pendingDelete = row },
                     )
                 }
                 item { Spacer(Modifier.height(8.dp)) }
             }
         }
+    }
+
+    pendingDelete?.let { row ->
+        DeleteConfirmationDialog(
+            row = row,
+            onConfirm = {
+                onDelete(row.medication.id)
+                pendingDelete = null
+            },
+            onDismiss = { pendingDelete = null },
+        )
     }
 
     if (showSourceSheet) {
@@ -141,6 +155,33 @@ fun HomeScreen(
             }
         }
     }
+}
+
+@Composable
+private fun DeleteConfirmationDialog(
+    row: MedicationWithSchedule,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val body = buildString {
+        append("This removes the medication and its dose history.")
+        if (row.isActive) append(" You are currently taking this.")
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete ${row.medication.drugName}?") },
+        text = { Text(body) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Delete", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 @Composable

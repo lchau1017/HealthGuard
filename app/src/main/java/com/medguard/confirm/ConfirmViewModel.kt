@@ -18,6 +18,7 @@ import com.medguard.shared.extraction.VisionExtractor
 import java.util.UUID
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -154,9 +155,16 @@ class ConfirmViewModel(
             stoppedAt = null,
         )
         viewModelScope.launch {
-            repository.insertMedication(medication, schedule)
-            _state.value = ConfirmUiState.Saved
-            saving = false
+            try {
+                repository.insertMedication(medication, schedule)
+                _state.value = ConfirmUiState.Saved
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                _state.value = ConfirmUiState.Error(MESSAGE_SAVE_FAILED, retriable = true)
+            } finally {
+                saving = false
+            }
         }
     }
 
@@ -237,5 +245,6 @@ class ConfirmViewModel(
 
         const val MESSAGE_MALFORMED = "Couldn't read the label — try another photo"
         const val MESSAGE_UNAVAILABLE = "Service unavailable — check connection"
+        const val MESSAGE_SAVE_FAILED = "Couldn't save — try again"
     }
 }

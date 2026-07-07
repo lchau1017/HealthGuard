@@ -440,4 +440,60 @@ class ConfirmViewModelTest {
         assertTrue(vm.state.value is ConfirmUiState.Review)
         assertTrue(storedMedications().isEmpty())
     }
+
+    private fun failingRepository(): MedicationRepository {
+        val deadDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        MedGuardDb.Schema.create(deadDriver)
+        val repository = MedicationRepository(MedGuardDb(deadDriver), dispatcher)
+        deadDriver.close()
+        return repository
+    }
+
+    private fun viewModelWith(
+        repository: MedicationRepository,
+        vararg results: ExtractionResult,
+    ) = ConfirmViewModel(
+        FakeExtractor(results.toMutableList()),
+        repository,
+        dispatcher,
+    ) { fixedNow }
+
+    @Test
+    fun `failed insert surfaces a retriable error instead of crashing`() = runTest(dispatcher) {
+        val vm = viewModelWith(failingRepository(), ExtractionResult.Success(extraction()))
+        vm.onImagePicked("img")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.onAccept(null)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val error = vm.state.value as ConfirmUiState.Error
+        assertEquals("Couldn't save — try again", error.message)
+        assertTrue(error.retriable)
+    }
+
+    @Test
+    fun `accept can be attempted again after a failed save`() = runTest(dispatcher) {
+        val vm = viewModelWith(
+            failingRepository(),
+            ExtractionResult.Success(extraction()),
+            ExtractionResult.Success(extraction()),
+        )
+        vm.onImagePicked("img")
+        dispatcher.scheduler.advanceUntilIdle()
+        vm.onAccept(null)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.state.value is ConfirmUiState.Error)
+
+        // Retry re-extracts; a second Accept must attempt the insert again
+        // (failing again here) rather than being swallowed by a stuck saving
+        // flag, which would leave the state silently stuck in Review.
+        vm.onRetry()
+        dispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.state.value is ConfirmUiState.Review)
+
+        vm.onAccept(null)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.state.value is ConfirmUiState.Error)
+    }
 }
