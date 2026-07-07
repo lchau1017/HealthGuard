@@ -70,17 +70,26 @@ class ExtractionParser {
         (this as? JsonPrimitive)?.takeIf { it.isString }?.content
 
     // The frequency union arrives without a class discriminator: either
-    // {"timesPerDay": N} or {"everyHours": N}. Any other shape, or a
-    // non-positive count, maps to a null value (needsReview) rather than
-    // Malformed, so one bad field does not discard the whole scan.
+    // {"timesPerDay": N} or {"everyHours": N}. Any other shape, or a count
+    // outside the plausible dosing range, maps to a null value (needsReview)
+    // rather than Malformed, so one bad field does not discard the whole
+    // scan. The upper bounds also shield downstream date math from overflow
+    // on hallucinated counts.
     private fun JsonElement.toFrequencyOrNull(): Frequency? {
         val obj = this as? JsonObject ?: return null
         (obj["timesPerDay"] as? JsonPrimitive)?.intOrNull
-            ?.takeIf { it > 0 }
+            ?.takeIf { it in 1..MAX_TIMES_PER_DAY }
             ?.let { return Frequency.TimesPerDay(it) }
         (obj["everyHours"] as? JsonPrimitive)?.intOrNull
-            ?.takeIf { it > 0 }
+            ?.takeIf { it in 1..MAX_EVERY_HOURS }
             ?.let { return Frequency.EveryHours(it) }
         return null
+    }
+
+    private companion object {
+        // More often than hourly, or less often than monthly, is not a real
+        // dosing regimen a label would state.
+        const val MAX_TIMES_PER_DAY = 24
+        const val MAX_EVERY_HOURS = 31 * 24
     }
 }

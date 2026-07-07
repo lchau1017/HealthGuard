@@ -166,6 +166,36 @@ class ExtractionParserTest {
     }
 
     @Test
+    fun `implausibly large frequency counts yield null frequency needing review`() {
+        // Hallucinated extremes must degrade, not reach downstream date math
+        // (an unbounded count previously overflowed the slot calculator).
+        val hugeTimesPerDay = parseSuccess(
+            payload(frequency = """{"value":{"timesPerDay":3000000},"confidence":0.9}""")
+        )
+        assertNull(hugeTimesPerDay.frequency.value)
+        assertTrue(hugeTimesPerDay.frequency.needsReview)
+
+        val hugeEveryHours = parseSuccess(
+            payload(frequency = """{"value":{"everyHours":100000},"confidence":0.9}""")
+        )
+        assertNull(hugeEveryHours.frequency.value)
+        assertTrue(hugeEveryHours.frequency.needsReview)
+    }
+
+    @Test
+    fun `boundary frequency counts are accepted`() {
+        val hourly = parseSuccess(
+            payload(frequency = """{"value":{"timesPerDay":24},"confidence":0.9}""")
+        )
+        assertEquals(Frequency.TimesPerDay(24), hourly.frequency.value)
+
+        val monthly = parseSuccess(
+            payload(frequency = """{"value":{"everyHours":744},"confidence":0.9}""")
+        )
+        assertEquals(Frequency.EveryHours(744), monthly.frequency.value)
+    }
+
+    @Test
     fun `non-finite confidence sanitizes to zero and needs review`() {
         // "NaN"/"Infinity" string contents survive doubleOrNull as non-finite
         // doubles; NaN defeats both coerceIn and the needsReview threshold
