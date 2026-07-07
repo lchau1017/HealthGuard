@@ -50,6 +50,8 @@ fun ConfirmScreen(
             onBack = onBack,
             modifier = modifier,
         )
+        // The host consumes Saved (toast + reset); nothing to render here.
+        is ConfirmUiState.Saved -> Unit
         is ConfirmUiState.Error -> ErrorContent(
             message = current.message,
             retriable = current.retriable,

@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalTime::class)
+
 package com.medguard.di
 
 import com.medguard.BuildConfig
@@ -10,6 +12,9 @@ import com.medguard.shared.extraction.VisionExtractor
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 import kotlinx.coroutines.Dispatchers
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
@@ -33,5 +38,7 @@ val appModule = module {
     single { MedGuardDb(get<DriverFactory>().createDriver()) }
     single { MedicationRepository(get(), Dispatchers.IO) }
 
-    viewModel { ConfirmViewModel(get(), Dispatchers.IO) }
+    single<() -> Instant> { { Clock.System.now() } }
+
+    viewModel { ConfirmViewModel(get(), get(), Dispatchers.IO, get()) }
 }

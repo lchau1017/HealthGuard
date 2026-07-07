@@ -75,6 +75,8 @@ dependencies {
     implementation(libs.koin.androidx.compose)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // In-memory SQLite for exercising the real MedicationRepository in unit tests.
+    testImplementation(libs.sqldelight.sqlite.driver)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

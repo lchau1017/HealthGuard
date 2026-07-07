@@ -1,12 +1,23 @@
+@file:OptIn(ExperimentalTime::class)
+
 package com.medguard.confirm
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.medguard.format.parseFrequency
+import com.medguard.format.parseWithFood
+import com.medguard.format.toHumanText
+import com.medguard.shared.data.MedicationRepository
+import com.medguard.shared.data.StoredMedication
+import com.medguard.shared.data.StoredSchedule
 import com.medguard.shared.extraction.ExtractedField
 import com.medguard.shared.extraction.ExtractionResult
 import com.medguard.shared.extraction.Frequency
 import com.medguard.shared.extraction.MedicationExtraction
 import com.medguard.shared.extraction.VisionExtractor
+import java.util.UUID
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,17 +39,34 @@ data class ReviewField(
 sealed interface ConfirmUiState {
     data object Idle : ConfirmUiState
     data object Extracting : ConfirmUiState
-    data class Review(val fields: List<ReviewField>) : ConfirmUiState
+
+    /**
+     * Editable review of the extraction. [frequency] and [withFood] carry the
+     * typed values behind their display rows so Accept never has to re-parse
+     * human-readable text the user did not touch.
+     */
+    data class Review(
+        val fields: List<ReviewField>,
+        val frequency: Frequency?,
+        val withFood: Boolean?,
+    ) : ConfirmUiState
+
     data class Error(val message: String, val retriable: Boolean) : ConfirmUiState
+
+    /** One-shot: the medication was persisted; the UI should close and reset. */
+    data object Saved : ConfirmUiState
 }
 
 /**
- * Drives the capture -> extract -> review flow. All extraction work runs on
- * [ioDispatcher]; the extractor itself never throws (see [VisionExtractor]).
+ * Drives the capture -> extract -> review -> save flow. All extraction work
+ * runs on [ioDispatcher]; the extractor itself never throws (see
+ * [VisionExtractor]). [clock] is injected so tests control timestamps.
  */
 class ConfirmViewModel(
     private val extractor: VisionExtractor,
+    private val repository: MedicationRepository,
     private val ioDispatcher: CoroutineDispatcher,
+    private val clock: () -> Instant,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ConfirmUiState>(ConfirmUiState.Idle)
@@ -73,16 +101,72 @@ class ConfirmViewModel(
                 field.copy(value = newValue, userConfirmed = true, needsReview = false)
             }
         }
+        // Keep the typed values in sync with what the user now sees: a stale
+        // typed frequency must never silently override an edited display text.
+        _state.update { current ->
+            if (current !is ConfirmUiState.Review) return@update current
+            when (key) {
+                KEY_FREQUENCY -> current.copy(frequency = parseFrequency(newValue))
+                KEY_WITH_FOOD -> current.copy(withFood = parseWithFood(newValue))
+                else -> current
+            }
+        }
     }
 
     fun onFieldConfirmed(key: String) {
         updateField(key) { it.copy(userConfirmed = true) }
     }
 
+    /**
+     * Persists the reviewed medication with a dormant schedule (started later
+     * from the home list). No-op unless every flagged field is confirmed.
+     */
+    fun onAccept(label: String?) {
+        val review = _state.value as? ConfirmUiState.Review ?: return
+        if (!canAccept || saving) return
+        saving = true
+
+        val byKey = review.fields.associateBy { it.key }
+        fun value(key: String): String? =
+            byKey[key]?.value?.trim()?.takeUnless { it.isEmpty() }
+
+        val medicationId = UUID.randomUUID().toString()
+        val medication = StoredMedication(
+            id = medicationId,
+            drugName = value(KEY_DRUG_NAME).orEmpty(),
+            label = label?.trim()?.takeUnless { it.isEmpty() },
+            activeIngredients = value(KEY_INGREDIENTS)
+                ?.split(",")
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                .orEmpty(),
+            dosage = value(KEY_DOSAGE),
+            form = value(KEY_FORM),
+            extractionConfidence = review.fields.minOfOrNull { it.confidence } ?: 0.0,
+            createdAt = clock(),
+        )
+        val schedule = StoredSchedule(
+            id = UUID.randomUUID().toString(),
+            medicationId = medicationId,
+            frequency = review.frequency,
+            withFood = review.withFood,
+            startedAt = null,
+            stoppedAt = null,
+        )
+        viewModelScope.launch {
+            repository.insertMedication(medication, schedule)
+            _state.value = ConfirmUiState.Saved
+            saving = false
+        }
+    }
+
     fun reset() {
         lastImageBase64 = null
+        saving = false
         _state.value = ConfirmUiState.Idle
     }
+
+    private var saving = false
 
     private fun extract(imageJpegBase64: String) {
         _state.value = ConfirmUiState.Extracting
@@ -90,7 +174,11 @@ class ConfirmViewModel(
             val result = withContext(ioDispatcher) { extractor.extract(imageJpegBase64) }
             _state.value = when (result) {
                 is ExtractionResult.Success ->
-                    ConfirmUiState.Review(result.extraction.toReviewFields())
+                    ConfirmUiState.Review(
+                        fields = result.extraction.toReviewFields(),
+                        frequency = result.extraction.frequency.value,
+                        withFood = result.extraction.withFood.value,
+                    )
                 is ExtractionResult.Malformed ->
                     ConfirmUiState.Error(MESSAGE_MALFORMED, retriable = true)
                 is ExtractionResult.Unavailable ->
@@ -112,7 +200,7 @@ class ConfirmViewModel(
         add(drugName.toReviewField(KEY_DRUG_NAME, "Drug name") { it })
         add(dosage.toReviewField(KEY_DOSAGE, "Dosage") { it })
         add(form.toReviewField(KEY_FORM, "Form") { it })
-        add(frequency.toReviewField(KEY_FREQUENCY, "Frequency") { it.render() })
+        add(frequency.toReviewField(KEY_FREQUENCY, "Frequency") { it.toHumanText() })
         add(withFood.toReviewField(KEY_WITH_FOOD, "Take with food") { if (it) "Yes" else "No" })
         if (activeIngredients.isNotEmpty()) {
             add(
@@ -138,11 +226,6 @@ class ConfirmViewModel(
         confidence = confidence,
         needsReview = needsReview,
     )
-
-    private fun Frequency.render(): String = when (this) {
-        is Frequency.TimesPerDay -> if (count == 1) "once a day" else "$count times a day"
-        is Frequency.EveryHours -> if (hours == 1) "every hour" else "every $hours hours"
-    }
 
     companion object {
         const val KEY_DRUG_NAME = "drugName"

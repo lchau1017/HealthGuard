@@ -1,13 +1,23 @@
+@file:OptIn(ExperimentalCoroutinesApi::class, ExperimentalTime::class)
+
 package com.medguard.confirm
 
+import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import com.medguard.shared.data.MedicationRepository
+import com.medguard.shared.data.MedicationWithSchedule
+import com.medguard.shared.db.MedGuardDb
 import com.medguard.shared.extraction.ExtractedField
 import com.medguard.shared.extraction.ExtractionResult
 import com.medguard.shared.extraction.Frequency
 import com.medguard.shared.extraction.MedicationExtraction
 import com.medguard.shared.extraction.VisionExtractor
+import java.util.Properties
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -16,19 +26,28 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class ConfirmViewModelTest {
 
     private lateinit var dispatcher: TestDispatcher
+    private lateinit var repository: MedicationRepository
+
+    private val fixedNow = Instant.fromEpochMilliseconds(1_720_000_000_000)
 
     @Before
     fun setUp() {
         dispatcher = StandardTestDispatcher()
         Dispatchers.setMain(dispatcher)
+        val driver = JdbcSqliteDriver(
+            JdbcSqliteDriver.IN_MEMORY,
+            Properties().apply { put("foreign_keys", "true") },
+        )
+        MedGuardDb.Schema.create(driver)
+        repository = MedicationRepository(MedGuardDb(driver), dispatcher)
     }
 
     @After
@@ -63,7 +82,10 @@ class ConfirmViewModelTest {
     ) = MedicationExtraction(drugName, ingredients, dosage, form, frequency, withFood)
 
     private fun viewModel(vararg results: ExtractionResult) =
-        ConfirmViewModel(FakeExtractor(results.toMutableList()), dispatcher)
+        ConfirmViewModel(FakeExtractor(results.toMutableList()), repository, dispatcher) { fixedNow }
+
+    private suspend fun storedMedications(): List<MedicationWithSchedule> =
+        repository.medications().first()
 
     @Test
     fun `initial state is Idle`() {
@@ -72,7 +94,7 @@ class ConfirmViewModelTest {
 
     @Test
     fun `onImagePicked enters Extracting while extractor is in flight`() = runTest(dispatcher) {
-        val vm = ConfirmViewModel(SuspendingExtractor(), dispatcher)
+        val vm = ConfirmViewModel(SuspendingExtractor(), repository, dispatcher) { fixedNow }
         vm.onImagePicked("img")
         dispatcher.scheduler.runCurrent()
         assertEquals(ConfirmUiState.Extracting, vm.state.value)
@@ -278,7 +300,7 @@ class ConfirmViewModelTest {
         val extractor = FakeExtractor(
             mutableListOf(ExtractionResult.Unavailable, ExtractionResult.Success(extraction())),
         )
-        val vm = ConfirmViewModel(extractor, dispatcher)
+        val vm = ConfirmViewModel(extractor, repository, dispatcher) { fixedNow }
         vm.onImagePicked("img")
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value is ConfirmUiState.Error)
@@ -296,5 +318,126 @@ class ConfirmViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
         vm.reset()
         assertEquals(ConfirmUiState.Idle, vm.state.value)
+    }
+
+    @Test
+    fun `accept persists medication with dormant schedule and enters Saved`() = runTest(dispatcher) {
+        val vm = viewModel(ExtractionResult.Success(extraction()))
+        vm.onImagePicked("img")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.onAccept("Heart")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(ConfirmUiState.Saved, vm.state.value)
+        val stored = storedMedications().single()
+        assertEquals("Ibuprofen", stored.medication.drugName)
+        assertEquals("200 mg", stored.medication.dosage)
+        assertEquals("tablet", stored.medication.form)
+        assertEquals("Heart", stored.medication.label)
+        assertEquals(listOf("ibuprofen"), stored.medication.activeIngredients)
+        assertEquals(fixedNow, stored.medication.createdAt)
+        assertEquals(stored.medication.id, stored.schedule.medicationId)
+        assertEquals(true, stored.schedule.withFood)
+        assertNull(stored.schedule.startedAt)
+        assertNull(stored.schedule.stoppedAt)
+    }
+
+    @Test
+    fun `accept preserves the typed frequency rather than re-parsing display text`() = runTest(dispatcher) {
+        val vm = viewModel(
+            ExtractionResult.Success(
+                extraction(frequency = ExtractedField(Frequency.EveryHours(6), 0.9)),
+            ),
+        )
+        vm.onImagePicked("img")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.onAccept(null)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(Frequency.EveryHours(6), storedMedications().single().schedule.frequency)
+    }
+
+    @Test
+    fun `edited field values win over the original extraction`() = runTest(dispatcher) {
+        val vm = viewModel(ExtractionResult.Success(extraction()))
+        vm.onImagePicked("img")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.onFieldEdited(ConfirmViewModel.KEY_DRUG_NAME, "Paracetamol")
+        vm.onFieldEdited(ConfirmViewModel.KEY_DOSAGE, "500 mg")
+        vm.onAccept(null)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val stored = storedMedications().single()
+        assertEquals("Paracetamol", stored.medication.drugName)
+        assertEquals("500 mg", stored.medication.dosage)
+    }
+
+    @Test
+    fun `blank label is stored as null`() = runTest(dispatcher) {
+        val vm = viewModel(ExtractionResult.Success(extraction()))
+        vm.onImagePicked("img")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.onAccept("   ")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(storedMedications().single().medication.label)
+    }
+
+    @Test
+    fun `editing the frequency text updates the typed frequency`() = runTest(dispatcher) {
+        val vm = viewModel(ExtractionResult.Success(extraction()))
+        vm.onImagePicked("img")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.onFieldEdited(ConfirmViewModel.KEY_FREQUENCY, "every 8 hours")
+        vm.onAccept(null)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(Frequency.EveryHours(8), storedMedications().single().schedule.frequency)
+    }
+
+    @Test
+    fun `unparseable frequency edit stores a null frequency`() = runTest(dispatcher) {
+        val vm = viewModel(ExtractionResult.Success(extraction()))
+        vm.onImagePicked("img")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.onFieldEdited(ConfirmViewModel.KEY_FREQUENCY, "whenever it hurts")
+        vm.onAccept(null)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(storedMedications().single().schedule.frequency)
+    }
+
+    @Test
+    fun `editing withFood text updates the typed value`() = runTest(dispatcher) {
+        val vm = viewModel(ExtractionResult.Success(extraction()))
+        vm.onImagePicked("img")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.onFieldEdited(ConfirmViewModel.KEY_WITH_FOOD, "No")
+        vm.onAccept(null)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(false, storedMedications().single().schedule.withFood)
+    }
+
+    @Test
+    fun `accept is ignored while a flagged field is unconfirmed`() = runTest(dispatcher) {
+        val vm = viewModel(
+            ExtractionResult.Success(extraction(dosage = ExtractedField("2OO mg", 0.4))),
+        )
+        vm.onImagePicked("img")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.onAccept(null)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.state.value is ConfirmUiState.Review)
+        assertTrue(storedMedications().isEmpty())
     }
 }
