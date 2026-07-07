@@ -54,12 +54,25 @@ FROM medication m
 INNER JOIN schedule s ON s.medicationId = m.id
 ORDER BY m.createdAt DESC, m.id DESC;
 
+updateMedication:
+UPDATE medication
+SET drugName = :drugName, label = :label, activeIngredients = :activeIngredients,
+    dosage = :dosage, form = :form
+WHERE id = :id;
+
 deleteMedication:
 DELETE FROM medication WHERE id = :id;
 
 insertSchedule:
 INSERT INTO schedule(id, medicationId, frequencyType, frequencyValue, withFood, startedAt, stoppedAt)
 VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- Deliberately never touches startedAt/stoppedAt: activation state changes
+-- go through activateSchedule/stopSchedule.
+updateSchedule:
+UPDATE schedule
+SET frequencyType = :frequencyType, frequencyValue = :frequencyValue, withFood = :withFood
+WHERE id = :id;
 
 activateSchedule:
 UPDATE schedule SET startedAt = :startedAt, stoppedAt = NULL WHERE id = :id;

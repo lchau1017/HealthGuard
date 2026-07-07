@@ -62,6 +62,33 @@ class MedicationRepository(
         queries.getMedication(id, ::rowToMedicationWithSchedule).executeAsOneOrNull()
     }
 
+    /** Updates the editable medication fields; a missing id is a no-op. */
+    suspend fun updateMedication(medication: StoredMedication) = withContext(dispatcher) {
+        queries.updateMedication(
+            drugName = medication.drugName,
+            label = medication.label,
+            activeIngredients = encodeIngredients(medication.activeIngredients),
+            dosage = medication.dosage,
+            form = medication.form,
+            id = medication.id,
+        )
+    }
+
+    /**
+     * Updates frequency and withFood only. [StoredSchedule.startedAt] and
+     * [StoredSchedule.stoppedAt] on the passed value are deliberately ignored:
+     * activation state changes go through [activate]/[stop]. A missing id is
+     * a no-op.
+     */
+    suspend fun updateSchedule(schedule: StoredSchedule) = withContext(dispatcher) {
+        queries.updateSchedule(
+            frequencyType = schedule.frequency.typeColumn(),
+            frequencyValue = schedule.frequency.valueColumn(),
+            withFood = schedule.withFood.toDbBool(),
+            id = schedule.id,
+        )
+    }
+
     suspend fun delete(id: String) = withContext(dispatcher) {
         queries.deleteMedication(id)
     }

@@ -188,6 +188,96 @@ class MedicationRepositoryTest {
     }
 
     @Test
+    fun `updateMedication roundtrips every field`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(), schedule())
+
+        val updated = medication().copy(
+            drugName = "Loratadine",
+            label = "Hay fever",
+            activeIngredients = listOf("loratadine", "microcrystalline cellulose"),
+            dosage = "5 mg",
+            form = "capsule",
+        )
+        repo.updateMedication(updated)
+
+        assertEquals(updated, repo.getMedication("med-1")?.medication)
+    }
+
+    @Test
+    fun `updateMedication can clear nullable fields and empty ingredients`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(), schedule())
+
+        val cleared = medication().copy(
+            label = null,
+            dosage = null,
+            form = null,
+            activeIngredients = emptyList(),
+        )
+        repo.updateMedication(cleared)
+
+        assertEquals(cleared, repo.getMedication("med-1")?.medication)
+    }
+
+    @Test
+    fun `updateSchedule changes frequency TimesPerDay to EveryHours and to null`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(), schedule(frequency = Frequency.TimesPerDay(2)))
+
+        repo.updateSchedule(schedule().copy(frequency = Frequency.EveryHours(8), withFood = false))
+        var stored = repo.getMedication("med-1")?.schedule
+        assertEquals(Frequency.EveryHours(8), stored?.frequency)
+        assertEquals(false, stored?.withFood)
+
+        repo.updateSchedule(schedule().copy(frequency = null, withFood = null))
+        stored = repo.getMedication("med-1")?.schedule
+        assertNull(stored?.frequency)
+        assertNull(stored?.withFood)
+    }
+
+    @Test
+    fun `updateSchedule preserves startedAt and stoppedAt`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(), schedule())
+        repo.activate("med-1", Instant.fromEpochMilliseconds(2_000))
+        repo.stop("med-1", Instant.fromEpochMilliseconds(3_000))
+
+        // The passed-in schedule claims different activation state; update
+        // must ignore it — activation changes go through activate/stop.
+        repo.updateSchedule(
+            schedule().copy(
+                frequency = Frequency.EveryHours(6),
+                startedAt = Instant.fromEpochMilliseconds(9_000),
+                stoppedAt = null,
+            ),
+        )
+
+        val stored = repo.getMedication("med-1")?.schedule
+        assertEquals(Frequency.EveryHours(6), stored?.frequency)
+        assertEquals(Instant.fromEpochMilliseconds(2_000), stored?.startedAt)
+        assertEquals(Instant.fromEpochMilliseconds(3_000), stored?.stoppedAt)
+    }
+
+    @Test
+    fun `update of a missing id is a no-op`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(), schedule())
+
+        repo.updateMedication(medication(id = "med-ghost").copy(drugName = "Ghost"))
+        repo.updateSchedule(
+            schedule(id = "sch-ghost", medicationId = "med-ghost")
+                .copy(frequency = Frequency.EveryHours(4)),
+        )
+
+        val all = repo.medications().first()
+        assertEquals(1, all.size)
+        val only = all.single()
+        assertEquals(medication(), only.medication)
+        assertEquals(schedule(), only.schedule)
+    }
+
+    @Test
     fun `list orders newest first`() = runTest {
         val repo = repository()
         repo.insertMedication(
