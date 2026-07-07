@@ -61,6 +61,16 @@ dropdown after a project reload.)
 An environment variable still wins over `.env` if you prefer:
 `OPENROUTER_API_KEY=sk-or-v1-... ./gradlew :backend:server:run`
 
+**Stopping the server:**
+
+- Started from Android Studio → press the red ■ stop button.
+- Started from a terminal → `Ctrl-C` in that terminal.
+- Lost track of it (e.g. a closed terminal left it running) →
+  `lsof -ti :8787 | xargs kill`
+
+Only one instance can hold port 8787 — if a start fails with
+`Address already in use`, stop the previous instance first.
+
 Success looks like:
 
 ```
