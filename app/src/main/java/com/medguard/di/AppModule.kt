@@ -4,6 +4,7 @@ package com.medguard.di
 
 import com.medguard.BuildConfig
 import com.medguard.confirm.ConfirmViewModel
+import com.medguard.detail.DetailViewModel
 import com.medguard.home.HomeViewModel
 import com.medguard.shared.data.DriverFactory
 import com.medguard.shared.data.MedicationRepository
@@ -43,4 +44,7 @@ val appModule = module {
 
     viewModel { ConfirmViewModel(get(), get(), Dispatchers.IO, get()) }
     viewModel { HomeViewModel(get(), get()) }
+    viewModel { (medicationId: String) ->
+        DetailViewModel(repository = get(), clock = get(), medicationId = medicationId)
+    }
 }

@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -29,6 +30,9 @@ import com.medguard.capture.toUploadJpegBase64
 import com.medguard.confirm.ConfirmDialog
 import com.medguard.confirm.ConfirmUiState
 import com.medguard.confirm.ConfirmViewModel
+import com.medguard.detail.DetailFinished
+import com.medguard.detail.DetailScreen
+import com.medguard.detail.DetailViewModel
 import com.medguard.home.HomeScreen
 import com.medguard.home.HomeViewModel
 import com.medguard.ui.theme.MedGuardTheme
@@ -37,6 +41,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,15 +57,18 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Single-screen shell: the home medication list is always the backdrop; the
- * import/confirm flow floats above it as a dialog whose visibility derives
- * from [ConfirmViewModel]'s state (Idle = hidden), so it survives rotation
+ * Two-screen shell driven by plain state: Home when [detailMedicationId] is
+ * null, the medication detail page otherwise (saveable, so rotation and
+ * process death keep the open detail). The import/confirm flow floats above
+ * whichever screen is showing as a dialog whose visibility derives from
+ * [ConfirmViewModel]'s state (Idle = hidden), so it survives rotation
  * without extra plumbing.
  */
 @Composable
 private fun MedGuardApp(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var detailMedicationId by rememberSaveable { mutableStateOf<String?>(null) }
     // Saveable so rotation (or process death while the camera app is in the
     // foreground) keeps the pending capture target. Uri has no built-in
     // saver; persist its string form instead.
@@ -104,45 +112,74 @@ private fun MedGuardApp(modifier: Modifier = Modifier) {
         if (uri != null) processPickedImage(uri)
     }
 
-    HomeScreen(
-        state = homeState,
-        onTakeNow = homeViewModel::takeNow,
-        onPlay = homeViewModel::onPlay,
-        onDelete = homeViewModel::onDelete,
-        // Detail navigation lands with the medication detail page.
-        onOpenDetail = {},
-        onTakePhoto = {
-            val imagesDir = File(context.cacheDir, "images").apply { mkdirs() }
-            val photoFile = File(imagesDir, "label_${System.currentTimeMillis()}.jpg")
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${BuildConfig.APPLICATION_ID}.fileprovider",
-                photoFile,
-            )
-            // Android 18+ stops granting the capture Uri implicitly; give
-            // every resolvable camera app an explicit read/write grant
-            // (revoked again in the launcher callback).
-            val captureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-            context.packageManager
-                .queryIntentActivities(captureIntent, PackageManager.MATCH_DEFAULT_ONLY)
-                .forEach { info ->
-                    context.grantUriPermission(
-                        info.activityInfo.packageName,
-                        uri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-                    )
+    fun launchCamera() {
+        val imagesDir = File(context.cacheDir, "images").apply { mkdirs() }
+        val photoFile = File(imagesDir, "label_${System.currentTimeMillis()}.jpg")
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${BuildConfig.APPLICATION_ID}.fileprovider",
+            photoFile,
+        )
+        // Android 18+ stops granting the capture Uri implicitly; give
+        // every resolvable camera app an explicit read/write grant
+        // (revoked again in the launcher callback).
+        val captureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+        context.packageManager
+            .queryIntentActivities(captureIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            .forEach { info ->
+                context.grantUriPermission(
+                    info.activityInfo.packageName,
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                )
+            }
+        pendingCameraUriString = uri.toString()
+        takePictureLauncher.launch(uri)
+    }
+
+    val openDetailId = detailMedicationId
+    if (openDetailId != null) {
+        val detailViewModel: DetailViewModel = koinViewModel(
+            key = "detail-$openDetailId",
+            parameters = { parametersOf(openDetailId) },
+        )
+        val detailState by detailViewModel.state.collectAsState()
+        BackHandler { detailMedicationId = null }
+        DetailScreen(
+            viewModel = detailViewModel,
+            onBack = { detailMedicationId = null },
+            modifier = modifier,
+        )
+        LaunchedEffect(detailState.finished) {
+            when (detailState.finished) {
+                DetailFinished.SAVED -> {
+                    Toast.makeText(context, "Changes saved", Toast.LENGTH_SHORT).show()
+                    detailMedicationId = null
                 }
-            pendingCameraUriString = uri.toString()
-            takePictureLauncher.launch(uri)
-        },
-        onPickFromGallery = {
-            pickImageLauncher.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-            )
-        },
-        modifier = modifier,
-    )
+                DetailFinished.DELETED -> {
+                    Toast.makeText(context, "Medication deleted", Toast.LENGTH_SHORT).show()
+                    detailMedicationId = null
+                }
+                null -> Unit
+            }
+        }
+    } else {
+        HomeScreen(
+            state = homeState,
+            onTakeNow = homeViewModel::takeNow,
+            onPlay = homeViewModel::onPlay,
+            onDelete = homeViewModel::onDelete,
+            onOpenDetail = { detailMedicationId = it },
+            onTakePhoto = ::launchCamera,
+            onPickFromGallery = {
+                pickImageLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                )
+            },
+            modifier = modifier,
+        )
+    }
 
     when (confirmState) {
         is ConfirmUiState.Idle -> Unit
