@@ -16,8 +16,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -57,8 +57,11 @@ class MainActivity : ComponentActivity() {
 private fun MedGuardApp(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var screen by remember { mutableStateOf(Screen.Home) }
-    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    // Saveable so rotation (or process death while the camera app is in the
+    // foreground) keeps the current screen and the pending capture target.
+    var screen by rememberSaveable { mutableStateOf(Screen.Home) }
+    // Uri has no built-in saver; persist its string form instead.
+    var pendingCameraUriString by rememberSaveable { mutableStateOf<String?>(null) }
 
     val viewModel: ConfirmViewModel = viewModel(
         factory = viewModelFactory {
@@ -89,9 +92,9 @@ private fun MedGuardApp(modifier: Modifier = Modifier) {
     val takePictureLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture(),
     ) { success ->
-        val uri = pendingCameraUri
+        val uri = pendingCameraUriString?.let(Uri::parse)
         if (success && uri != null) processPickedImage(uri)
-        pendingCameraUri = null
+        pendingCameraUriString = null
     }
 
     val pickImageLauncher = rememberLauncherForActivityResult(
@@ -110,7 +113,7 @@ private fun MedGuardApp(modifier: Modifier = Modifier) {
                     "${BuildConfig.APPLICATION_ID}.fileprovider",
                     photoFile,
                 )
-                pendingCameraUri = uri
+                pendingCameraUriString = uri.toString()
                 takePictureLauncher.launch(uri)
             },
             onPickFromGallery = {

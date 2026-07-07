@@ -182,6 +182,65 @@ class ConfirmViewModelTest {
     }
 
     @Test
+    fun `blank edit does not confirm a flagged field and keeps accept blocked`() = runTest(dispatcher) {
+        val vm = viewModel(
+            ExtractionResult.Success(extraction(dosage = ExtractedField("2OO mg", 0.4))),
+        )
+        vm.onImagePicked("img")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.onFieldEdited(ConfirmViewModel.KEY_DOSAGE, "   ")
+        val field = (vm.state.value as ConfirmUiState.Review)
+            .fields.first { it.key == ConfirmViewModel.KEY_DOSAGE }
+        assertEquals("   ", field.value)
+        assertFalse(field.userConfirmed)
+        assertTrue(field.needsReview)
+        assertFalse(vm.canAccept)
+    }
+
+    @Test
+    fun `non-blank edit after a blank edit confirms the field again`() = runTest(dispatcher) {
+        val vm = viewModel(
+            ExtractionResult.Success(extraction(dosage = ExtractedField("2OO mg", 0.4))),
+        )
+        vm.onImagePicked("img")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.onFieldEdited(ConfirmViewModel.KEY_DOSAGE, "")
+        assertFalse(vm.canAccept)
+        vm.onFieldEdited(ConfirmViewModel.KEY_DOSAGE, "200 mg")
+        val field = (vm.state.value as ConfirmUiState.Review)
+            .fields.first { it.key == ConfirmViewModel.KEY_DOSAGE }
+        assertEquals("200 mg", field.value)
+        assertTrue(field.userConfirmed)
+        assertFalse(field.needsReview)
+        assertTrue(vm.canAccept)
+    }
+
+    @Test
+    fun `accept stays blocked until every flagged field is confirmed`() = runTest(dispatcher) {
+        val vm = viewModel(
+            ExtractionResult.Success(
+                extraction(
+                    drugName = ExtractedField("Ibuprofen", 0.3),
+                    dosage = ExtractedField("200 mg", 0.5),
+                    form = ExtractedField(null, 0.0),
+                ),
+            ),
+        )
+        vm.onImagePicked("img")
+        dispatcher.scheduler.advanceUntilIdle()
+        assertFalse(vm.canAccept)
+
+        vm.onFieldConfirmed(ConfirmViewModel.KEY_DRUG_NAME)
+        assertFalse(vm.canAccept)
+        vm.onFieldConfirmed(ConfirmViewModel.KEY_DOSAGE)
+        assertFalse(vm.canAccept)
+        vm.onFieldEdited(ConfirmViewModel.KEY_FORM, "tablet")
+        assertTrue(vm.canAccept)
+    }
+
+    @Test
     fun `canAccept is true when no field needs review`() = runTest(dispatcher) {
         val vm = viewModel(ExtractionResult.Success(extraction()))
         vm.onImagePicked("img")

@@ -64,7 +64,15 @@ class ConfirmViewModel(
     }
 
     fun onFieldEdited(key: String, newValue: String) {
-        updateField(key) { it.copy(value = newValue, userConfirmed = true, needsReview = false) }
+        updateField(key) { field ->
+            if (newValue.isBlank()) {
+                // A blank value can never stand in for a reviewed one: typing
+                // (or clearing to) whitespace must not unlock Accept.
+                field.copy(value = newValue, userConfirmed = false, needsReview = true)
+            } else {
+                field.copy(value = newValue, userConfirmed = true, needsReview = false)
+            }
+        }
     }
 
     fun onFieldConfirmed(key: String) {
