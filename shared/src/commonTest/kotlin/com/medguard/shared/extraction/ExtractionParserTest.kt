@@ -20,6 +20,26 @@ class ExtractionParserTest {
          "withFood":{"value":null,"confidence":0.2}}
     """.trimIndent()
 
+    /**
+     * Builds a structurally valid payload. Each parameter is a complete field
+     * wrapper (an array for activeIngredients); null omits the key entirely.
+     */
+    private fun payload(
+        drugName: String? = """{"value":"Ibuprofen","confidence":0.9}""",
+        activeIngredients: String? = "[]",
+        dosage: String = """{"value":"200 mg","confidence":0.9}""",
+        form: String = """{"value":"tablet","confidence":0.9}""",
+        frequency: String = """{"value":{"timesPerDay":3},"confidence":0.9}""",
+        withFood: String = """{"value":true,"confidence":0.9}""",
+    ): String = buildList {
+        drugName?.let { add(""""drugName":$it""") }
+        activeIngredients?.let { add(""""activeIngredients":$it""") }
+        add(""""dosage":$dosage""")
+        add(""""form":$form""")
+        add(""""frequency":$frequency""")
+        add(""""withFood":$withFood""")
+    }.joinToString(separator = ",", prefix = "{", postfix = "}")
+
     private fun parseSuccess(raw: String): MedicationExtraction {
         val result = parser.parse(raw)
         assertIs<ExtractionResult.Success>(result)
@@ -56,36 +76,24 @@ class ExtractionParserTest {
 
     @Test
     fun `missing drugName returns Malformed`() {
-        val payload = """{"dosage":{"value":"10 mg","confidence":0.9}}"""
-        val result = parser.parse(payload)
+        val result = parser.parse(payload(drugName = null))
         assertIs<ExtractionResult.Malformed>(result)
     }
 
     @Test
     fun `drugName with null value returns Malformed`() {
-        val payload = """
-            {"drugName":{"value":null,"confidence":0.9},
-             "activeIngredients":[],
-             "dosage":{"value":"10 mg","confidence":0.9},
-             "form":{"value":"tablet","confidence":0.9},
-             "frequency":{"value":{"timesPerDay":2},"confidence":0.9},
-             "withFood":{"value":true,"confidence":0.9}}
-        """.trimIndent()
-        val result = parser.parse(payload)
+        val result = parser.parse(payload(drugName = """{"value":null,"confidence":0.9}"""))
         assertIs<ExtractionResult.Malformed>(result)
     }
 
     @Test
     fun `confidence above one clamps to one and below zero clamps to zero`() {
-        val payload = """
-            {"drugName":{"value":"Ibuprofen","confidence":1.7},
-             "activeIngredients":[],
-             "dosage":{"value":"200 mg","confidence":-0.3},
-             "form":{"value":"tablet","confidence":0.9},
-             "frequency":{"value":{"timesPerDay":3},"confidence":0.9},
-             "withFood":{"value":true,"confidence":0.9}}
-        """.trimIndent()
-        val extraction = parseSuccess(payload)
+        val extraction = parseSuccess(
+            payload(
+                drugName = """{"value":"Ibuprofen","confidence":1.7}""",
+                dosage = """{"value":"200 mg","confidence":-0.3}""",
+            )
+        )
 
         assertEquals(1.0, extraction.drugName.confidence)
         assertEquals(0.0, extraction.dosage.confidence)
@@ -100,24 +108,26 @@ class ExtractionParserTest {
     }
 
     @Test
+    fun `needsReview is true for non-finite confidence`() {
+        // Later screens construct ExtractedField directly, so the model
+        // itself must fail safe on NaN, not just the parser's sanitizing.
+        assertTrue(ExtractedField("x", Double.NaN).needsReview)
+        assertTrue(ExtractedField("x", Double.NEGATIVE_INFINITY).needsReview)
+    }
+
+    @Test
     fun `everyHours frequency wire shape maps to EveryHours`() {
-        val payload = """
-            {"drugName":{"value":"Ibuprofen","confidence":0.9},
-             "activeIngredients":[],
-             "dosage":{"value":"200 mg","confidence":0.9},
-             "form":{"value":"tablet","confidence":0.9},
-             "frequency":{"value":{"everyHours":6},"confidence":0.9},
-             "withFood":{"value":true,"confidence":0.9}}
-        """.trimIndent()
-        val extraction = parseSuccess(payload)
+        val extraction = parseSuccess(
+            payload(frequency = """{"value":{"everyHours":6},"confidence":0.9}""")
+        )
 
         assertEquals(Frequency.EveryHours(6), extraction.frequency.value)
     }
 
     @Test
     fun `unknown extra keys are ignored`() {
-        val payload = validPayload.dropLast(1) + ""","unexpectedExtra":{"value":42,"confidence":0.5}}"""
-        val extraction = parseSuccess(payload)
+        val raw = validPayload.dropLast(1) + ""","unexpectedExtra":{"value":42,"confidence":0.5}}"""
+        val extraction = parseSuccess(raw)
 
         assertEquals("Cetirizine 10mg Tablets", extraction.drugName.value)
     }
@@ -127,15 +137,29 @@ class ExtractionParserTest {
         // Chosen behavior: an unrecognized frequency object degrades to a
         // null-value field with needsReview=true instead of Malformed, so one
         // bad field does not discard the whole scan.
-        val payload = """
-            {"drugName":{"value":"Ibuprofen","confidence":0.9},
-             "activeIngredients":[],
-             "dosage":{"value":"200 mg","confidence":0.9},
-             "form":{"value":"tablet","confidence":0.9},
-             "frequency":{"value":{"weekly":2},"confidence":0.9},
-             "withFood":{"value":true,"confidence":0.9}}
-        """.trimIndent()
-        val extraction = parseSuccess(payload)
+        val extraction = parseSuccess(
+            payload(frequency = """{"value":{"weekly":2},"confidence":0.9}""")
+        )
+
+        assertNull(extraction.frequency.value)
+        assertTrue(extraction.frequency.needsReview)
+    }
+
+    @Test
+    fun `zero timesPerDay yields null frequency needing review`() {
+        val extraction = parseSuccess(
+            payload(frequency = """{"value":{"timesPerDay":0},"confidence":0.9}""")
+        )
+
+        assertNull(extraction.frequency.value)
+        assertTrue(extraction.frequency.needsReview)
+    }
+
+    @Test
+    fun `negative everyHours yields null frequency needing review`() {
+        val extraction = parseSuccess(
+            payload(frequency = """{"value":{"everyHours":-6},"confidence":0.9}""")
+        )
 
         assertNull(extraction.frequency.value)
         assertTrue(extraction.frequency.needsReview)
@@ -146,15 +170,13 @@ class ExtractionParserTest {
         // "NaN"/"Infinity" string contents survive doubleOrNull as non-finite
         // doubles; NaN defeats both coerceIn and the needsReview threshold
         // comparison, so non-finite confidence must be forced to 0.0.
-        val payload = """
-            {"drugName":{"value":"Ibuprofen","confidence":"NaN"},
-             "activeIngredients":[],
-             "dosage":{"value":"200 mg","confidence":"Infinity"},
-             "form":{"value":"tablet","confidence":"-Infinity"},
-             "frequency":{"value":{"timesPerDay":3},"confidence":0.9},
-             "withFood":{"value":true,"confidence":0.9}}
-        """.trimIndent()
-        val extraction = parseSuccess(payload)
+        val extraction = parseSuccess(
+            payload(
+                drugName = """{"value":"Ibuprofen","confidence":"NaN"}""",
+                dosage = """{"value":"200 mg","confidence":"Infinity"}""",
+                form = """{"value":"tablet","confidence":"-Infinity"}""",
+            )
+        )
 
         assertEquals(0.0, extraction.drugName.confidence)
         assertTrue(extraction.drugName.needsReview)
@@ -166,16 +188,23 @@ class ExtractionParserTest {
 
     @Test
     fun `empty activeIngredients array parses`() {
-        val payload = """
-            {"drugName":{"value":"Ibuprofen","confidence":0.9},
-             "activeIngredients":[],
-             "dosage":{"value":"200 mg","confidence":0.9},
-             "form":{"value":"tablet","confidence":0.9},
-             "frequency":{"value":{"timesPerDay":3},"confidence":0.9},
-             "withFood":{"value":false,"confidence":0.9}}
-        """.trimIndent()
-        val extraction = parseSuccess(payload)
+        val extraction = parseSuccess(payload(activeIngredients = "[]"))
 
         assertTrue(extraction.activeIngredients.isEmpty())
+    }
+
+    @Test
+    fun `absent activeIngredients key parses as empty list`() {
+        val extraction = parseSuccess(payload(activeIngredients = null))
+
+        assertTrue(extraction.activeIngredients.isEmpty())
+    }
+
+    @Test
+    fun `non-object activeIngredients entry degrades to null field needing review`() {
+        val extraction = parseSuccess(payload(activeIngredients = "[42]"))
+
+        assertEquals(listOf(ExtractedField<String>(null, 0.0)), extraction.activeIngredients)
+        assertTrue(extraction.activeIngredients[0].needsReview)
     }
 }

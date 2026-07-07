@@ -70,13 +70,17 @@ class ExtractionParser {
         (this as? JsonPrimitive)?.takeIf { it.isString }?.content
 
     // The frequency union arrives without a class discriminator: either
-    // {"timesPerDay": N} or {"everyHours": N}. Any other shape maps to a
-    // null value (needsReview) rather than Malformed, so one bad field does
-    // not discard the whole scan.
+    // {"timesPerDay": N} or {"everyHours": N}. Any other shape, or a
+    // non-positive count, maps to a null value (needsReview) rather than
+    // Malformed, so one bad field does not discard the whole scan.
     private fun JsonElement.toFrequencyOrNull(): Frequency? {
         val obj = this as? JsonObject ?: return null
-        (obj["timesPerDay"] as? JsonPrimitive)?.intOrNull?.let { return Frequency.TimesPerDay(it) }
-        (obj["everyHours"] as? JsonPrimitive)?.intOrNull?.let { return Frequency.EveryHours(it) }
+        (obj["timesPerDay"] as? JsonPrimitive)?.intOrNull
+            ?.takeIf { it > 0 }
+            ?.let { return Frequency.TimesPerDay(it) }
+        (obj["everyHours"] as? JsonPrimitive)?.intOrNull
+            ?.takeIf { it > 0 }
+            ?.let { return Frequency.EveryHours(it) }
         return null
     }
 }
