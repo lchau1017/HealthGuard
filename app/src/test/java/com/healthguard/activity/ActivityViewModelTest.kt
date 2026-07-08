@@ -107,7 +107,10 @@ class ActivityViewModelTest {
         val state = vm.state.value
         assertEquals(ActivityFilter.ALL, state.filter)
         assertEquals(2, state.stats.totalEvents)
-        assertEquals(2, state.dayCounts.sumOf { it.count })
+        // The heat map is a fixed 16-week record: only the recent take shows.
+        assertEquals(1, state.dayCounts.sumOf { it.count })
+        // 16 heat-map week columns ending this week start Monday 2024-03-18.
+        assertEquals(LocalDate(2024, 3, 18), state.heatFrom)
     }
 
     @Test
@@ -145,11 +148,25 @@ class ActivityViewModelTest {
         assertEquals(LocalDate(2024, 6, 4), vm.state.value.from)
     }
 
+    private suspend fun logMissed(medicationId: String, plannedAt: Instant) {
+        repository.logDose(
+            StoredDoseLog(
+                id = "missed-$medicationId-${plannedAt.toEpochMilliseconds()}",
+                scheduleId = "sched-$medicationId",
+                plannedAt = plannedAt,
+                takenAt = null,
+                status = DoseStatus.MISSED,
+            ),
+        )
+    }
+
     @Test
-    fun `breakdown sorts by count with percentages of the total`() = runTest(dispatcher) {
+    fun `breakdown is adherence per medicine best first`() = runTest(dispatcher) {
         insert("a", "Ibuprofen")
         insert("b", "Cetirizine")
+        // Ibuprofen: 1 taken, 1 missed -> 50%. Cetirizine: 3 taken -> 100%.
         logTaken("a", fixedNow - 3.hours)
+        logMissed("a", fixedNow - 10.hours)
         logTaken("b", fixedNow - 2.hours)
         logTaken("b", fixedNow - 1.hours)
         logTaken("b", fixedNow - 30.days)
@@ -158,9 +175,28 @@ class ActivityViewModelTest {
 
         assertEquals(
             listOf(
-                MedicationBreakdown("Cetirizine", 3, 75),
-                MedicationBreakdown("Ibuprofen", 1, 25),
+                MedicationAdherence("Cetirizine", 100),
+                MedicationAdherence("Ibuprofen", 50),
             ),
+            vm.state.value.breakdown,
+        )
+    }
+
+    @Test
+    fun `breakdown omits medicines without taken or missed doses in the window`() = runTest(dispatcher) {
+        insert("a", "Ibuprofen")
+        insert("b", "Cetirizine")
+        logTaken("a", fixedNow - 1.hours)
+        // Cetirizine's only dose predates the 7-day window.
+        logTaken("b", fixedNow - 10.days)
+        val vm = viewModel()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.setFilter(ActivityFilter.DAYS_7)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            listOf(MedicationAdherence("Ibuprofen", 100)),
             vm.state.value.breakdown,
         )
     }

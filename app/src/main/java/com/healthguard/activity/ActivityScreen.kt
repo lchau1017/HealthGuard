@@ -15,12 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -45,9 +41,9 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 /**
- * The Activity dashboard: window filter, stat tiles, the full heat map with a
- * tap-to-read caption, and the per-medication breakdown. Reloads on entry so
- * takes recorded on other screens are always included.
+ * The Activity tab: window filter, four stat tiles, the fixed 16-week heat
+ * map with a tap-to-read caption, and the per-medicine adherence breakdown.
+ * Reloads on entry so takes recorded on other screens are always included.
  */
 @Composable
 fun ActivityScreen(
@@ -87,8 +83,14 @@ fun ActivityScreen(
             } else {
                 StatTiles(stats = state.stats)
 
-                state.from?.let { from ->
+                state.heatFrom?.let { from ->
                     Column {
+                        Text(
+                            text = "16-week record",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.height(8.dp))
                         ActivityHeatMap(
                             dayCounts = state.dayCounts,
                             from = from,
@@ -123,9 +125,9 @@ private fun FilterRow(
     modifier: Modifier = Modifier,
 ) {
     val options = listOf(
-        "All" to ActivityFilter.ALL,
-        "30d" to ActivityFilter.DAYS_30,
-        "7d" to ActivityFilter.DAYS_7,
+        "All time" to ActivityFilter.ALL,
+        "30 days" to ActivityFilter.DAYS_30,
+        "7 days" to ActivityFilter.DAYS_7,
     )
     SingleChoiceSegmentedButtonRow(modifier = modifier.fillMaxWidth()) {
         options.forEachIndexed { index, (label, filter) ->
@@ -139,25 +141,23 @@ private fun FilterRow(
     }
 }
 
+/** Exactly four tiles: doses taken, current run, active days, most consistent. */
 @Composable
 private fun StatTiles(stats: ActivityStats, modifier: Modifier = Modifier) {
+    val runValue = if (stats.currentStreakDays == 1) "1 day" else "${stats.currentStreakDays} days"
     val tiles = listOf(
-        "Doses taken" to "${stats.totalEvents}",
-        "Current streak" to "${stats.currentStreakDays}d",
-        "Longest streak" to "${stats.longestStreakDays}d",
-        "Active days" to "${stats.activeDays}",
-        "Peak hour" to (stats.peakHour?.let(::hourLabel) ?: "—"),
-        "Most taken" to (stats.topItem?.name ?: "—"),
+        "${stats.totalEvents}" to "Doses taken",
+        runValue to "Current run",
+        "${stats.activeDays}" to "Active days",
+        (stats.peakHour?.let(::hourLabel) ?: "—") to "Most consistent",
     )
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         tiles.chunked(2).forEach { rowTiles ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                rowTiles.forEach { (label, value) ->
+                rowTiles.forEach { (value, label) ->
                     StatTile(
                         label = label,
                         value = value,
-                        // Drug names don't fit display type; step down for text values.
-                        compactValue = label == "Most taken",
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -170,18 +170,13 @@ private fun StatTiles(stats: ActivityStats, modifier: Modifier = Modifier) {
 private fun StatTile(
     label: String,
     value: String,
-    compactValue: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = value,
-                style = if (compactValue) {
-                    MaterialTheme.typography.titleMedium
-                } else {
-                    MaterialTheme.typography.headlineMedium
-                },
+                style = MaterialTheme.typography.headlineMedium,
                 maxLines = 1,
             )
             Spacer(Modifier.height(2.dp))
@@ -194,19 +189,23 @@ private fun StatTile(
     }
 }
 
+/** Per-medicine adherence: name, percentage, and a thin progress bar. */
 @Composable
-private fun BreakdownList(rows: List<MedicationBreakdown>, modifier: Modifier = Modifier) {
-    val maxCount = rows.maxOfOrNull { it.count } ?: return
+private fun BreakdownList(rows: List<MedicationAdherence>, modifier: Modifier = Modifier) {
+    if (rows.isEmpty()) return
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "By medication",
+            text = "By medicine",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
         )
         Spacer(Modifier.height(8.dp))
         rows.forEach { row ->
             Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Text(
                         text = row.name,
                         style = MaterialTheme.typography.bodyLarge,
@@ -215,25 +214,24 @@ private fun BreakdownList(rows: List<MedicationBreakdown>, modifier: Modifier = 
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        text = "${row.count} · ${row.percent}%",
+                        text = "${row.percent}%",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Spacer(Modifier.height(4.dp))
-                // Thin single-hue proportion bar, scaled to the largest row.
                 Box(
                     Modifier
                         .fillMaxWidth()
                         .height(6.dp)
                         .background(
-                            MaterialTheme.colorScheme.surfaceVariant,
+                            MaterialTheme.colorScheme.secondaryContainer,
                             MaterialTheme.shapes.extraSmall,
                         ),
                 ) {
                     Box(
                         Modifier
-                            .fillMaxWidth(row.count.toFloat() / maxCount)
+                            .fillMaxWidth(row.percent / 100f)
                             .height(6.dp)
                             .background(
                                 MaterialTheme.colorScheme.primary,
