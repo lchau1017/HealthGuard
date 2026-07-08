@@ -179,6 +179,7 @@ private fun HealthGuardApp(modifier: Modifier = Modifier) {
             onPlay = homeViewModel::onPlay,
             onDelete = homeViewModel::onDelete,
             onOpenDetail = { detailMedicationId = it },
+            onOpenActivity = {}, // Activity dashboard arrives with the next slice.
             onTakePhoto = ::launchCamera,
             onPickFromGallery = {
                 pickImageLauncher.launch(

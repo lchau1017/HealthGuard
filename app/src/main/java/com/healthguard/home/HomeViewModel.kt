@@ -4,6 +4,11 @@ package com.healthguard.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.healthguard.activity.ActivityEvent
+import com.healthguard.activity.DayCount
+import com.healthguard.activity.activityStats
+import com.healthguard.activity.dayCounts
+import com.healthguard.activity.mondayOf
 import com.healthguard.dose.RecordedTake
 import com.healthguard.dose.isDoubleDose
 import com.healthguard.dose.recordTakenDose
@@ -25,7 +30,12 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.minus
+import kotlinx.datetime.toLocalDateTime
 
 /** A schedule the user has started and not stopped. */
 val MedicationWithSchedule.isActive: Boolean
@@ -41,15 +51,24 @@ data class DoseCard(
     val isDue: Boolean = false,
 )
 
+/** The due-now banner: the most overdue card plus how many others are due. */
+data class DueAlert(val card: DoseCard, val othersDueCount: Int)
+
 data class HomeUiState(
-    /** The hero card: the first taking entry with a known next dose. */
-    val nextUp: DoseCard? = null,
+    /** Non-null only while at least one taking entry is due now or overdue. */
+    val dueAlert: DueAlert? = null,
     /** Active schedules: overdue first, then soonest next dose, no-frequency last. */
     val taking: List<DoseCard> = emptyList(),
     /** Dormant or stopped medications, newest first. */
     val cabinet: List<MedicationWithSchedule> = emptyList(),
     /** How many taking entries are due now or overdue. */
     val dueCount: Int = 0,
+    /** Per-day take counts over the activity strip window, ascending. */
+    val activityDayCounts: List<DayCount> = emptyList(),
+    /** First day of the activity strip window (a Monday). */
+    val activityFrom: LocalDate? = null,
+    val activityStreakDays: Int = 0,
+    val activityTodayCount: Int = 0,
 )
 
 /** A takeNow blocked by the double-dose window, awaiting user confirmation. */
@@ -105,11 +124,30 @@ class HomeViewModel(
             // Ascending nextDoseAt puts the most overdue (earliest) instant
             // first and upcoming doses after, exactly the triage order.
             .sortedWith(compareBy(nullsLast()) { it.nextDoseAt })
+        val dueCount = taking.count { it.isDue }
+
+        // Activity strip window: today's heat-map column plus the 15 full
+        // weeks before it. Query upper bound is exclusive, so pad past `now`
+        // to include a take recorded at this exact instant.
+        val today = now.toLocalDateTime(zone).date
+        val activityFrom = mondayOf(today).minus(ACTIVITY_STRIP_WEEKS - 1, DateTimeUnit.WEEK)
+        val taken = repository.takenDosesInRange(
+            from = activityFrom.atStartOfDayIn(zone),
+            to = now + 1.minutes,
+        )
+        val stats = activityStats(taken.map { ActivityEvent(it.drugName, it.takenAt) }, now, zone)
+        val activityDayCounts = dayCounts(taken.map { it.takenAt }, zone)
+
         return HomeUiState(
-            nextUp = taking.firstOrNull { it.nextDoseAt != null },
+            dueAlert = taking.firstOrNull { it.isDue }?.let { DueAlert(it, dueCount - 1) },
             taking = taking,
             cabinet = rows.filterNot { it.isActive },
-            dueCount = taking.count { it.isDue },
+            dueCount = dueCount,
+            activityDayCounts = activityDayCounts,
+            activityFrom = activityFrom,
+            activityStreakDays = stats.currentStreakDays,
+            activityTodayCount = activityDayCounts.lastOrNull()
+                ?.takeIf { it.date == today }?.count ?: 0,
         )
     }
 
@@ -181,6 +219,9 @@ class HomeViewModel(
         viewModelScope.launch { repository.delete(medicationId) }
     }
 }
+
+/** Heat-map columns on the home activity strip (current week included). */
+private const val ACTIVITY_STRIP_WEEKS = 16
 
 private const val TICK_MILLIS = 60_000L
 

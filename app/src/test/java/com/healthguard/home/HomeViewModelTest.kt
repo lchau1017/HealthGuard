@@ -139,26 +139,85 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `nextUp is the first taking entry with a non-null next dose`() = runTest(dispatcher) {
+    fun `dueAlert is null when nothing is due`() = runTest(dispatcher) {
         insert("nofreq", frequency = null, startedAt = fixedNow - 1.hours)
-        insert("due", frequency = Frequency.EveryHours(4), startedAt = fixedNow - 6.hours)
-        logTaken("due", fixedNow - 1.hours)
+        insert("later", frequency = Frequency.EveryHours(4), startedAt = fixedNow - 6.hours)
+        logTaken("later", fixedNow - 1.hours) // next dose in 3h
         val vm = viewModel()
         collectState(vm)
 
-        assertEquals("due", vm.state.value.nextUp?.item?.medication?.id)
-        assertEquals(fixedNow + 3.hours, vm.state.value.nextUp?.nextDoseAt)
+        assertNull(vm.state.value.dueAlert)
+        assertEquals(2, vm.state.value.taking.size)
     }
 
     @Test
-    fun `nextUp is null when no taking entry has a next dose`() = runTest(dispatcher) {
-        insert("nofreq", frequency = null, startedAt = fixedNow - 1.hours)
-        insert("dormant")
+    fun `dueAlert carries the single due card with no others`() = runTest(dispatcher) {
+        insert("due", frequency = Frequency.EveryHours(4), startedAt = fixedNow - 1.hours)
+        insert("later", frequency = Frequency.EveryHours(4), startedAt = fixedNow - 6.hours)
+        logTaken("later", fixedNow - 1.hours)
         val vm = viewModel()
         collectState(vm)
 
-        assertNull(vm.state.value.nextUp)
-        assertEquals(1, vm.state.value.taking.size)
+        val alert = vm.state.value.dueAlert!!
+        assertEquals("due", alert.card.item.medication.id)
+        assertEquals(0, alert.othersDueCount)
+    }
+
+    @Test
+    fun `dueAlert picks the most overdue card and counts the rest`() = runTest(dispatcher) {
+        insert("od1", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 1.hours)
+        insert("od2", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 3.hours)
+        insert("od3", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 2.hours)
+        val vm = viewModel()
+        collectState(vm)
+
+        val alert = vm.state.value.dueAlert!!
+        assertEquals("od2", alert.card.item.medication.id)
+        assertEquals(2, alert.othersDueCount)
+    }
+
+    @Test
+    fun `activity aggregates recent takes into day counts streak and today count`() = runTest(dispatcher) {
+        insert("a", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 72.hours)
+        logTaken("a", fixedNow - 26.hours) // yesterday 08:00 UTC
+        logTaken("a", fixedNow - 2.hours) // today 08:00
+        logTaken("a", fixedNow - 1.hours) // today 09:00
+        val vm = viewModel()
+        collectState(vm)
+
+        val state = vm.state.value
+        assertEquals(2, state.activityStreakDays)
+        assertEquals(2, state.activityTodayCount)
+        assertEquals(
+            listOf(1, 2),
+            state.activityDayCounts.map { it.count },
+        )
+    }
+
+    @Test
+    fun `activity ignores takes older than the sixteen week window`() = runTest(dispatcher) {
+        insert("a", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 5000.hours)
+        // Window starts Monday 2024-03-18 (16 heat-map week columns).
+        logTaken("a", Instant.parse("2024-03-17T12:00:00Z")) // just outside
+        logTaken("a", Instant.parse("2024-03-18T00:00:00Z")) // first instant inside
+        val vm = viewModel()
+        collectState(vm)
+
+        assertEquals(1, vm.state.value.activityDayCounts.sumOf { it.count })
+    }
+
+    @Test
+    fun `takeNow refresh folds the new take into activity`() = runTest(dispatcher) {
+        insert("a", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 2.hours)
+        val vm = viewModel()
+        collectState(vm)
+        assertEquals(0, vm.state.value.activityTodayCount)
+
+        vm.takeNow(vm.state.value.taking.single())
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, vm.state.value.activityTodayCount)
+        assertEquals(1, vm.state.value.activityStreakDays)
     }
 
     @Test

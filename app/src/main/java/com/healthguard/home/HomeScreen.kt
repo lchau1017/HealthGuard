@@ -48,6 +48,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +57,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.healthguard.activity.ActivityHeatMap
+import com.healthguard.activity.DayCount
 import com.healthguard.dose.RecordedTake
 import com.healthguard.format.countdownText
 import com.healthguard.format.doseTimeText
@@ -66,7 +69,10 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
+import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * The home screen: a "Next dose" hero card, the active "Taking now" list,
@@ -86,6 +92,7 @@ fun HomeScreen(
     onPlay: (String) -> Unit,
     onDelete: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
+    onOpenActivity: () -> Unit,
     onTakePhoto: () -> Unit,
     onPickFromGallery: () -> Unit,
     modifier: Modifier = Modifier,
@@ -94,6 +101,7 @@ fun HomeScreen(
     var showDisclaimer by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<MedicationWithSchedule?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     // Fresh wall-clock reading per state emission: the view model re-emits at
     // least every minute, which is exactly the countdown's resolution.
@@ -156,15 +164,14 @@ fun HomeScreen(
                 )
             }
 
-            state.nextUp?.let { hero ->
-                item(key = "hero") {
-                    NextDoseHeroCard(
-                        card = hero,
-                        moreDueCount = if (state.dueCount >= 2) state.dueCount - 1 else 0,
+            state.dueAlert?.let { alert ->
+                item(key = "due-alert") {
+                    DueAlertCard(
+                        alert = alert,
                         now = now,
                         zone = zone,
-                        onTakeNow = { onTakeNow(hero) },
-                        onClick = { onOpenDetail(hero.item.medication.id) },
+                        onTakeNow = { onTakeNow(alert.card) },
+                        onClick = { onOpenDetail(alert.card.item.medication.id) },
                     )
                 }
             }
@@ -172,6 +179,26 @@ fun HomeScreen(
             if (state.taking.isEmpty() && state.cabinet.isEmpty()) {
                 item(key = "empty-all") { OverallEmptyState() }
             } else {
+                state.activityFrom?.let { activityFrom ->
+                    item(key = "activity-strip") {
+                        ActivityStrip(
+                            dayCounts = state.activityDayCounts,
+                            from = activityFrom,
+                            today = now.toLocalDateTime(zone).date,
+                            streakDays = state.activityStreakDays,
+                            todayCount = state.activityTodayCount,
+                            onOpen = onOpenActivity,
+                            onDayClick = { date, count ->
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        dayCountMessage(date, count),
+                                        duration = SnackbarDuration.Short,
+                                    )
+                                }
+                            },
+                        )
+                    }
+                }
                 item(key = "taking-header") { SectionHeader("Taking now") }
                 if (state.taking.isEmpty()) {
                     item(key = "taking-empty") {
@@ -301,33 +328,38 @@ private fun Urgency.countdownColor(): Color = when (this) {
     else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
+/**
+ * Shown only while something is due: the most urgent item front and center
+ * with the guarded Take action, plus a count of any other due items.
+ */
 @Composable
-private fun NextDoseHeroCard(
-    card: DoseCard,
-    moreDueCount: Int,
+private fun DueAlertCard(
+    alert: DueAlert,
     now: Instant,
     zone: TimeZone,
     onTakeNow: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val card = alert.card
     val medication = card.item.medication
-    val urgency = urgencyOf(card.nextDoseAt, now)
-    val containerColor = when (urgency) {
-        Urgency.OVERDUE -> MaterialTheme.colorScheme.errorContainer
-        Urgency.DUE_SOON -> MaterialTheme.colorScheme.tertiaryContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant
-    }
+    val overdue = urgencyOf(card.nextDoseAt, now) == Urgency.OVERDUE
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = containerColor),
+        colors = CardDefaults.cardColors(
+            containerColor = if (overdue) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                MaterialTheme.colorScheme.tertiaryContainer
+            },
+        ),
         modifier = modifier
             .fillMaxWidth()
-            .semanticsLabel("Next dose: ${medication.drugName}, open details"),
+            .semanticsLabel("Dose due: ${medication.drugName}, open details"),
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text(
-                text = "Next dose",
+                text = "Dose due",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -337,32 +369,19 @@ private fun NextDoseHeroCard(
                     .joinToString(" · "),
                 style = MaterialTheme.typography.titleLarge,
             )
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    text = card.nextDoseAt?.let { doseTimeText(it, zone) }.orEmpty(),
-                    style = MaterialTheme.typography.displaySmall,
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    text = countdownText(card.nextDoseAt, now, zone),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = urgency.countdownColor(),
-                    modifier = Modifier.padding(bottom = 6.dp),
-                )
-            }
-            card.item.schedule.frequency?.let { frequency ->
-                Text(
-                    text = frequency.toHumanText() +
-                        if (card.item.schedule.withFood == true) " · with food" else "",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (moreDueCount > 0) {
+            Text(
+                text = countdownText(card.nextDoseAt, now, zone),
+                style = MaterialTheme.typography.titleMedium,
+                color = if (overdue) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+            if (alert.othersDueCount > 0) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "and $moreDueCount more due now",
+                    text = "and ${alert.othersDueCount} more due now",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -377,6 +396,67 @@ private fun NextDoseHeroCard(
             ) {
                 Text("Take now", style = MaterialTheme.typography.titleMedium)
             }
+        }
+    }
+}
+
+/** Transient text for a tapped heat-map day — the non-color value channel. */
+private fun dayCountMessage(date: LocalDate, count: Int): String {
+    val dayName = date.dayOfWeek.name.lowercase()
+        .replaceFirstChar { it.uppercase() }.take(3)
+    val monthName = date.month.name.lowercase()
+        .replaceFirstChar { it.uppercase() }.take(3)
+    val doses = if (count == 1) "1 dose" else "$count doses"
+    return "$dayName ${date.day} $monthName — $doses"
+}
+
+/**
+ * Compact tappable activity summary: a short 16-week heat map plus one
+ * streak/today line. Tapping the card opens the Activity screen; tapping a
+ * cell surfaces that day's count as a snackbar instead.
+ */
+@Composable
+private fun ActivityStrip(
+    dayCounts: List<DayCount>,
+    from: LocalDate,
+    today: LocalDate,
+    streakDays: Int,
+    todayCount: Int,
+    onOpen: () -> Unit,
+    onDayClick: (LocalDate, Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        onClick = onOpen,
+        modifier = modifier
+            .fillMaxWidth()
+            .semanticsLabel("Activity, open dashboard"),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Activity",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            ActivityHeatMap(
+                dayCounts = dayCounts,
+                from = from,
+                today = today,
+                cellSize = 12.dp,
+                // The strip stays compact; the Activity screen carries the legend.
+                showLegend = false,
+                onDayClick = onDayClick,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = listOfNotNull(
+                    streakDays.takeIf { it > 0 }?.let { "$it-day streak" },
+                    "$todayCount today",
+                ).joinToString(" · "),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
