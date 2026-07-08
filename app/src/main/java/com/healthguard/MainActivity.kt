@@ -197,6 +197,8 @@ private fun HealthGuardApp(modifier: Modifier = Modifier) {
                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                 )
             },
+            onLoadDemoData = homeViewModel::loadDemoData,
+            onRemoveDemoData = homeViewModel::removeDemoData,
             modifier = modifier,
         )
     }

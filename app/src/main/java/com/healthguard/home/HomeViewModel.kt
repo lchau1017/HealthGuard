@@ -9,6 +9,7 @@ import com.healthguard.activity.DayCount
 import com.healthguard.activity.activityStats
 import com.healthguard.activity.dayCounts
 import com.healthguard.activity.mondayOf
+import com.healthguard.demo.DemoDataSeeder
 import com.healthguard.dose.RecordedTake
 import com.healthguard.dose.isDoubleDose
 import com.healthguard.dose.recordTakenDose
@@ -217,6 +218,21 @@ class HomeViewModel(
 
     fun onDelete(medicationId: String) {
         viewModelScope.launch { repository.delete(medicationId) }
+    }
+
+    /** Debug builds only: populate/remove demo history so the dashboard demos well. */
+    fun loadDemoData() {
+        viewModelScope.launch {
+            DemoDataSeeder.seed(repository, clock(), zone)
+            refresh.update { it + 1 }
+        }
+    }
+
+    fun removeDemoData() {
+        viewModelScope.launch {
+            DemoDataSeeder.remove(repository)
+            refresh.update { it + 1 }
+        }
     }
 }
 

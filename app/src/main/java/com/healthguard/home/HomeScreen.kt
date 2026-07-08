@@ -18,8 +18,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import com.healthguard.BuildConfig
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -96,6 +100,8 @@ fun HomeScreen(
     onOpenActivity: () -> Unit,
     onTakePhoto: () -> Unit,
     onPickFromGallery: () -> Unit,
+    onLoadDemoData: () -> Unit = {},
+    onRemoveDemoData: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var showSourceSheet by remember { mutableStateOf(false) }
@@ -137,6 +143,35 @@ fun HomeScreen(
                             imageVector = Icons.Filled.Info,
                             contentDescription = "About HealthGuard and medical disclaimer",
                         )
+                    }
+                    // Demo data controls exist in debug builds only.
+                    if (BuildConfig.DEBUG) {
+                        var demoMenuOpen by remember { mutableStateOf(false) }
+                        IconButton(onClick = { demoMenuOpen = true }) {
+                            Icon(
+                                imageVector = Icons.Filled.MoreVert,
+                                contentDescription = "Developer options",
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = demoMenuOpen,
+                            onDismissRequest = { demoMenuOpen = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Load demo data") },
+                                onClick = {
+                                    demoMenuOpen = false
+                                    onLoadDemoData()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Remove demo data") },
+                                onClick = {
+                                    demoMenuOpen = false
+                                    onRemoveDemoData()
+                                },
+                            )
+                        }
                     }
                 },
             )
