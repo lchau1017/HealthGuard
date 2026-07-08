@@ -22,6 +22,23 @@ private const val WINDOW_START_MINUTE = 8 * 60
 private const val WINDOW_LENGTH_MINUTES = 14 * 60
 
 /**
+ * Wall-clock dose slots for a frequency, ascending. TimesPerDay slots are
+ * aligned to waking and meal times rather than spread mechanically — 1x/day
+ * is a morning-routine 09:00, 2x/day brackets the day at 09:00 and 21:00,
+ * 3x/day follows meals (08:00, 14:00, 21:00) and 4x/day adds a midday dose
+ * (08:00, 12:00, 17:00, 21:00). Five or more doses fall back to even spacing
+ * inside the 08:00-22:00 waking window. Nothing is ever scheduled between
+ * 22:00 and 08:00.
+ *
+ * [Frequency.EveryHours] (and null) return an empty list: interval doses
+ * anchor to the schedule start / last take, not to wall-clock slots.
+ */
+fun doseSlots(frequency: Frequency?): List<LocalTime> = when (frequency) {
+    is Frequency.TimesPerDay -> slotTimes(frequency.count)
+    is Frequency.EveryHours, null -> emptyList()
+}
+
+/**
  * Computes when the next dose of a schedule is due. Pure: never reads the
  * clock — [now] and [zone] are injected by the caller.
  *
@@ -35,11 +52,10 @@ private const val WINDOW_LENGTH_MINUTES = 14 * 60
  * - lastTaken == null -> the first dose is due at `startedAt` (pressing
  *   start means "ready to take"), also possibly in the past.
  *
- * [Frequency.TimesPerDay] uses wall-clock slots in [zone], evenly spaced in
- * the waking window 08:00-22:00 local: slot k (0-based) is at
- * `08:00 + (k * 14h) / (n - 1)` for n > 1, and n == 1 has a single 08:00
- * slot. Slots stay at the same local time across DST transitions. The
- * result is the earliest slot instant strictly after a threshold:
+ * [Frequency.TimesPerDay] uses the meal-aligned wall-clock slots of
+ * [doseSlots] in [zone]. Slots stay at the same local time across DST
+ * transitions. The result is the earliest slot instant strictly after a
+ * threshold:
  * - lastTaken != null -> threshold = maxOf(lastTaken, now): the next
  *   upcoming slot; missed days never accumulate overdue slots.
  * - lastTaken == null -> threshold = startedAt: the first untaken slot
@@ -68,19 +84,26 @@ fun nextDose(
 }
 
 /**
- * Earliest waking-window slot instant strictly after [threshold]. Only the
- * threshold's local date and the next one need checking: any earlier date's
- * slots all end by 22:00 local, before the threshold's date begins.
+ * Earliest slot instant strictly after [threshold]. Only the threshold's
+ * local date and the next one need checking: any earlier date's slots all
+ * end by 22:00 local, before the threshold's date begins.
  */
 private fun nextSlotAfter(threshold: Instant, count: Int, zone: TimeZone): Instant {
     val date = threshold.toLocalDateTime(zone).date
+    val slots = slotTimes(count)
     return sequenceOf(date, date.plus(1, DateTimeUnit.DAY))
-        .flatMap { day -> slotMinutes(count).map { minute -> day.atTime(LocalTime(minute / 60, minute % 60)).toInstant(zone) } }
+        .flatMap { day -> slots.map { slot -> day.atTime(slot).toInstant(zone) } }
         .first { it > threshold }
 }
 
-/** Slot times as minutes from local midnight, ascending. */
-private fun slotMinutes(count: Int): Sequence<Int> =
-    if (count <= 1) sequenceOf(WINDOW_START_MINUTE)
-    else (0 until count).asSequence()
-        .map { k -> WINDOW_START_MINUTE + (k * WINDOW_LENGTH_MINUTES) / (count - 1) }
+/** Slot times for a times-per-day count, ascending; see [doseSlots]. */
+private fun slotTimes(count: Int): List<LocalTime> = when {
+    count <= 1 -> listOf(LocalTime(9, 0))
+    count == 2 -> listOf(LocalTime(9, 0), LocalTime(21, 0))
+    count == 3 -> listOf(LocalTime(8, 0), LocalTime(14, 0), LocalTime(21, 0))
+    count == 4 -> listOf(LocalTime(8, 0), LocalTime(12, 0), LocalTime(17, 0), LocalTime(21, 0))
+    else -> (0 until count).map { k ->
+        val minute = WINDOW_START_MINUTE + (k * WINDOW_LENGTH_MINUTES) / (count - 1)
+        LocalTime(minute / 60, minute % 60)
+    }
+}

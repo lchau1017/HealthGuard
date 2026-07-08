@@ -394,20 +394,20 @@ class HomeViewModelTest {
 
     @Test
     fun `ticker re-emission recomputes against the current clock`() = runTest(dispatcher) {
-        // TimesPerDay(2) slots at 08:00 and 22:00 UTC. Taken at 09:00,
-        // now 10:00 -> next slot today 22:00.
+        // TimesPerDay(2) slots at 09:00 and 21:00 UTC. Taken at 09:05,
+        // now 10:00 -> next slot today 21:00.
         insert("a", frequency = Frequency.TimesPerDay(2), startedAt = Instant.parse("2024-07-03T08:30:00Z"))
-        logTaken("a", Instant.parse("2024-07-03T09:00:00Z"))
+        logTaken("a", Instant.parse("2024-07-03T09:05:00Z"))
         val vm = viewModel()
         collectState(vm)
-        assertEquals(Instant.parse("2024-07-03T22:00:00Z"), vm.state.value.taking.single().nextDoseAt)
+        assertEquals(Instant.parse("2024-07-03T21:00:00Z"), vm.state.value.taking.single().nextDoseAt)
 
-        // The 22:00 slot passes untaken; a tick must roll to tomorrow 08:00.
+        // The 21:00 slot passes untaken; a tick must roll to tomorrow 09:00.
         now = Instant.parse("2024-07-03T22:30:00Z")
         ticker.emit(Unit)
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(Instant.parse("2024-07-04T08:00:00Z"), vm.state.value.taking.single().nextDoseAt)
+        assertEquals(Instant.parse("2024-07-04T09:00:00Z"), vm.state.value.taking.single().nextDoseAt)
     }
 
     @Test
