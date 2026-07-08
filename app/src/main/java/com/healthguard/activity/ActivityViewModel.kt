@@ -5,12 +5,14 @@ package com.healthguard.activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthguard.shared.data.MedicationRepository
+import com.healthguard.shared.extraction.Frequency
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
@@ -22,8 +24,19 @@ import kotlinx.datetime.toLocalDateTime
 /** Time windows on the Activity dashboard. */
 enum class ActivityFilter { ALL, DAYS_30, DAYS_7 }
 
-/** One "By medicine" row: adherence over the current window. */
-data class MedicationAdherence(val name: String, val percent: Int)
+/**
+ * One "By medicine" row: schedule-based adherence over the current window.
+ * [percent] is null for medications without an expected-dose schedule —
+ * interval ("every N hours") medications are as-needed and tracked by
+ * count, never by percent.
+ */
+data class MedicationAdherence(
+    val name: String,
+    val percent: Int?,
+    val taken: Int,
+    val skipped: Int,
+    val asNeeded: Boolean,
+)
 
 private val EMPTY_STATS = ActivityStats(0, 0, 0, 0, null, null)
 
@@ -62,6 +75,11 @@ private const val HEAT_MAP_WEEKS = 16
  * loads once per [filter] change plus explicit [reload]s (the host calls it
  * whenever the screen is (re)entered, catching takes recorded elsewhere
  * since the last load).
+ *
+ * The 16-week grid deliberately stays count-based raw activity across all
+ * medications (how much was logged, GitHub-style) — schedule-based
+ * completeness only drives the per-medication views (detail heat map, week
+ * circles) where "which schedule?" has a single answer.
  */
 class ActivityViewModel(
     private val repository: MedicationRepository,
@@ -104,10 +122,6 @@ class ActivityViewModel(
                 from = heatFrom.atStartOfDayIn(zone),
                 to = now + 1.minutes,
             )
-            val tallies = repository.adherenceTallies(
-                from = from.atStartOfDayIn(zone),
-                to = now + 1.minutes,
-            )
             _state.value = ActivityUiState(
                 filter = filter,
                 from = from,
@@ -118,15 +132,37 @@ class ActivityViewModel(
                 ),
                 heatFrom = heatFrom,
                 dayCounts = dayCounts(heatTaken.map { it.takenAt }, zone),
-                breakdown = tallies
-                    .mapNotNull { tally ->
-                        adherencePercent(tally.taken, tally.missed)
-                            ?.let { MedicationAdherence(tally.drugName, it) }
-                    }
-                    .sortedWith(
-                        compareByDescending<MedicationAdherence> { it.percent }.thenBy { it.name },
-                    ),
+                breakdown = breakdown(from.atStartOfDayIn(zone), now),
             )
         }
     }
+
+    /**
+     * One row per medication, measured against its schedule over the window
+     * — silent days count, so a visible heat-map gap can never coexist with
+     * a 100% figure. Scheduled rows sort best percent first (ties by name);
+     * as-needed and other percent-less rows follow alphabetically. Rows with
+     * neither an expectation nor a take in the window are omitted.
+     */
+    private suspend fun breakdown(from: Instant, now: Instant): List<MedicationAdherence> =
+        repository.medications().first()
+            .mapNotNull { row ->
+                // Padded past `now` like the queries above; expected doses
+                // are computed against `now` so future slots never count.
+                val logs = repository.dosesInRange(row.schedule.id, from, now + 1.minutes)
+                val result = adherenceResult(row.schedule, logs, from, now, zone)
+                if (result.percent == null && result.taken == 0) return@mapNotNull null
+                MedicationAdherence(
+                    name = row.medication.drugName,
+                    percent = result.percent,
+                    taken = result.taken,
+                    skipped = result.skipped,
+                    asNeeded = row.schedule.frequency is Frequency.EveryHours,
+                )
+            }
+            .sortedWith(
+                compareBy<MedicationAdherence> { it.percent == null }
+                    .thenByDescending { it.percent ?: 0 }
+                    .thenBy { it.name },
+            )
 }

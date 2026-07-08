@@ -189,7 +189,12 @@ private fun StatTile(
     }
 }
 
-/** Per-medicine adherence: name, percentage, and a thin progress bar. */
+/**
+ * Per-medicine adherence against each schedule. Scheduled medicines get a
+ * percent plus a thin progress bar (skips noted beside the figure);
+ * as-needed (interval) medicines get a bar-less "As needed · N taken" row —
+ * a percent would presume doses that were never mandatory.
+ */
 @Composable
 private fun BreakdownList(rows: List<MedicationAdherence>, modifier: Modifier = Modifier) {
     if (rows.isEmpty()) return
@@ -214,33 +219,46 @@ private fun BreakdownList(rows: List<MedicationAdherence>, modifier: Modifier = 
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        text = "${row.percent}%",
+                        text = breakdownFigure(row),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Spacer(Modifier.height(4.dp))
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .background(
-                            MaterialTheme.colorScheme.secondaryContainer,
-                            MaterialTheme.shapes.extraSmall,
-                        ),
-                ) {
+                row.percent?.let { percent ->
+                    Spacer(Modifier.height(4.dp))
                     Box(
                         Modifier
-                            .fillMaxWidth(row.percent / 100f)
+                            .fillMaxWidth()
                             .height(6.dp)
                             .background(
-                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.secondaryContainer,
                                 MaterialTheme.shapes.extraSmall,
                             ),
-                    )
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(percent / 100f)
+                                .height(6.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.shapes.extraSmall,
+                                ),
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+/** "84%", "84% · 2 skipped", "As needed · 5 taken", or a bare "5 taken". */
+private fun breakdownFigure(row: MedicationAdherence): String {
+    val takenText = if (row.taken == 1) "1 taken" else "${row.taken} taken"
+    return when {
+        row.asNeeded -> "As needed · $takenText"
+        row.percent == null -> takenText
+        row.skipped > 0 -> "${row.percent}% · ${row.skipped} skipped"
+        else -> "${row.percent}%"
     }
 }
 

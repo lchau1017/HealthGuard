@@ -9,6 +9,7 @@ import com.healthguard.shared.data.StoredDoseLog
 import com.healthguard.shared.data.StoredMedication
 import com.healthguard.shared.data.StoredSchedule
 import com.healthguard.shared.db.HealthGuardDb
+import com.healthguard.shared.extraction.Frequency
 import java.util.Properties
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
@@ -60,7 +61,12 @@ class ActivityViewModelTest {
         zone = TimeZone.UTC,
     )
 
-    private suspend fun insert(id: String, drugName: String) {
+    private suspend fun insert(
+        id: String,
+        drugName: String,
+        frequency: Frequency? = null,
+        startedAt: Instant? = null,
+    ) {
         repository.insertMedication(
             StoredMedication(
                 id = id,
@@ -75,9 +81,9 @@ class ActivityViewModelTest {
             StoredSchedule(
                 id = "sched-$id",
                 medicationId = id,
-                frequency = null,
+                frequency = frequency,
                 withFood = null,
-                startedAt = null,
+                startedAt = startedAt,
                 stoppedAt = null,
             ),
         )
@@ -148,47 +154,87 @@ class ActivityViewModelTest {
         assertEquals(LocalDate(2024, 6, 4), vm.state.value.from)
     }
 
-    private suspend fun logMissed(medicationId: String, plannedAt: Instant) {
+    private suspend fun logSkipped(medicationId: String, plannedAt: Instant) {
         repository.logDose(
             StoredDoseLog(
-                id = "missed-$medicationId-${plannedAt.toEpochMilliseconds()}",
+                id = "skip-$medicationId-${plannedAt.toEpochMilliseconds()}",
                 scheduleId = "sched-$medicationId",
                 plannedAt = plannedAt,
                 takenAt = null,
-                status = DoseStatus.MISSED,
+                status = DoseStatus.SKIPPED,
             ),
         )
     }
 
     @Test
-    fun `breakdown is adherence per medicine best first`() = runTest(dispatcher) {
-        insert("a", "Ibuprofen")
-        insert("b", "Cetirizine")
-        // Ibuprofen: 1 taken, 1 missed -> 50%. Cetirizine: 3 taken -> 100%.
-        logTaken("a", fixedNow - 3.hours)
-        logMissed("a", fixedNow - 10.hours)
-        logTaken("b", fixedNow - 2.hours)
-        logTaken("b", fixedNow - 1.hours)
-        logTaken("b", fixedNow - 30.days)
+    fun `breakdown measures each medicine against its schedule best first`() = runTest(dispatcher) {
+        // Ibuprofen 1x/day since 2024-06-30: slots 09:00 on 6/30..7/3 = 4
+        // expected. 2 taken, 1 skipped, 7/3 never recorded -> 2/(4-1) = 67%.
+        insert("a", "Ibuprofen", Frequency.TimesPerDay(1), Instant.parse("2024-06-30T00:00:00Z"))
+        logTaken("a", Instant.parse("2024-06-30T09:00:00Z"))
+        logTaken("a", Instant.parse("2024-07-01T09:00:00Z"))
+        logSkipped("a", Instant.parse("2024-07-02T09:00:00Z"))
+        // Cetirizine 1x/day since 2024-07-02: both slots taken -> 100%.
+        insert("b", "Cetirizine", Frequency.TimesPerDay(1), Instant.parse("2024-07-02T00:00:00Z"))
+        logTaken("b", Instant.parse("2024-07-02T09:00:00Z"))
+        logTaken("b", Instant.parse("2024-07-03T09:00:00Z"))
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
             listOf(
-                MedicationAdherence("Cetirizine", 100),
-                MedicationAdherence("Ibuprofen", 50),
+                MedicationAdherence("Cetirizine", percent = 100, taken = 2, skipped = 0, asNeeded = false),
+                MedicationAdherence("Ibuprofen", percent = 67, taken = 2, skipped = 1, asNeeded = false),
             ),
             vm.state.value.breakdown,
         )
     }
 
     @Test
-    fun `breakdown omits medicines without taken or missed doses in the window`() = runTest(dispatcher) {
+    fun `a scheduled medicine with silent days scores below 100`() = runTest(dispatcher) {
+        // 2x/day since 2024-07-01, only 7/1 fully logged; 7/2 has no rows at
+        // all and 7/3's 09:00 passed silently: 2 taken of 5 expected = 40%.
+        insert("a", "Ibuprofen", Frequency.TimesPerDay(2), Instant.parse("2024-07-01T00:00:00Z"))
+        logTaken("a", Instant.parse("2024-07-01T09:00:00Z"))
+        logTaken("a", Instant.parse("2024-07-01T21:00:00Z"))
+        val vm = viewModel()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            listOf(MedicationAdherence("Ibuprofen", percent = 40, taken = 2, skipped = 0, asNeeded = false)),
+            vm.state.value.breakdown,
+        )
+    }
+
+    @Test
+    fun `interval medicines are as-needed rows after scheduled ones`() = runTest(dispatcher) {
+        insert("a", "Ibuprofen", Frequency.EveryHours(6), Instant.parse("2024-07-01T00:00:00Z"))
+        logTaken("a", fixedNow - 3.hours)
+        logTaken("a", fixedNow - 9.hours)
+        insert("b", "Cetirizine", Frequency.TimesPerDay(1), Instant.parse("2024-07-02T00:00:00Z"))
+        logTaken("b", Instant.parse("2024-07-02T09:00:00Z"))
+        logTaken("b", Instant.parse("2024-07-03T09:00:00Z"))
+        val vm = viewModel()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            listOf(
+                MedicationAdherence("Cetirizine", percent = 100, taken = 2, skipped = 0, asNeeded = false),
+                MedicationAdherence("Ibuprofen", percent = null, taken = 2, skipped = 0, asNeeded = true),
+            ),
+            vm.state.value.breakdown,
+        )
+    }
+
+    @Test
+    fun `breakdown omits medicines with nothing expected and nothing taken in the window`() = runTest(dispatcher) {
+        // Dormant, never taken: no row. Interval with takes only before the
+        // 7-day window: no row either.
         insert("a", "Ibuprofen")
-        insert("b", "Cetirizine")
-        logTaken("a", fixedNow - 1.hours)
-        // Cetirizine's only dose predates the 7-day window.
+        insert("b", "Cetirizine", Frequency.EveryHours(6), fixedNow - 30.days)
         logTaken("b", fixedNow - 10.days)
+        insert("c", "Loratadine", Frequency.TimesPerDay(1), Instant.parse("2024-07-02T00:00:00Z"))
+        logTaken("c", Instant.parse("2024-07-02T09:00:00Z"))
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -196,7 +242,7 @@ class ActivityViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
-            listOf(MedicationAdherence("Ibuprofen", 100)),
+            listOf(MedicationAdherence("Loratadine", percent = 50, taken = 1, skipped = 0, asNeeded = false)),
             vm.state.value.breakdown,
         )
     }
