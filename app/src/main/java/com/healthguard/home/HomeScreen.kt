@@ -59,6 +59,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.healthguard.activity.ActivityHeatMap
 import com.healthguard.activity.DayCount
+import com.healthguard.activity.dayLabel
 import com.healthguard.dose.RecordedTake
 import com.healthguard.format.countdownText
 import com.healthguard.format.doseTimeText
@@ -402,12 +403,8 @@ private fun DueAlertCard(
 
 /** Transient text for a tapped heat-map day — the non-color value channel. */
 private fun dayCountMessage(date: LocalDate, count: Int): String {
-    val dayName = date.dayOfWeek.name.lowercase()
-        .replaceFirstChar { it.uppercase() }.take(3)
-    val monthName = date.month.name.lowercase()
-        .replaceFirstChar { it.uppercase() }.take(3)
     val doses = if (count == 1) "1 dose" else "$count doses"
-    return "$dayName ${date.day} $monthName — $doses"
+    return "${dayLabel(date)} — $doses"
 }
 
 /**

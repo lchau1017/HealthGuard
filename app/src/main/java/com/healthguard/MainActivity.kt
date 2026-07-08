@@ -25,6 +25,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
+import com.healthguard.activity.ActivityScreen
+import com.healthguard.activity.ActivityViewModel
 import com.healthguard.capture.loadDownsampledBitmap
 import com.healthguard.capture.toUploadJpegBase64
 import com.healthguard.confirm.ConfirmDialog
@@ -57,18 +59,19 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Two-screen shell driven by plain state: Home when [detailMedicationId] is
- * null, the medication detail page otherwise (saveable, so rotation and
- * process death keep the open detail). The import/confirm flow floats above
- * whichever screen is showing as a dialog whose visibility derives from
- * [ConfirmViewModel]'s state (Idle = hidden), so it survives rotation
- * without extra plumbing.
+ * Three-screen shell driven by plain saveable state: the medication detail
+ * page when [detailMedicationId] is set, the Activity dashboard when
+ * [showActivity], Home otherwise — so rotation and process death keep the
+ * open screen. The import/confirm flow floats above whichever screen is
+ * showing as a dialog whose visibility derives from [ConfirmViewModel]'s
+ * state (Idle = hidden), so it survives rotation without extra plumbing.
  */
 @Composable
 private fun HealthGuardApp(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var detailMedicationId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showActivity by rememberSaveable { mutableStateOf(false) }
     // Saveable so rotation (or process death while the camera app is in the
     // foreground) keeps the pending capture target. Uri has no built-in
     // saver; persist its string form instead.
@@ -166,6 +169,14 @@ private fun HealthGuardApp(modifier: Modifier = Modifier) {
                 null -> Unit
             }
         }
+    } else if (showActivity) {
+        val activityViewModel: ActivityViewModel = koinViewModel()
+        BackHandler { showActivity = false }
+        ActivityScreen(
+            viewModel = activityViewModel,
+            onBack = { showActivity = false },
+            modifier = modifier,
+        )
     } else {
         HomeScreen(
             state = homeState,
@@ -179,7 +190,7 @@ private fun HealthGuardApp(modifier: Modifier = Modifier) {
             onPlay = homeViewModel::onPlay,
             onDelete = homeViewModel::onDelete,
             onOpenDetail = { detailMedicationId = it },
-            onOpenActivity = {}, // Activity dashboard arrives with the next slice.
+            onOpenActivity = { showActivity = true },
             onTakePhoto = ::launchCamera,
             onPickFromGallery = {
                 pickImageLauncher.launch(

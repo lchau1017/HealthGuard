@@ -3,6 +3,7 @@
 package com.healthguard.di
 
 import com.healthguard.BuildConfig
+import com.healthguard.activity.ActivityViewModel
 import com.healthguard.confirm.ConfirmViewModel
 import com.healthguard.detail.DetailViewModel
 import com.healthguard.home.HomeViewModel
@@ -44,6 +45,7 @@ val appModule = module {
 
     viewModel { ConfirmViewModel(get(), get(), Dispatchers.IO, get()) }
     viewModel { HomeViewModel(get(), get()) }
+    viewModel { ActivityViewModel(get(), get()) }
     viewModel { (medicationId: String) ->
         DetailViewModel(repository = get(), clock = get(), medicationId = medicationId)
     }
