@@ -215,64 +215,63 @@ class ActivityViewModelTest {
     }
 
     @Test
-    fun `every medicine gets a row typed by its treatment phase`() = runTest(dispatcher) {
-        // Taking + scheduled: a percent row.
-        insert("a", "Cetirizine", Frequency.TimesPerDay(1), Instant.parse("2024-07-02T00:00:00Z"))
-        logTaken("a", Instant.parse("2024-07-02T09:00:00Z"))
-        logTaken("a", Instant.parse("2024-07-03T09:00:00Z"))
-        // Taking + interval: an as-needed count row.
-        insert("b", "Ibuprofen", Frequency.EveryHours(6), Instant.parse("2024-07-01T00:00:00Z"))
-        logTaken("b", fixedNow - 3.hours)
-        // Never activated: a not-started row, no longer silently omitted.
-        insert("c", "Amoxicillin", Frequency.TimesPerDay(3))
-        // Stopped yesterday noon after three owed slots, two answered:
-        // 2 of 3 = 67% while taking.
-        insert(
-            "d", "Loratadine", Frequency.TimesPerDay(1),
-            startedAt = Instant.parse("2024-06-30T00:00:00Z"),
-            stoppedAt = Instant.parse("2024-07-02T12:00:00Z"),
-        )
-        logTaken("d", Instant.parse("2024-06-30T09:00:00Z"))
-        logTaken("d", Instant.parse("2024-07-01T09:00:00Z"))
-        val vm = viewModel()
-        dispatcher.scheduler.advanceUntilIdle()
+    fun `rows cover taking as-needed and stopped medicines but never not-started ones`() =
+        runTest(dispatcher) {
+            // Taking + scheduled: a percent row.
+            insert("a", "Cetirizine", Frequency.TimesPerDay(1), Instant.parse("2024-07-02T00:00:00Z"))
+            logTaken("a", Instant.parse("2024-07-02T09:00:00Z"))
+            logTaken("a", Instant.parse("2024-07-03T09:00:00Z"))
+            // Taking + interval with takes: an as-needed count row.
+            insert("b", "Ibuprofen", Frequency.EveryHours(6), Instant.parse("2024-07-01T00:00:00Z"))
+            logTaken("b", fixedNow - 3.hours)
+            // Never activated: phase noise, not activity — no row. The phase
+            // still lives on the home cabinet chip and the detail header.
+            insert("c", "Amoxicillin", Frequency.TimesPerDay(3))
+            // Stopped yesterday noon after three owed slots, two answered
+            // (both in the window): 2 of 3 = 67% while taking.
+            insert(
+                "d", "Loratadine", Frequency.TimesPerDay(1),
+                startedAt = Instant.parse("2024-06-30T00:00:00Z"),
+                stoppedAt = Instant.parse("2024-07-02T12:00:00Z"),
+            )
+            logTaken("d", Instant.parse("2024-06-30T09:00:00Z"))
+            logTaken("d", Instant.parse("2024-07-01T09:00:00Z"))
+            val vm = viewModel()
+            dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(
-            listOf(
-                takingRow("Cetirizine", percent = 100, taken = 2, meetsTarget = true),
-                takingRow("Ibuprofen", percent = null, taken = 1, asNeeded = true),
-                MedicationAdherence(
-                    name = "Loratadine",
-                    phase = MedicationPhase.STOPPED,
-                    asNeeded = false,
-                    percent = 67,
-                    taken = 2,
-                    skipped = 0,
-                    meetsTarget = false,
-                    stoppedText = "Stopped yesterday",
+            assertEquals(
+                listOf(
+                    takingRow("Cetirizine", percent = 100, taken = 2, meetsTarget = true),
+                    takingRow("Ibuprofen", percent = null, taken = 1, asNeeded = true),
+                    MedicationAdherence(
+                        name = "Loratadine",
+                        phase = MedicationPhase.STOPPED,
+                        asNeeded = false,
+                        percent = 67,
+                        taken = 2,
+                        skipped = 0,
+                        meetsTarget = false,
+                        stoppedText = "Stopped yesterday",
+                    ),
                 ),
-                MedicationAdherence(
-                    name = "Amoxicillin",
-                    phase = MedicationPhase.NOT_STARTED,
-                    asNeeded = false,
-                    percent = null,
-                    taken = 0,
-                    skipped = 0,
-                    meetsTarget = null,
-                    stoppedText = null,
-                ),
-            ),
-            vm.state.value.breakdown,
-        )
-    }
+                vm.state.value.breakdown,
+            )
+        }
 
     @Test
-    fun `quiet medicines keep their rows instead of vanishing`() = runTest(dispatcher) {
-        // Dormant and never taken; as-needed with takes only before the
-        // 7-day window: both previously omitted, both now typed rows.
+    fun `medicines without activity in the window hide their rows`() = runTest(dispatcher) {
+        // Dormant and never taken: hidden. As-needed with takes only before
+        // the 7-day window: hidden. Stopped with all logs before the window:
+        // hidden. Only the medicine with in-window activity keeps a row.
         insert("a", "Ibuprofen")
         insert("b", "Cetirizine", Frequency.EveryHours(6), fixedNow - 30.days)
         logTaken("b", fixedNow - 10.days)
+        insert(
+            "d", "Paracetamol", Frequency.TimesPerDay(1),
+            startedAt = fixedNow - 30.days,
+            stoppedAt = fixedNow - 20.days,
+        )
+        logTaken("d", fixedNow - 25.days)
         insert("c", "Loratadine", Frequency.TimesPerDay(1), Instant.parse("2024-07-02T00:00:00Z"))
         logTaken("c", Instant.parse("2024-07-02T09:00:00Z"))
         val vm = viewModel()
@@ -282,26 +281,34 @@ class ActivityViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
-            listOf(
-                takingRow("Loratadine", percent = 50, taken = 1, meetsTarget = false),
-                takingRow("Cetirizine", percent = null, taken = 0, asNeeded = true),
-                MedicationAdherence(
-                    name = "Ibuprofen",
-                    phase = MedicationPhase.NOT_STARTED,
-                    asNeeded = false,
-                    percent = null,
-                    taken = 0,
-                    skipped = 0,
-                    meetsTarget = null,
-                    stoppedText = null,
-                ),
-            ),
+            listOf(takingRow("Loratadine", percent = 50, taken = 1, meetsTarget = false)),
             vm.state.value.breakdown,
         )
     }
 
     @Test
-    fun `no takes yield an empty state with the medicines still listed`() = runTest(dispatcher) {
+    fun `a stopped medicine with in-window logs keeps its clipped percent row`() =
+        runTest(dispatcher) {
+            insert(
+                "d", "Paracetamol", Frequency.TimesPerDay(1),
+                startedAt = fixedNow - 30.days,
+                stoppedAt = fixedNow - 20.days,
+            )
+            logTaken("d", fixedNow - 25.days)
+            val vm = viewModel()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            vm.setFilter(ActivityFilter.MONTHS_12)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            val row = vm.state.value.breakdown.single()
+            assertEquals("Paracetamol", row.name)
+            assertEquals(MedicationPhase.STOPPED, row.phase)
+            assertEquals(1, row.taken)
+        }
+
+    @Test
+    fun `no takes yield an empty state and no breakdown rows`() = runTest(dispatcher) {
         insert("a", "Ibuprofen")
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
@@ -309,7 +316,7 @@ class ActivityViewModelTest {
         val state = vm.state.value
         assertEquals(0, state.stats.totalEvents)
         assertTrue(state.dayCounts.isEmpty())
-        assertEquals(listOf(MedicationPhase.NOT_STARTED), state.breakdown.map { it.phase })
+        assertTrue(state.breakdown.isEmpty())
     }
 
     /** A TAKING-phase row; percent == null means an as-needed count row. */

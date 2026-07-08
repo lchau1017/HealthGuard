@@ -48,14 +48,6 @@ class AdherenceRowsTest {
     }
 
     @Test
-    fun `not started rows say so`() {
-        assertEquals(
-            "Not started",
-            adherenceRowFigure(row(phase = MedicationPhase.NOT_STARTED)),
-        )
-    }
-
-    @Test
     fun `stopped rows name the stop and the while-taking percent when computable`() {
         assertEquals(
             "Stopped 3 Jul · 74% while taking",
@@ -97,10 +89,6 @@ class AdherenceRowsTest {
         assertEquals(
             "Cetirizine: as needed, 34 taken in this window",
             adherenceRowDescription(row(asNeeded = true, taken = 34)),
-        )
-        assertEquals(
-            "Cetirizine: not started yet",
-            adherenceRowDescription(row(phase = MedicationPhase.NOT_STARTED)),
         )
         assertEquals(
             "Cetirizine: stopped 3 Jul, 74% of its scheduled doses taken while active",

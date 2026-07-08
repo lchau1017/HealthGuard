@@ -28,13 +28,14 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
 /**
- * One "Adherence by medicine" row: every medication gets one, typed by its
- * treatment [phase] — nothing is silently omitted. [percent] measures the
- * medicine against its *own* schedule over the window (never a share of
- * total doses); it is null for medications without an expected-dose schedule
- * — interval ("every N hours") medications are as-needed and tracked by
- * count, never by percent. For stopped medications the expectation is
- * clipped to the active stretch, so [percent] reads "while taking".
+ * One "Adherence by medicine" row for a medication with activity in the
+ * window (see [ActivityViewModel]'s breakdown for what earns a row).
+ * [percent] measures the medicine against its *own* schedule over the
+ * window (never a share of total doses); it is null for medications without
+ * an expected-dose schedule — interval ("every N hours") medications are
+ * as-needed and tracked by count, never by percent. For stopped medications
+ * the expectation is clipped to the active stretch, so [percent] reads
+ * "while taking".
  */
 data class MedicationAdherence(
     val name: String,
@@ -152,23 +153,36 @@ class ActivityViewModel(
     }
 
     /**
-     * One row per medication — every medication, typed by phase; silently
-     * dropping rows made the list read as broken. Adherence is measured
-     * against each schedule over the window: silent days count, so a
-     * visible heat-map gap can never coexist with a 100% figure (expected
-     * doses clip themselves to the active stretch, so stopped rows score
-     * their while-taking window). Actively-taken percent rows sort best
-     * first; percent-less taking rows, stopped, then never-started rows
-     * follow, each group alphabetical.
+     * One row per medication with anything to say about the window — the
+     * list is an activity breakdown, not a cabinet inventory. Never-started
+     * medicines have no row (their phase lives on the home chip and the
+     * detail header); as-needed and unscheduled medicines only earn one by
+     * being taken in the window; stopped medicines by having any log in it.
+     * Actively scheduled percent rows always show — an untouched schedule
+     * scoring 0% is exactly the information the list exists for.
+     *
+     * Adherence is measured against each schedule over the window: silent
+     * days count, so a visible grid gap can never coexist with a 100% figure
+     * (expected doses clip themselves to the active stretch, so stopped rows
+     * score their while-taking window). Actively-taken percent rows sort
+     * best first; count rows, then stopped rows follow, each group
+     * alphabetical.
      */
     private suspend fun breakdown(from: Instant, now: Instant): List<MedicationAdherence> =
         repository.medications().first()
-            .map { row ->
+            .mapNotNull { row ->
+                val phase = row.schedule.phase
+                if (phase == MedicationPhase.NOT_STARTED) return@mapNotNull null
                 // Padded past `now` like the queries above; expected doses
                 // are computed against `now` so future slots never count.
                 val logs = repository.dosesInRange(row.schedule.id, from, now + 1.minutes)
                 val result = adherenceResult(row.schedule, logs, from, now, zone)
-                val phase = row.schedule.phase
+                val quiet = when {
+                    phase == MedicationPhase.STOPPED -> logs.isEmpty()
+                    result.percent == null -> result.taken == 0
+                    else -> false
+                }
+                if (quiet) return@mapNotNull null
                 MedicationAdherence(
                     name = row.medication.drugName,
                     phase = phase,
@@ -193,7 +207,6 @@ class ActivityViewModel(
     /** Group order of the breakdown list; see [breakdown]. */
     private val MedicationAdherence.rank: Int
         get() = when {
-            phase == MedicationPhase.NOT_STARTED -> 3
             phase == MedicationPhase.STOPPED -> 2
             percent == null -> 1
             else -> 0

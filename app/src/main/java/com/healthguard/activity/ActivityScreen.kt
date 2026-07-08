@@ -253,15 +253,16 @@ private fun StatTile(
 }
 
 /**
- * "Adherence by medicine": one row per medication, typed by treatment phase
- * — actively scheduled medicines get a percent (against their *own*
+ * "Adherence by medicine": one row per medication with activity in the
+ * window — actively scheduled medicines get a percent (against their *own*
  * schedule, spelled out in the caption) plus a thin progress bar with an
- * 80%-target tick; as-needed medicines a bar-less count row; never-started
- * and stopped medicines their phase text instead of vanishing from the list.
+ * 80%-target tick; as-needed medicines a bar-less count row; stopped
+ * medicines their clipped while-taking figure. Never-started medicines and
+ * medicines quiet all window carry no information here and are left out; an
+ * entirely quiet list says so in one muted line.
  */
 @Composable
 private fun BreakdownList(rows: List<MedicationAdherence>, modifier: Modifier = Modifier) {
-    if (rows.isEmpty()) return
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = "Adherence by medicine",
@@ -274,7 +275,15 @@ private fun BreakdownList(rows: List<MedicationAdherence>, modifier: Modifier = 
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(8.dp))
-        rows.forEach { row -> BreakdownRow(row) }
+        if (rows.isEmpty()) {
+            Text(
+                text = "No medicines with activity in this range.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            rows.forEach { row -> BreakdownRow(row) }
+        }
     }
 }
 
