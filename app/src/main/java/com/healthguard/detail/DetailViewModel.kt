@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DateTimeUnit
@@ -141,7 +142,13 @@ class DetailViewModel(
 
     init {
         viewModelScope.launch {
-            combine(repository.medications(), refresh) { rows, _ -> rows }.collect { rows ->
+            combine(
+                repository.medications(),
+                refresh,
+                // Writes from other screens (a take on Home, demo reseed)
+                // must reach a retained detail too.
+                repository.dataChanges.onStart { emit(Unit) },
+            ) { rows, _, _ -> rows }.collect { rows ->
                 val item = rows.firstOrNull { it.medication.id == medicationId }
                     ?: return@collect // deleted (or bad id): keep last state
                 val latest = repository.latestDose(item.schedule.id)

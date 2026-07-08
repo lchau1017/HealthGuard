@@ -8,7 +8,11 @@ import com.healthguard.shared.db.DoseLog
 import com.healthguard.shared.db.HealthGuardDb
 import com.healthguard.shared.extraction.Frequency
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
@@ -26,30 +30,94 @@ class MedicationRepository(
 ) {
     private val queries = db.healthGuardQueries
 
+    private val _dataChanges = MutableSharedFlow<Unit>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+
+    /**
+     * Fires after every mutating call. SQLDelight's query flows only notify
+     * listeners of the tables they read, so screens that derive state from
+     * dose logs (or hold a retained view model while another screen writes)
+     * fold this into their recompute triggers to never go stale.
+     */
+    val dataChanges: SharedFlow<Unit> = _dataChanges.asSharedFlow()
+
+    private fun notifyChanged() {
+        _dataChanges.tryEmit(Unit)
+    }
+
     suspend fun insertMedication(medication: StoredMedication, schedule: StoredSchedule) =
         withContext(dispatcher) {
-            queries.transaction {
-                queries.insertMedication(
-                    id = medication.id,
-                    drugName = medication.drugName,
-                    label = medication.label,
-                    activeIngredients = encodeIngredients(medication.activeIngredients),
-                    dosage = medication.dosage,
-                    form = medication.form,
-                    extractionConfidence = medication.extractionConfidence,
-                    createdAt = medication.createdAt.toEpochMilliseconds(),
-                )
-                queries.insertSchedule(
-                    id = schedule.id,
-                    medicationId = schedule.medicationId,
-                    frequencyType = schedule.frequency.typeColumn(),
-                    frequencyValue = schedule.frequency.valueColumn(),
-                    withFood = schedule.withFood.toDbBool(),
-                    startedAt = schedule.startedAt?.toEpochMilliseconds(),
-                    stoppedAt = schedule.stoppedAt?.toEpochMilliseconds(),
-                )
-            }
+            queries.transaction { writeMedication(medication, schedule) }
+            notifyChanged()
         }
+
+    /**
+     * Runs several writes inside ONE transaction, so observers see a single
+     * state change (no intermediate "medication exists but its history
+     * doesn't yet" emissions) and [dataChanges] fires once.
+     */
+    suspend fun batch(block: BatchWriter.() -> Unit) = withContext(dispatcher) {
+        queries.transaction { BatchWriter().block() }
+        notifyChanged()
+    }
+
+    /** The writes available inside [batch]; each is the plain-call equivalent. */
+    inner class BatchWriter internal constructor() {
+        fun insertMedication(medication: StoredMedication, schedule: StoredSchedule) =
+            writeMedication(medication, schedule)
+
+        fun activate(medicationId: String, at: Instant) = writeActivation(medicationId, at)
+
+        fun stop(medicationId: String, at: Instant) = writeStop(medicationId, at)
+
+        fun logDose(log: StoredDoseLog) = writeDoseLog(log)
+    }
+
+    private fun writeMedication(medication: StoredMedication, schedule: StoredSchedule) {
+        queries.insertMedication(
+            id = medication.id,
+            drugName = medication.drugName,
+            label = medication.label,
+            activeIngredients = encodeIngredients(medication.activeIngredients),
+            dosage = medication.dosage,
+            form = medication.form,
+            extractionConfidence = medication.extractionConfidence,
+            createdAt = medication.createdAt.toEpochMilliseconds(),
+        )
+        queries.insertSchedule(
+            id = schedule.id,
+            medicationId = schedule.medicationId,
+            frequencyType = schedule.frequency.typeColumn(),
+            frequencyValue = schedule.frequency.valueColumn(),
+            withFood = schedule.withFood.toDbBool(),
+            startedAt = schedule.startedAt?.toEpochMilliseconds(),
+            stoppedAt = schedule.stoppedAt?.toEpochMilliseconds(),
+        )
+    }
+
+    private fun writeActivation(medicationId: String, at: Instant) {
+        queries.scheduleIdForMedication(medicationId).executeAsList().forEach { scheduleId ->
+            queries.activateSchedule(startedAt = at.toEpochMilliseconds(), id = scheduleId)
+        }
+    }
+
+    private fun writeStop(medicationId: String, at: Instant) {
+        queries.scheduleIdForMedication(medicationId).executeAsList().forEach { scheduleId ->
+            queries.stopSchedule(stoppedAt = at.toEpochMilliseconds(), id = scheduleId)
+        }
+    }
+
+    private fun writeDoseLog(log: StoredDoseLog) {
+        queries.insertDoseLog(
+            id = log.id,
+            scheduleId = log.scheduleId,
+            plannedAt = log.plannedAt.toEpochMilliseconds(),
+            takenAt = log.takenAt?.toEpochMilliseconds(),
+            status = log.status.name,
+        )
+    }
 
     fun medications(): Flow<List<MedicationWithSchedule>> =
         queries.listMedications(::rowToMedicationWithSchedule).asFlow().mapToList(dispatcher)
@@ -72,6 +140,7 @@ class MedicationRepository(
             form = medication.form,
             id = medication.id,
         )
+        notifyChanged()
     }
 
     /**
@@ -87,41 +156,33 @@ class MedicationRepository(
             withFood = schedule.withFood.toDbBool(),
             id = schedule.id,
         )
+        notifyChanged()
     }
 
     suspend fun delete(id: String) = withContext(dispatcher) {
         queries.deleteMedication(id)
+        notifyChanged()
     }
 
     suspend fun activate(medicationId: String, at: Instant) = withContext(dispatcher) {
-        queries.transaction {
-            queries.scheduleIdForMedication(medicationId).executeAsList().forEach { scheduleId ->
-                queries.activateSchedule(startedAt = at.toEpochMilliseconds(), id = scheduleId)
-            }
-        }
+        queries.transaction { writeActivation(medicationId, at) }
+        notifyChanged()
     }
 
     suspend fun stop(medicationId: String, at: Instant) = withContext(dispatcher) {
-        queries.transaction {
-            queries.scheduleIdForMedication(medicationId).executeAsList().forEach { scheduleId ->
-                queries.stopSchedule(stoppedAt = at.toEpochMilliseconds(), id = scheduleId)
-            }
-        }
+        queries.transaction { writeStop(medicationId, at) }
+        notifyChanged()
     }
 
     suspend fun logDose(log: StoredDoseLog) = withContext(dispatcher) {
-        queries.insertDoseLog(
-            id = log.id,
-            scheduleId = log.scheduleId,
-            plannedAt = log.plannedAt.toEpochMilliseconds(),
-            takenAt = log.takenAt?.toEpochMilliseconds(),
-            status = log.status.name,
-        )
+        writeDoseLog(log)
+        notifyChanged()
     }
 
     /** Removes a single dose log (undo of a just-recorded take); missing id is a no-op. */
     suspend fun deleteDoseLog(id: String) = withContext(dispatcher) {
         queries.deleteDoseLog(id)
+        notifyChanged()
     }
 
     suspend fun updateDoseStatus(id: String, status: DoseStatus, takenAt: Instant?) =
@@ -131,6 +192,7 @@ class MedicationRepository(
                 takenAt = takenAt?.toEpochMilliseconds(),
                 id = id,
             )
+            notifyChanged()
         }
 
     /** Half-open range: plannedAt in [from, to). */

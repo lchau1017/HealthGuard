@@ -89,6 +89,12 @@ class ActivityViewModel(
 
     init {
         reload()
+        // Any write anywhere (a take on Home or detail, undo, demo reseed)
+        // re-queries the current window, so a retained Activity tab never
+        // shows stale tiles or grids.
+        viewModelScope.launch {
+            repository.dataChanges.collect { reload() }
+        }
     }
 
     fun setFilter(filter: ActivityFilter) {

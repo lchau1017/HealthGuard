@@ -63,6 +63,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.healthguard.BuildConfig
 import com.healthguard.activity.DoseDayStatus
@@ -373,6 +374,8 @@ private fun DueAlertCard(
                         text = listOfNotNull(medication.drugName, medication.dosage)
                             .joinToString(" ") + " is due",
                         style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     card.nextDoseAt?.let { nextDoseAt ->
                         Text(
@@ -571,6 +574,10 @@ private fun TakingRow(
                     text = listOfNotNull(medication.drugName, medication.dosage)
                         .joinToString(" "),
                     style = MaterialTheme.typography.titleMedium,
+                    // Real labels produce dosage prose ("Take 1 or 2 caplets up
+                    // to 3 times a day, as required.") — clamp the row.
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -676,6 +683,10 @@ private fun CabinetRow(
                     text = listOfNotNull(medication.drugName, medication.dosage)
                         .joinToString(" "),
                     style = MaterialTheme.typography.titleMedium,
+                    // Real labels produce dosage prose ("Take 1 or 2 caplets up
+                    // to 3 times a day, as required.") — clamp the row.
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {

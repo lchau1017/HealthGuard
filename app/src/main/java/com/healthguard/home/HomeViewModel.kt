@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -97,7 +98,15 @@ class HomeViewModel(
     val recentTake: StateFlow<RecordedTake?> = _recentTake.asStateFlow()
 
     val state: StateFlow<HomeUiState> =
-        combine(repository.medications(), ticker, refresh) { rows, _, _ -> rows }
+        combine(
+            repository.medications(),
+            ticker,
+            refresh,
+            // Dose-log writes from ANY screen (detail take, undo, demo seed)
+            // must recompute home state too; the medications query alone
+            // doesn't observe the doseLog table.
+            repository.dataChanges.onStart { emit(Unit) },
+        ) { rows, _, _, _ -> rows }
             .map(::buildState)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 

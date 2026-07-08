@@ -6,6 +6,7 @@ import com.healthguard.shared.db.HealthGuardDb
 import com.healthguard.shared.extraction.Frequency
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -517,5 +518,76 @@ class MedicationRepositoryTest {
             listOf("med-new", "med-old"),
             repo.medications().first().map { it.medication.id },
         )
+    }
+
+    @Test
+    fun `every mutating call signals data changes`() = runTest {
+        val repo = repository()
+        val events = mutableListOf<Unit>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            repo.dataChanges.collect { events += it }
+        }
+
+        repo.insertMedication(medication(), schedule())
+        repo.activate("med-1", Instant.fromEpochMilliseconds(1_000))
+        repo.logDose(dose("d-1", plannedAtMillis = 1_000))
+        repo.updateDoseStatus("d-1", DoseStatus.TAKEN, Instant.fromEpochMilliseconds(1_100))
+        repo.deleteDoseLog("d-1")
+        repo.stop("med-1", Instant.fromEpochMilliseconds(2_000))
+        repo.updateMedication(medication())
+        repo.updateSchedule(schedule())
+        repo.delete("med-1")
+
+        assertEquals(9, events.size)
+        job.cancel()
+    }
+
+    @Test
+    fun `batch applies every write under a single change signal`() = runTest {
+        val repo = repository()
+        val events = mutableListOf<Unit>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            repo.dataChanges.collect { events += it }
+        }
+
+        repo.batch {
+            insertMedication(medication(), schedule())
+            activate("med-1", Instant.fromEpochMilliseconds(1_000))
+            logDose(dose("d-1", plannedAtMillis = 1_000))
+        }
+
+        assertEquals(1, events.size)
+        // All three writes landed.
+        val row = repo.medications().first().single()
+        assertEquals("med-1", row.medication.id)
+        assertEquals(Instant.fromEpochMilliseconds(1_000), row.schedule.startedAt)
+        assertEquals("d-1", repo.latestDose("sch-1")?.id)
+        job.cancel()
+    }
+
+    @Test
+    fun `batch is one visible state change for query flows`() = runTest {
+        val repo = repository()
+        val sizes = mutableListOf<Int>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            repo.medications().collect { sizes += it.size }
+        }
+
+        repo.batch {
+            insertMedication(
+                medication(id = "med-a"),
+                schedule(id = "sch-a", medicationId = "med-a"),
+            )
+            insertMedication(
+                medication(id = "med-b"),
+                schedule(id = "sch-b", medicationId = "med-b"),
+            )
+        }
+
+        // Initial empty emission, then straight to the fully applied state:
+        // never a partial one-medication snapshot.
+        assertTrue(sizes.none { it == 1 }, "saw partial emission: $sizes")
+        assertEquals(2, sizes.last())
+        job.cancel()
     }
 }

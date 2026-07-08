@@ -15,6 +15,7 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DateTimeUnit
@@ -197,5 +198,22 @@ class DemoDataSeederTest {
 
         assertTrue(repo.medications().first().isEmpty())
         assertEquals(0, totalDoses(repo))
+    }
+
+    @Test
+    fun `seeding applies in one visible step`() = runTest {
+        val repo = repository()
+        val sizes = mutableListOf<Int>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            repo.medications().collect { sizes += it.size }
+        }
+
+        DemoDataSeeder.seed(repo, now, zone)
+
+        // Never a partially seeded emission (medications without their
+        // history used to flash a bogus due alert on the home screen).
+        assertTrue("saw partial emissions: $sizes", sizes.none { it in 1..4 })
+        assertEquals(5, sizes.last())
+        job.cancel()
     }
 }

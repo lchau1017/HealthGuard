@@ -99,8 +99,12 @@ object DemoDataSeeder {
             ),
         )
 
+        // One transaction for the whole seed: observers see a single state
+        // change, never a moment where medications exist without their
+        // history (which used to flash a bogus due alert mid-seed).
+        repository.batch {
         demos.forEach { demo ->
-            repository.insertMedication(
+            insertMedication(
                 StoredMedication(
                     id = demo.medId,
                     drugName = demo.name,
@@ -120,8 +124,8 @@ object DemoDataSeeder {
                     stoppedAt = null,
                 ),
             )
-            demo.startedAt?.let { repository.activate(demo.medId, it) }
-            demo.stoppedAt?.let { repository.stop(demo.medId, it) }
+            demo.startedAt?.let { activate(demo.medId, it) }
+            demo.stoppedAt?.let { stop(demo.medId, it) }
         }
 
         var doseCounter = 0
@@ -164,7 +168,7 @@ object DemoDataSeeder {
                                     DoseStatus.TAKEN
                                 }
                             }
-                            repository.logDose(
+                            logDose(
                                 StoredDoseLog(
                                     id = "demo-dose-${doseCounter++}",
                                     scheduleId = demo.schedId,
@@ -182,6 +186,7 @@ object DemoDataSeeder {
                 }
                 day = LocalDate.fromEpochDays(day.toEpochDays() + 1)
             }
+        }
         }
         return true
     }
