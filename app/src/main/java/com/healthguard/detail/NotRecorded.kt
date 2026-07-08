@@ -24,35 +24,51 @@ sealed interface HistoryEntry {
     }
 }
 
-/** How far a log may sit from a slot and still count as answering it. */
-private val SLOT_MATCH_WINDOW = 90.minutes
+/**
+ * How far a log may sit from a slot and still count as answering it — and
+ * therefore how long a slot stays open before it can read as "not recorded":
+ * a slot is never declared unanswered while a matching take is still likely.
+ */
+val SLOT_MATCH_WINDOW = 90.minutes
+
+/**
+ * The expected slots no log answers — the "Not recorded" derivation shared
+ * by the detail history and the day-detail sheet. A slot is answered by its
+ * nearest log time within ±90 minutes, and a log can answer only one slot —
+ * two slots can never share a single take. Slots are processed ascending,
+ * so when a log sits equidistant between two slots the earlier slot claims
+ * it. Log times are plannedAt (takes recorded against a slot carry that
+ * slot as plannedAt; ad-hoc takes carry their wall time).
+ */
+fun unansweredSlots(
+    expectedSlots: List<Instant>,
+    logTimes: List<Instant>,
+): List<Instant> {
+    val unmatched = logTimes.toMutableList()
+    val gaps = mutableListOf<Instant>()
+    expectedSlots.sorted().forEach { slot ->
+        val nearest = unmatched
+            .filter { (it - slot).absoluteValue <= SLOT_MATCH_WINDOW }
+            .minByOrNull { (it - slot).absoluteValue }
+        if (nearest != null) {
+            unmatched.remove(nearest)
+        } else {
+            gaps.add(slot)
+        }
+    }
+    return gaps
+}
 
 /**
  * Interleaves [logs] with derived [HistoryEntry.NotRecorded] rows, newest
- * first: every expected slot with no log within ±90 minutes of it becomes a
+ * first: every expected slot [unansweredSlots] leaves open becomes a
  * visible gap instead of silently vanishing from history.
- *
- * Matching is by the log's plannedAt (takes recorded against a slot carry
- * that slot as plannedAt; ad-hoc takes carry their wall time). Each slot is
- * answered by its nearest in-window log, and a log can answer only one slot
- * — two slots can never share a single take. Slots are processed ascending,
- * so when a log sits equidistant between two slots the earlier slot claims it.
  */
 fun historyWithGaps(
     logs: List<StoredDoseLog>,
     expectedSlots: List<Instant>,
 ): List<HistoryEntry> {
-    val unmatched = logs.toMutableList()
-    val gaps = mutableListOf<HistoryEntry.NotRecorded>()
-    expectedSlots.sorted().forEach { slot ->
-        val nearest = unmatched
-            .filter { (it.plannedAt - slot).absoluteValue <= SLOT_MATCH_WINDOW }
-            .minByOrNull { (it.plannedAt - slot).absoluteValue }
-        if (nearest != null) {
-            unmatched.remove(nearest)
-        } else {
-            gaps.add(HistoryEntry.NotRecorded(slot))
-        }
-    }
+    val gaps = unansweredSlots(expectedSlots, logs.map { it.plannedAt })
+        .map { HistoryEntry.NotRecorded(it) }
     return (logs.map { HistoryEntry.Logged(it) } + gaps).sortedByDescending { it.at }
 }

@@ -24,9 +24,11 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -328,6 +330,70 @@ class ActivityViewModelTest {
         meetsTarget = meetsTarget,
         stoppedText = null,
     )
+
+    @Test
+    fun `selecting a day builds its detail sheet and dismissing clears it`() = runTest(dispatcher) {
+        // Cetirizine 2x/day (09:00/21:00): the 09:04 take answers the morning
+        // slot, the evening slot goes unanswered -> 1 not recorded.
+        insert("a", "Cetirizine", Frequency.TimesPerDay(2), Instant.parse("2024-07-01T00:00:00Z"))
+        logTaken("a", Instant.parse("2024-07-02T09:04:00Z"))
+        // As-needed the same day: a count line, never a not-recorded count.
+        insert("b", "Ibuprofen", Frequency.EveryHours(6), Instant.parse("2024-07-01T00:00:00Z"))
+        logTaken("b", Instant.parse("2024-07-02T14:00:00Z"))
+        val vm = viewModel()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.selectDay(LocalDate(2024, 7, 2))
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            DayDetail(
+                date = LocalDate(2024, 7, 2),
+                lines = listOf(
+                    DayMedicineLine(
+                        medicationId = "a",
+                        name = "Cetirizine",
+                        takenTimes = listOf(LocalTime(9, 4)),
+                        skipped = 0,
+                        missed = 0,
+                        notRecorded = 1,
+                    ),
+                    DayMedicineLine(
+                        medicationId = "b",
+                        name = "Ibuprofen",
+                        takenTimes = listOf(LocalTime(14, 0)),
+                        skipped = 0,
+                        missed = 0,
+                        notRecorded = 0,
+                    ),
+                ),
+                expectedNotRecorded = 0,
+            ),
+            vm.state.value.dayDetail,
+        )
+
+        vm.dismissDayDetail()
+        assertNull(vm.state.value.dayDetail)
+    }
+
+    @Test
+    fun `an empty day with expectations reports them as not recorded`() = runTest(dispatcher) {
+        insert("a", "Cetirizine", Frequency.TimesPerDay(2), Instant.parse("2024-07-01T00:00:00Z"))
+        val vm = viewModel()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.selectDay(LocalDate(2024, 7, 2))
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            DayDetail(
+                date = LocalDate(2024, 7, 2),
+                lines = emptyList(),
+                expectedNotRecorded = 2,
+            ),
+            vm.state.value.dayDetail,
+        )
+    }
 
     @Test
     fun `reload picks up takes recorded since the last load`() = runTest(dispatcher) {

@@ -4,6 +4,8 @@ package com.healthguard.detail
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.healthguard.activity.AdherenceResult
+import com.healthguard.activity.DayDetail
+import com.healthguard.activity.DayMedicineLine
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.home.MedicationPhase
 import com.healthguard.shared.data.DoseStatus
@@ -27,6 +29,8 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -281,6 +285,74 @@ class DetailViewModelTest {
 
         assertNull(repository.getMedication("med-1"))
         assertEquals(DetailFinished.DELETED, vm.state.value.finished)
+    }
+
+    @Test
+    fun `selecting a day scopes the sheet to this medication`() = runTest(dispatcher) {
+        insert(startedAt = Instant.parse("2024-07-01T00:00:00Z"))
+        logDose(
+            "d-1",
+            takenAt = Instant.parse("2024-07-02T09:04:00Z"),
+            plannedAt = Instant.parse("2024-07-02T09:00:00Z"),
+            status = DoseStatus.TAKEN,
+        )
+        // Another medication's same-day take must not leak into the sheet.
+        repository.insertMedication(
+            StoredMedication(
+                id = "med-2",
+                drugName = "Ibuprofen",
+                label = null,
+                activeIngredients = emptyList(),
+                dosage = null,
+                form = null,
+                extractionConfidence = 1.0,
+                createdAt = Instant.fromEpochMilliseconds(2_000),
+            ),
+            StoredSchedule(
+                id = "sch-2",
+                medicationId = "med-2",
+                frequency = Frequency.EveryHours(6),
+                withFood = null,
+                startedAt = Instant.parse("2024-07-01T00:00:00Z"),
+                stoppedAt = null,
+            ),
+        )
+        repository.logDose(
+            StoredDoseLog(
+                id = "d-other",
+                scheduleId = "sch-2",
+                plannedAt = Instant.parse("2024-07-02T14:00:00Z"),
+                takenAt = Instant.parse("2024-07-02T14:00:00Z"),
+                status = DoseStatus.TAKEN,
+            ),
+        )
+        val vm = viewModel()
+        collectState(vm)
+
+        vm.selectDay(LocalDate(2024, 7, 2))
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            DayDetail(
+                date = LocalDate(2024, 7, 2),
+                lines = listOf(
+                    DayMedicineLine(
+                        medicationId = "med-1",
+                        name = "Cetirizine 10 mg",
+                        takenTimes = listOf(LocalTime(9, 4)),
+                        skipped = 0,
+                        missed = 0,
+                        // The evening (21:00) slot went unanswered.
+                        notRecorded = 1,
+                    ),
+                ),
+                expectedNotRecorded = 0,
+            ),
+            vm.state.value.dayDetail,
+        )
+
+        vm.dismissDayDetail()
+        assertNull(vm.state.value.dayDetail)
     }
 
     private suspend fun logDose(

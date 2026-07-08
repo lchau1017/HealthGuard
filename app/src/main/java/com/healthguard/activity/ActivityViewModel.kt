@@ -7,7 +7,9 @@ import androidx.lifecycle.viewModelScope
 import com.healthguard.home.MedicationPhase
 import com.healthguard.home.phase
 import com.healthguard.home.phaseChipText
+import com.healthguard.detail.SLOT_MATCH_WINDOW
 import com.healthguard.shared.data.MedicationRepository
+import com.healthguard.shared.domain.expectedDoseTimes
 import com.healthguard.shared.extraction.Frequency
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
@@ -16,10 +18,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
 /**
@@ -55,6 +60,8 @@ data class ActivityUiState(
     val dayCounts: List<DayCount> = emptyList(),
     /** Best adherence first; ties break alphabetically. */
     val breakdown: List<MedicationAdherence> = emptyList(),
+    /** Non-null while the day-detail sheet for a tapped grid day shows. */
+    val dayDetail: DayDetail? = null,
 )
 
 /**
@@ -90,6 +97,34 @@ class ActivityViewModel(
 
     /** Re-queries the current window. */
     fun reload() = load(_state.value.filter)
+
+    /**
+     * Loads the tapped grid day's detail sheet: that day's logs grouped per
+     * medicine, plus what in-treatment schedules expected of it. Slots still
+     * inside the 90-minute answer window are not "not recorded" yet.
+     */
+    fun selectDay(date: LocalDate) {
+        viewModelScope.launch {
+            val now = clock()
+            val dayStart = date.atStartOfDayIn(zone)
+            val dayEnd = date.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone)
+            val logs = repository.doseLogsWithMedicationInRange(dayStart, dayEnd)
+            val expectedByMedication = repository.medications().first()
+                .associate { row ->
+                    row.medication.id to expectedDoseTimes(
+                        row.schedule,
+                        dayStart,
+                        minOf(dayEnd, now - SLOT_MATCH_WINDOW),
+                        zone,
+                    )
+                }
+                .filterValues { it.isNotEmpty() }
+            _state.update { it.copy(dayDetail = dayDetail(date, logs, expectedByMedication, zone)) }
+        }
+    }
+
+    /** The day-detail sheet was dismissed. */
+    fun dismissDayDetail() = _state.update { it.copy(dayDetail = null) }
 
     private fun load(filter: ActivityFilter) {
         viewModelScope.launch {

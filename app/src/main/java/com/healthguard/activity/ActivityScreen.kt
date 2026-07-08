@@ -30,9 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -48,8 +46,9 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 /**
- * The Activity tab: window filter, four stat tiles, the fixed 16-week heat
- * map with a tap-to-read caption, and the per-medicine adherence breakdown.
+ * The Activity tab: window filter, four stat tiles, the record grid at the
+ * window's zoom with tap-to-open day-detail sheets, and the per-medicine
+ * adherence breakdown — everything recomputes for the selected window.
  * Reloads on entry so takes recorded on other screens are always included.
  */
 @Composable
@@ -60,10 +59,6 @@ fun ActivityScreen(
 ) {
     val state by viewModel.state.collectAsState()
     LaunchedEffect(Unit) { viewModel.reload() }
-
-    // Tapped heat-map day, shown as a caption so the value is readable as
-    // text, not only as color intensity.
-    var selectedDay by remember { mutableStateOf<Pair<LocalDate, Int>?>(null) }
 
     val zone = remember { TimeZone.currentSystemDefault() }
     val today = remember(state) { Clock.System.now().toLocalDateTime(zone).date }
@@ -96,8 +91,7 @@ fun ActivityScreen(
                         dayCounts = state.dayCounts,
                         from = from,
                         today = today,
-                        onDayClick = { date, count -> selectedDay = date to count },
-                        selectedDay = selectedDay,
+                        onDayClick = { date, _ -> viewModel.selectDay(date) },
                     )
                 }
 
@@ -105,6 +99,10 @@ fun ActivityScreen(
             }
             Spacer(Modifier.height(20.dp))
         }
+    }
+
+    state.dayDetail?.let { detail ->
+        DayDetailSheet(detail = detail, onDismiss = viewModel::dismissDayDetail)
     }
 }
 
@@ -140,7 +138,6 @@ private fun RecordSection(
     from: LocalDate,
     today: LocalDate,
     onDayClick: (LocalDate, Int) -> Unit,
-    selectedDay: Pair<LocalDate, Int>?,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -180,15 +177,6 @@ private fun RecordSection(
                 onDayClick = onDayClick,
             )
         }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = selectedDay?.let { (date, count) ->
-                val doses = if (count == 1) "1 dose" else "$count doses"
-                "${dayLabel(date)} — $doses"
-            } ?: "Tap a day for its count",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 

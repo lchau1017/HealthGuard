@@ -6,7 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DayCount
+import com.healthguard.activity.DayDetail
 import com.healthguard.activity.DoseDayStatus
+import com.healthguard.activity.dayDetail
 import com.healthguard.activity.doseDayStatusByDay
 import com.healthguard.activity.dayCounts
 import com.healthguard.activity.mondayOf
@@ -41,6 +43,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
 /** One-shot navigation results: the host pops back to Home on either. */
@@ -54,13 +57,6 @@ private const val HEAT_MAP_WEEKS = 16
 
 /** How far back derived "Not recorded" rows reach. */
 private val GAP_LOOKBACK = 14.days
-
-/**
- * A slot stays open this long before it can become a "Not recorded" row —
- * the same distance a log may sit from a slot and still answer it, so a
- * slot is never declared unrecorded while a matching take is still likely.
- */
-private val SLOT_ANSWER_GRACE = 90.minutes
 
 /**
  * Editable detail form plus the live persisted [item]. Field values are
@@ -87,6 +83,8 @@ data class DetailUiState(
      * at 30 entries.
      */
     val history: List<HistoryEntry> = emptyList(),
+    /** Non-null while the day-detail sheet for a tapped heat-map day shows. */
+    val dayDetail: DayDetail? = null,
     /**
      * Per-day status against the schedule over the heat-map window; days
      * with no expectation at all are absent (rendered as out-of-treatment
@@ -213,12 +211,45 @@ class DetailViewModel(
     ): List<HistoryEntry> {
         val cutoff = now - GAP_LOOKBACK
         val recentLogs = windowLogs.filter { (it.takenAt ?: it.plannedAt) >= cutoff }
-        val gapSlots = expectedDoseTimes(schedule, cutoff, now - SLOT_ANSWER_GRACE, zone)
+        val gapSlots = expectedDoseTimes(schedule, cutoff, now - SLOT_MATCH_WINDOW, zone)
         val older = repository.recentDoses(schedule.id, HISTORY_LIMIT)
             .filter { (it.takenAt ?: it.plannedAt) < cutoff }
             .map { HistoryEntry.Logged(it) }
         return (historyWithGaps(recentLogs, gapSlots) + older).take(HISTORY_LIMIT)
     }
+
+    /**
+     * Loads the tapped heat-map day's detail sheet, scoped to this
+     * medication only — the per-med grid answers for one schedule. Slots
+     * still inside the 90-minute answer window are not "not recorded" yet.
+     */
+    fun selectDay(date: LocalDate) {
+        val item = _state.value.item ?: return
+        viewModelScope.launch {
+            val now = clock()
+            val dayStart = date.atStartOfDayIn(zone)
+            val dayEnd = date.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone)
+            val logs = repository.doseLogsWithMedicationInRange(dayStart, dayEnd)
+                .filter { it.medicationId == item.medication.id }
+            val expected = expectedDoseTimes(
+                item.schedule,
+                dayStart,
+                minOf(dayEnd, now - SLOT_MATCH_WINDOW),
+                zone,
+            )
+            val expectedByMedication = if (expected.isEmpty()) {
+                emptyMap()
+            } else {
+                mapOf(item.medication.id to expected)
+            }
+            _state.update {
+                it.copy(dayDetail = dayDetail(date, logs, expectedByMedication, zone))
+            }
+        }
+    }
+
+    /** The day-detail sheet was dismissed. */
+    fun dismissDayDetail() = _state.update { it.copy(dayDetail = null) }
 
     fun onNameChange(value: String) = _state.update { it.copy(name = value) }
     fun onDosageChange(value: String) = _state.update { it.copy(dosage = value) }

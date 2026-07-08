@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import com.healthguard.activity.ActivityHeatMap
 import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DayCount
+import com.healthguard.activity.DayDetailSheet
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.activity.HeatMapGrid
 import com.healthguard.format.countdownTextSeconds
@@ -268,6 +269,7 @@ fun DetailScreen(
                 historyFrom = state.historyFrom,
                 now = now,
                 zone = zone,
+                onDayClick = viewModel::selectDay,
             )
 
             Spacer(Modifier.height(8.dp))
@@ -322,6 +324,10 @@ fun DetailScreen(
                 }
             },
         )
+    }
+
+    state.dayDetail?.let { detail ->
+        DayDetailSheet(detail = detail, onDismiss = viewModel::dismissDayDetail)
     }
 
     if (confirmingDelete) {
@@ -492,6 +498,7 @@ private fun HistorySection(
     historyFrom: LocalDate?,
     now: Instant,
     zone: TimeZone,
+    onDayClick: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -543,12 +550,14 @@ private fun HistorySection(
                     dayCounts = dayTakeCounts,
                     from = from,
                     today = now.toLocalDate(zone),
+                    onDayClick = { date, _ -> onDayClick(date) },
                 )
             } else {
                 DayStatusHeatMap(
                     dayStatuses = dayStatuses,
                     from = from,
                     today = now.toLocalDate(zone),
+                    onDayClick = onDayClick,
                 )
             }
         }
@@ -581,6 +590,7 @@ private fun DayStatusHeatMap(
     dayStatuses: Map<LocalDate, DoseDayStatus>,
     from: LocalDate,
     today: LocalDate,
+    onDayClick: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ramp = heatRamp()
@@ -614,6 +624,7 @@ private fun DayStatusHeatMap(
                     DoseDayStatus.OUT_OF_TREATMENT, null -> "not tracking"
                 }
             },
+            onDayClick = onDayClick,
         )
         Spacer(Modifier.height(6.dp))
         FlowRow(
