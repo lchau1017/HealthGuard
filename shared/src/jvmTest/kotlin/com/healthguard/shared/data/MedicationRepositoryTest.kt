@@ -406,6 +406,82 @@ class MedicationRepositoryTest {
     }
 
     @Test
+    fun `doseLogsInRange returns any status across schedules on effective time`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(id = "med-a"), schedule(id = "sch-a", medicationId = "med-a"))
+        repo.insertMedication(medication(id = "med-b"), schedule(id = "sch-b", medicationId = "med-b"))
+        repo.logTaken("d-taken", scheduleId = "sch-a", takenAtMillis = 1_000)
+        repo.logDose(
+            dose("d-missed", scheduleId = "sch-b", plannedAtMillis = 1_500)
+                .copy(status = DoseStatus.MISSED),
+        )
+        // TAKEN late: planned before the range but taken inside it — the
+        // effective time (takenAt) decides membership.
+        repo.logTaken("d-late", scheduleId = "sch-a", takenAtMillis = 1_800, plannedAtMillis = 500)
+        // Outside the range on both ends.
+        repo.logTaken("d-before", scheduleId = "sch-a", takenAtMillis = 999)
+        repo.logDose(
+            dose("d-after", scheduleId = "sch-b", plannedAtMillis = 2_000)
+                .copy(status = DoseStatus.MISSED),
+        )
+
+        val inRange = repo.doseLogsInRange(
+            from = Instant.fromEpochMilliseconds(1_000),
+            to = Instant.fromEpochMilliseconds(2_000),
+        )
+        assertEquals(setOf("d-taken", "d-missed", "d-late"), inRange.map { it.id }.toSet())
+    }
+
+    @Test
+    fun `adherenceTallies counts taken and missed per medication excluding skips`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(id = "med-a"), schedule(id = "sch-a", medicationId = "med-a"))
+        repo.insertMedication(
+            medication(id = "med-b").copy(drugName = "Loratadine"),
+            schedule(id = "sch-b", medicationId = "med-b"),
+        )
+        repo.logTaken("d-1", scheduleId = "sch-a", takenAtMillis = 1_000)
+        repo.logTaken("d-2", scheduleId = "sch-a", takenAtMillis = 1_100)
+        repo.logDose(
+            dose("d-3", scheduleId = "sch-a", plannedAtMillis = 1_200).copy(status = DoseStatus.MISSED),
+        )
+        repo.logDose(
+            dose("d-4", scheduleId = "sch-a", plannedAtMillis = 1_300).copy(status = DoseStatus.SKIPPED),
+        )
+        repo.logTaken("d-5", scheduleId = "sch-b", takenAtMillis = 1_400)
+        // Outside the range: ignored.
+        repo.logTaken("d-6", scheduleId = "sch-b", takenAtMillis = 9_000)
+
+        val tallies = repo.adherenceTallies(
+            from = Instant.fromEpochMilliseconds(0),
+            to = Instant.fromEpochMilliseconds(2_000),
+        ).associateBy { it.medicationId }
+
+        assertEquals(2, tallies.getValue("med-a").taken)
+        assertEquals(1, tallies.getValue("med-a").missed)
+        assertEquals("Cetirizine Hydrochloride", tallies.getValue("med-a").drugName)
+        assertEquals(1, tallies.getValue("med-b").taken)
+        assertEquals(0, tallies.getValue("med-b").missed)
+    }
+
+    @Test
+    fun `adherenceTallies omits medications without taken or missed doses`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(id = "med-a"), schedule(id = "sch-a", medicationId = "med-a"))
+        repo.insertMedication(medication(id = "med-b"), schedule(id = "sch-b", medicationId = "med-b"))
+        repo.logTaken("d-1", scheduleId = "sch-a", takenAtMillis = 1_000)
+        repo.logDose(
+            dose("d-2", scheduleId = "sch-b", plannedAtMillis = 1_100).copy(status = DoseStatus.SKIPPED),
+        )
+
+        val tallies = repo.adherenceTallies(
+            from = Instant.fromEpochMilliseconds(0),
+            to = Instant.fromEpochMilliseconds(2_000),
+        )
+        assertEquals(listOf("med-a"), tallies.map { it.medicationId })
+    }
+
+    @Test
     fun `recentDoses of an unknown schedule is empty`() = runTest {
         val repo = repository()
         repo.insertMedication(medication(), schedule())

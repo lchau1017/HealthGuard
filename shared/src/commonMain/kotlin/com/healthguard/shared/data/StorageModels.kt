@@ -52,6 +52,14 @@ data class TakenDose(
     val takenAt: Instant,
 )
 
+/** TAKEN/MISSED tallies for one medication over a window (skips excluded). */
+data class AdherenceTally(
+    val medicationId: String,
+    val drugName: String,
+    val taken: Int,
+    val missed: Int,
+)
+
 data class StoredDoseLog(
     val id: String,
     val scheduleId: String,
