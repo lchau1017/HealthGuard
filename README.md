@@ -1,36 +1,34 @@
 # HealthGuard
 
-Take a photo of a medication box, and the app reads the label, builds a dosing
-schedule and tracks whether you actually take the stuff — with a GitHub-style
-activity graph for your health.
+Android medication tracker with AI label scanning.
 
-I'm building this as a personal health tracker. Medication is the first
-module; I want to add running, food and sleep later, all feeding the same
-history. It's an Android app written in Kotlin Multiplatform, with a small
-Ktor backend that talks to a vision LLM.
+- Photograph a medication box — a vision LLM extracts name, dosage, form,
+  ingredients and frequency into a dosing schedule
+- One-tap dose logging with undo and a double-dose guard
+- GitHub-style activity heat map and schedule-based adherence analytics
+- Kotlin Multiplatform app + Ktor backend
 
 > **HealthGuard is an informational and reminder tool, not medical advice.**
 > It never makes medical judgements. Always consult your doctor or pharmacist.
 
 ## Demo
 
-The whole loop — photograph a vitamin C tube, the model reads the label, I
-confirm the extracted fields, take a dose, and it lands in the record
-(shown at 2× speed; [full-quality video](docs/demo/scan-take-record.mp4)):
+Scan a label → confirm the extracted fields → take a dose → it lands in the
+record (2× speed; [full-quality video](docs/demo/scan-take-record.mp4)):
 
 <img src="docs/demo/scan-take-record.gif" width="300">
 
 ## Screenshots
 
-| Scan a real box | Home |
+| Scan | Home |
 |---|---|
 | <img src="docs/screenshots/scan-review.png" width="380"> | <img src="docs/screenshots/home.png" width="380"> |
-| The model read this ibuprofen box I photographed. It wasn't sure about "take with food", so that field is locked until I check it myself. | An alert only when something is due. The week circles don't lie — "5 of 6 days on track" because I really did miss a dose. |
+| Extraction from a real ibuprofen box — the low-confidence "take with food" field is locked until reviewed. | Due alert only when a dose is due; week circles with an honest "5 of 6 days on track". |
 
 | Activity | Tap a day |
 |---|---|
 | <img src="docs/screenshots/activity-12-months.png" width="380"> | <img src="docs/screenshots/day-detail-sheet.png" width="380"> |
-| 12-month record like a GitHub contribution graph, plus each medicine's own adherence with the 80% line clinicians use. | Any square tells you what happened that day — which medicines, what times, and what was expected but never recorded. |
+| 12-month record, GitHub-style, plus each medicine's own adherence with the 80% clinical threshold marked. | Per-day breakdown — which medicines, what times, and what was expected but never recorded. |
 
 | Medication detail | Dose history |
 |---|---|
@@ -46,7 +44,7 @@ confirm the extracted fields, take a dose, and it lands in the record
 └──────────────┘  extraction JSON │   the API key) │                      └────────────┘
 ```
 
-- Photo is downscaled on the phone, sent to my Ktor server, forwarded to a
+- Photo is downscaled on the phone, sent to the Ktor backend, forwarded to a
   vision model (`qwen/qwen2.5-vl-72b-instruct` via OpenRouter — just a config
   value, any vision model works).
 - The model must answer in a fixed JSON schema: drug name, dosage, form,
@@ -56,7 +54,7 @@ confirm the extracted fields, take a dose, and it lands in the record
   - the parser survives garbage JSON, NaN confidences and hallucinated
     frequencies like "3,000,000 times a day" — everything degrades to
     "please check this field", never a crash or a bad save
-  - low-confidence fields are locked until I confirm or correct them
+  - low-confidence fields are locked until the user confirms or corrects them
 - Everything safety-related — dose timing, the double-dose warning, the
   adherence maths — is plain deterministic Kotlin with tests.
 
@@ -94,7 +92,7 @@ This took a few iterations to get honest:
 ## Testing
 
 - 300+ tests across the three modules, written test-first.
-- The ones I care most about:
+- Highest-value suites:
   - parser boundary tests — the LLM is an adversary as far as the parser is
     concerned
   - dose-time maths across DST changes and odd timezones
