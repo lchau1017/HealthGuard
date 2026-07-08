@@ -3,6 +3,7 @@
 package com.healthguard.detail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,9 +22,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,7 +35,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,28 +52,36 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.healthguard.activity.ActivityHeatMap
-import com.healthguard.activity.DayCount
-import com.healthguard.activity.dayLabel
+import com.healthguard.activity.HeatMapGrid
 import com.healthguard.format.countdownTextSeconds
-import com.healthguard.format.doseTimeText
-import com.healthguard.format.lastTakenText
+import com.healthguard.format.dayTimeLabel
+import com.healthguard.format.doseAnnotation
+import com.healthguard.format.lastTakenLabel
+import com.healthguard.format.mediumDateLabel
+import com.healthguard.format.timeLabel
+import com.healthguard.format.toHumanText
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.StoredDoseLog
-import kotlinx.coroutines.delay
+import com.healthguard.shared.domain.doseSlots
+import com.healthguard.shared.extraction.Frequency
+import com.healthguard.ui.CategoryChip
 import com.healthguard.ui.CategoryLabelInput
 import com.healthguard.ui.DeleteConfirmationDialog
+import com.healthguard.ui.theme.heatRamp
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
+import kotlinx.coroutines.delay
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 /**
- * Full-screen medication detail: schedule status (start/stop + next dose) on
- * top, the editable fields below, Save at the bottom. Delete lives in the top
- * bar behind the shared confirmation dialog. The host observes
- * [DetailUiState.finished] to navigate back.
+ * Full-screen medication detail: identity header, live status card with the
+ * guarded take-now action, the schedule summary, the editable "Details" form,
+ * the completeness history, and the start/stop control at the bottom. Delete
+ * lives in the top bar behind the shared confirmation dialog. The host
+ * observes [DetailUiState.finished] to navigate back.
  */
 @Composable
 fun DetailScreen(
@@ -76,7 +90,10 @@ fun DetailScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
+    val takeConfirmMinutes by viewModel.takeConfirm.collectAsState()
+    val recentTake by viewModel.recentTake.collectAsState()
     var confirmingDelete by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Per-second countdown: the detail page is where precision matters.
     var now by remember { mutableStateOf(Clock.System.now()) }
@@ -88,16 +105,27 @@ fun DetailScreen(
     }
     val zone = remember { TimeZone.currentSystemDefault() }
 
+    // Same undo contract as home: only the explicit action removes the dose.
+    LaunchedEffect(recentTake) {
+        val take = recentTake ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = "${take.drugName} recorded",
+            actionLabel = "Undo",
+            duration = SnackbarDuration.Short,
+        )
+        if (result == SnackbarResult.ActionPerformed) {
+            viewModel.undoTake(take.doseId)
+        } else {
+            viewModel.clearRecentTake()
+        }
+    }
+
     Scaffold(
         modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        text = state.item?.medication?.drugName ?: "Medication",
-                        maxLines = 1,
-                    )
-                },
+                title = {},
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -126,14 +154,20 @@ fun DetailScreen(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ScheduleStatusCard(
-                state = state,
-                nowText = state.nextDoseAt?.let { doseTimeText(it, zone) }.orEmpty(),
-                countdown = countdownTextSeconds(state.nextDoseAt, now, zone),
-                lastTaken = state.lastTakenAt?.let { lastTakenText(it, now, zone) },
-                onToggleTaking = viewModel::toggleTaking,
-            )
+            HeaderBlock(state = state)
 
+            if (state.isActive) {
+                StatusCard(
+                    state = state,
+                    now = now,
+                    zone = zone,
+                    onTakeNow = viewModel::takeNow,
+                )
+            }
+
+            ScheduleCard(state = state, zone = zone)
+
+            SectionTitle("Details")
             OutlinedTextField(
                 value = state.name,
                 onValueChange = viewModel::onNameChange,
@@ -213,13 +247,59 @@ fun DetailScreen(
 
             HistorySection(
                 history = state.history,
-                doseDayCounts = state.doseDayCounts,
+                doseDayStatuses = state.doseDayStatuses,
+                adherencePercent = state.adherencePercent,
                 historyFrom = state.historyFrom,
                 now = now,
                 zone = zone,
             )
+
+            Spacer(Modifier.height(8.dp))
+            if (state.isActive) {
+                OutlinedButton(
+                    onClick = viewModel::toggleTaking,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 48.dp),
+                ) {
+                    Text("Stop taking")
+                }
+            } else {
+                Button(
+                    onClick = viewModel::toggleTaking,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 48.dp),
+                ) {
+                    Text("Start taking")
+                }
+            }
             Spacer(Modifier.height(20.dp))
         }
+    }
+
+    takeConfirmMinutes?.let { minutesAgo ->
+        val ago = if (minutesAgo < 1) "moments ago" else "$minutesAgo minutes ago"
+        AlertDialog(
+            onDismissRequest = viewModel::dismissTakeConfirm,
+            title = { Text("Record another dose?") },
+            text = {
+                Text(
+                    "You recorded ${state.item?.medication?.drugName ?: "this medication"} " +
+                        "$ago. Taking it again this soon may be a double dose.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmTakeAnyway) {
+                    Text("Record anyway", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissTakeConfirm) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 
     if (confirmingDelete) {
@@ -235,26 +315,152 @@ fun DetailScreen(
     }
 }
 
+/** Identity block: name, "500 mg · Capsule" line, category chip. */
+@Composable
+private fun HeaderBlock(state: DetailUiState, modifier: Modifier = Modifier) {
+    val medication = state.item?.medication
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = medication?.drugName ?: "Medication",
+            style = MaterialTheme.typography.headlineMedium,
+        )
+        val subtitle = listOfNotNull(
+            medication?.dosage,
+            medication?.form?.replaceFirstChar { it.uppercase() },
+        ).joinToString(" · ")
+        if (subtitle.isNotEmpty()) {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        medication?.label?.let { label ->
+            Spacer(Modifier.height(6.dp))
+            CategoryChip(label)
+        }
+    }
+}
+
+/** Live dose status: countdown, last take, and the guarded Take now action. */
+@Composable
+private fun StatusCard(
+    state: DetailUiState,
+    now: Instant,
+    zone: TimeZone,
+    onTakeNow: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            if (state.nextDoseAt != null) {
+                Text(
+                    text = "Next dose",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = countdownTextSeconds(state.nextDoseAt, now, zone),
+                    style = MaterialTheme.typography.headlineMedium,
+                )
+            }
+            state.lastTakenAt?.let { lastTaken ->
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = lastTakenLabel(lastTaken, now, zone),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = onTakeNow,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 48.dp),
+            ) {
+                Text("Take now", style = MaterialTheme.typography.titleMedium)
+            }
+        }
+    }
+}
+
+/** Schedule summary rows: dose times and the start date. */
+@Composable
+private fun ScheduleCard(
+    state: DetailUiState,
+    zone: TimeZone,
+    modifier: Modifier = Modifier,
+) {
+    val schedule = state.item?.schedule ?: return
+    val frequency = schedule.frequency
+    val timesText = when (frequency) {
+        null -> null
+        is Frequency.EveryHours -> frequency.toHumanText().replaceFirstChar { it.uppercase() }
+        is Frequency.TimesPerDay ->
+            doseSlots(frequency).joinToString(" · ") { timeLabel(it) }
+    }
+    val startedText = schedule.startedAt
+        ?.takeIf { state.isActive }
+        ?.let { mediumDateLabel(it.toLocalDate(zone)) }
+    if (timesText == null && startedText == null) return
+
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            timesText?.let { ScheduleRow(label = "Times", value = it) }
+            startedText?.let { ScheduleRow(label = "Started", value = it) }
+        }
+    }
+}
+
+@Composable
+private fun ScheduleRow(label: String, value: String, modifier: Modifier = Modifier) {
+    Row(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(72.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
 /**
- * Per-drug take history: a 16-week heat map with a tap-to-read caption, then
- * the latest dose logs with status and timestamp.
+ * Per-drug history: the adherence figure, a 16-week completeness heat map
+ * (all taken / some / missed per day), then the latest dose logs.
  */
 @Composable
 private fun HistorySection(
     history: List<StoredDoseLog>,
-    doseDayCounts: List<DayCount>,
+    doseDayStatuses: Map<LocalDate, DayDoseStatus>,
+    adherencePercent: Int?,
     historyFrom: LocalDate?,
-    now: kotlin.time.Instant,
+    now: Instant,
     zone: TimeZone,
     modifier: Modifier = Modifier,
 ) {
-    var selectedDay by remember { mutableStateOf<Pair<LocalDate, Int>?>(null) }
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = "History",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SectionTitle("History")
+            adherencePercent?.let { percent ->
+                Text(
+                    text = "$percent% taken",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
         if (history.isEmpty()) {
             Spacer(Modifier.height(8.dp))
             Text(
@@ -265,22 +471,37 @@ private fun HistorySection(
             return@Column
         }
         historyFrom?.let { from ->
+            val ramp = heatRamp()
             Spacer(Modifier.height(8.dp))
-            ActivityHeatMap(
-                dayCounts = doseDayCounts,
+            HeatMapGrid(
                 from = from,
-                today = now.toLocalDateTime(zone).date,
-                onDayClick = { date, count -> selectedDay = date to count },
+                today = now.toLocalDate(zone),
+                cellColor = { date ->
+                    when (doseDayStatuses[date]) {
+                        DayDoseStatus.ALL -> ramp[4]
+                        DayDoseStatus.SOME -> ramp[2]
+                        DayDoseStatus.MISSED -> ramp[1]
+                        null -> ramp[0]
+                    }
+                },
+                cellLabel = { date ->
+                    "$date: " + when (doseDayStatuses[date]) {
+                        DayDoseStatus.ALL -> "all doses taken"
+                        DayDoseStatus.SOME -> "some doses taken"
+                        DayDoseStatus.MISSED -> "doses missed"
+                        null -> "no doses"
+                    }
+                },
             )
             Spacer(Modifier.height(6.dp))
-            Text(
-                text = selectedDay?.let { (date, count) ->
-                    val doses = if (count == 1) "1 dose" else "$count doses"
-                    "${dayLabel(date)} — $doses"
-                } ?: "Tap a day for its count",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                LegendChip(color = ramp[4], text = "All taken")
+                LegendChip(color = ramp[2], text = "Some")
+                LegendChip(color = ramp[1], text = "Missed")
+            }
         }
         Spacer(Modifier.height(8.dp))
         history.forEach { log ->
@@ -290,118 +511,87 @@ private fun HistorySection(
 }
 
 @Composable
+private fun LegendChip(
+    color: androidx.compose.ui.graphics.Color,
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier
+                .size(10.dp)
+                .background(color, MaterialTheme.shapes.extraSmall),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** One recent dose: status circle, timestamp, and the on-time annotation. */
+@Composable
 private fun HistoryRow(
     log: StoredDoseLog,
-    now: kotlin.time.Instant,
+    now: Instant,
     zone: TimeZone,
     modifier: Modifier = Modifier,
 ) {
-    val (statusLabel, statusColor) = when (log.status) {
-        DoseStatus.TAKEN -> "Taken" to MaterialTheme.colorScheme.primary
-        DoseStatus.SKIPPED -> "Skipped" to MaterialTheme.colorScheme.tertiary
-        DoseStatus.MISSED -> "Missed" to MaterialTheme.colorScheme.error
-        DoseStatus.PENDING -> "Pending" to MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val taken = log.status == DoseStatus.TAKEN
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier
-                .size(10.dp)
-                .background(statusColor, CircleShape),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = statusLabel,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = lastTakenText(log.takenAt ?: log.plannedAt, now, zone),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (taken) {
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "✓",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .border(1.5.dp, MaterialTheme.colorScheme.outline, CircleShape),
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(
+                text = dayTimeLabel(log.takenAt ?: log.plannedAt, now, zone),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = doseAnnotation(log.status, log.plannedAt, log.takenAt),
+                style = MaterialTheme.typography.bodySmall,
+                color = when (log.status) {
+                    DoseStatus.MISSED -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
     }
 }
 
 @Composable
-private fun ScheduleStatusCard(
-    state: DetailUiState,
-    nowText: String,
-    countdown: String,
-    lastTaken: String?,
-    onToggleTaking: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = if (state.isActive) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
-            },
-        ),
-        modifier = modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = if (state.isActive) "Currently taking" else "Not taking",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            if (state.isActive && state.nextDoseAt != null) {
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        text = nowText,
-                        style = MaterialTheme.typography.headlineMedium,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = countdown,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 4.dp),
-                    )
-                }
-                Text(
-                    text = "Next dose",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (state.isActive && lastTaken != null) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "Last taken: $lastTaken",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.height(12.dp))
-            if (state.isActive) {
-                OutlinedButton(
-                    onClick = onToggleTaking,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = 48.dp),
-                ) {
-                    Text("Stop taking")
-                }
-            } else {
-                Button(
-                    onClick = onToggleTaking,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = 48.dp),
-                ) {
-                    Text("Start taking")
-                }
-            }
-        }
-    }
+private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier.padding(top = 8.dp),
+    )
 }
 
 @Composable
@@ -426,3 +616,5 @@ private fun WithFoodSelector(
         }
     }
 }
+
+private fun Instant.toLocalDate(zone: TimeZone): LocalDate = toLocalDateTime(zone).date

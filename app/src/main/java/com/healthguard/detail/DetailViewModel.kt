@@ -4,9 +4,11 @@ package com.healthguard.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.healthguard.activity.DayCount
-import com.healthguard.activity.dayCounts
+import com.healthguard.activity.adherencePercent
 import com.healthguard.activity.mondayOf
+import com.healthguard.dose.RecordedTake
+import com.healthguard.dose.isDoubleDose
+import com.healthguard.dose.recordTakenDose
 import com.healthguard.format.parseFrequency
 import com.healthguard.format.toHumanText
 import com.healthguard.home.isActive
@@ -21,6 +23,7 @@ import kotlin.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DateTimeUnit
@@ -60,8 +63,10 @@ data class DetailUiState(
     val lastTakenAt: Instant? = null,
     /** Latest dose logs (any status), newest planned first, capped at 30. */
     val history: List<StoredDoseLog> = emptyList(),
-    /** Per-day TAKEN counts over the heat-map window. */
-    val doseDayCounts: List<DayCount> = emptyList(),
+    /** Per-day completeness over the heat-map window; absent days are empty. */
+    val doseDayStatuses: Map<LocalDate, DayDoseStatus> = emptyMap(),
+    /** TAKEN/(TAKEN+MISSED) over the window; null with nothing to measure. */
+    val adherencePercent: Int? = null,
     /** First day of the heat-map window (a Monday). */
     val historyFrom: LocalDate? = null,
     val finished: DetailFinished? = null,
@@ -83,11 +88,22 @@ class DetailViewModel(
     private val _state = MutableStateFlow(DetailUiState())
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
 
+    /** Bumped after dose writes: they don't retrigger the medications query. */
+    private val refresh = MutableStateFlow(0)
+
+    /** Minutes since the last take while the double-dose dialog should show. */
+    private val _takeConfirm = MutableStateFlow<Long?>(null)
+    val takeConfirm: StateFlow<Long?> = _takeConfirm.asStateFlow()
+
+    /** Non-null while an undo snackbar for the last take should be showing. */
+    private val _recentTake = MutableStateFlow<RecordedTake?>(null)
+    val recentTake: StateFlow<RecordedTake?> = _recentTake.asStateFlow()
+
     private var fieldsSeeded = false
 
     init {
         viewModelScope.launch {
-            repository.medications().collect { rows ->
+            combine(repository.medications(), refresh) { rows, _ -> rows }.collect { rows ->
                 val item = rows.firstOrNull { it.medication.id == medicationId }
                     ?: return@collect // deleted (or bad id): keep last state
                 val latest = repository.latestDose(item.schedule.id)
@@ -96,19 +112,23 @@ class DetailViewModel(
                 val today = now.toLocalDateTime(zone).date
                 val historyFrom = mondayOf(today).minus(HEAT_MAP_WEEKS - 1, DateTimeUnit.WEEK)
                 // Range query is on plannedAt (exclusive upper bound, hence
-                // the pad); TAKEN doses are then bucketed by their takenAt.
-                val takes = repository.dosesInRange(
+                // the pad); statuses are then bucketed by their effective day.
+                val windowLogs = repository.dosesInRange(
                     scheduleId = item.schedule.id,
                     from = historyFrom.atStartOfDayIn(zone),
                     to = now + 1.minutes,
-                ).filter { it.status == DoseStatus.TAKEN }
+                )
                 _state.update { current ->
                     val tracked = current.copy(
                         item = item,
                         nextDoseAt = nextDose(item.schedule, lastTaken, now, zone),
                         lastTakenAt = lastTaken,
                         history = repository.recentDoses(item.schedule.id, HISTORY_LIMIT),
-                        doseDayCounts = dayCounts(takes.mapNotNull { it.takenAt }, zone),
+                        doseDayStatuses = doseDayStatuses(windowLogs, zone),
+                        adherencePercent = adherencePercent(
+                            taken = windowLogs.count { it.status == DoseStatus.TAKEN },
+                            missed = windowLogs.count { it.status == DoseStatus.MISSED },
+                        ),
                         historyFrom = historyFrom,
                     )
                     if (fieldsSeeded) {
@@ -137,6 +157,61 @@ class DetailViewModel(
     fun onIngredientsChange(value: String) = _state.update { it.copy(ingredients = value) }
     fun onFrequencyTextChange(value: String) = _state.update { it.copy(frequencyText = value) }
     fun onWithFoodChange(value: Boolean?) = _state.update { it.copy(withFood = value) }
+
+    /**
+     * Records the dose as taken now — the same guarded path as the home
+     * screen: a take within the double-dose window raises [takeConfirm]
+     * instead and nothing is logged until [confirmTakeAnyway].
+     */
+    fun takeNow() {
+        val now = clock()
+        val lastTaken = _state.value.lastTakenAt
+        if (isDoubleDose(lastTaken, now)) {
+            _takeConfirm.value = (now - lastTaken!!).inWholeMinutes
+            return
+        }
+        record()
+    }
+
+    /** User accepted the double-dose warning: record it after all. */
+    fun confirmTakeAnyway() {
+        if (_takeConfirm.value == null) return
+        _takeConfirm.value = null
+        record()
+    }
+
+    fun dismissTakeConfirm() {
+        _takeConfirm.value = null
+    }
+
+    /** Undoes a take recorded via [takeNow]/[confirmTakeAnyway]. */
+    fun undoTake(doseId: String) {
+        viewModelScope.launch {
+            repository.deleteDoseLog(doseId)
+            _recentTake.value = null
+            refresh.update { it + 1 }
+        }
+    }
+
+    /** The undo snackbar timed out or was dismissed. */
+    fun clearRecentTake() {
+        _recentTake.value = null
+    }
+
+    private fun record() {
+        val current = _state.value
+        val item = current.item ?: return
+        viewModelScope.launch {
+            val doseId = recordTakenDose(
+                repository = repository,
+                scheduleId = item.schedule.id,
+                plannedAt = current.nextDoseAt,
+                now = clock(),
+            )
+            _recentTake.value = RecordedTake(doseId, item.medication.drugName)
+            refresh.update { it + 1 }
+        }
+    }
 
     /**
      * Persists the edited fields. Never touches activation state — that goes

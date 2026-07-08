@@ -20,11 +20,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.healthguard.ui.theme.heatRamp
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.isoDayNumber
@@ -45,15 +45,11 @@ fun mondayOf(date: LocalDate): LocalDate =
 private const val HEAT_LEVELS = 4
 private const val DAYS_PER_WEEK = 7
 
-/** Single-hue intensity steps: primary alpha per level 1-4 over surface. */
-private val LEVEL_ALPHAS = floatArrayOf(0.25f, 0.45f, 0.70f, 1f)
-
 /**
- * GitHub-style activity heat map: one column per week (Monday on top),
- * newest week on the right and auto-scrolled into view, today outlined.
- * Sequential single-hue color scale — intensity is the only encoded channel,
- * and [onDayClick] lets hosts surface the tapped day's exact figure in text
- * so color is never the only way to read a value.
+ * GitHub-style count heat map: the brand's sequential sage ramp over the
+ * shared [HeatMapGrid], one intensity step per [heatLevel]. [onDayClick]
+ * lets hosts surface the tapped day's exact figure in text so color is
+ * never the only way to read a value.
  */
 @Composable
 fun ActivityHeatMap(
@@ -67,6 +63,67 @@ fun ActivityHeatMap(
     onDayClick: ((LocalDate, Int) -> Unit)? = null,
 ) {
     val countsByDate = remember(dayCounts) { dayCounts.associate { it.date to it.count } }
+    val ramp = heatRamp()
+
+    Column(modifier = modifier) {
+        HeatMapGrid(
+            from = from,
+            today = today,
+            cellSize = cellSize,
+            cellGap = cellGap,
+            cellColor = { date -> ramp[heatLevel(countsByDate[date] ?: 0)] },
+            cellLabel = { date -> "$date: ${countsByDate[date] ?: 0}" },
+            onDayClick = onDayClick?.let { click ->
+                { date -> click(date, countsByDate[date] ?: 0) }
+            },
+        )
+        if (showLegend) {
+            Spacer(Modifier.size(6.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(cellGap),
+            ) {
+                Text(
+                    text = "Less",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(2.dp))
+                ramp.forEach { color ->
+                    Box(
+                        Modifier
+                            .size(cellSize)
+                            .background(color, MaterialTheme.shapes.extraSmall),
+                    )
+                }
+                Spacer(Modifier.width(2.dp))
+                Text(
+                    text = "More",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The bare week-column grid shared by every heat map: one column per week
+ * (Monday on top), newest week on the right and auto-scrolled into view,
+ * today outlined. Hosts decide each day's color ([cellColor]) and
+ * accessibility text ([cellLabel]).
+ */
+@Composable
+fun HeatMapGrid(
+    from: LocalDate,
+    today: LocalDate,
+    cellColor: (LocalDate) -> Color,
+    cellLabel: (LocalDate) -> String,
+    modifier: Modifier = Modifier,
+    cellSize: Dp = 14.dp,
+    cellGap: Dp = 2.dp,
+    onDayClick: ((LocalDate) -> Unit)? = null,
+) {
     val firstMonday = mondayOf(from)
     val lastMonday = mondayOf(today)
     val weeks = remember(firstMonday, lastMonday) {
@@ -75,68 +132,32 @@ fun ActivityHeatMap(
             .toList()
     }
 
-    val surface = MaterialTheme.colorScheme.surface
-    val primary = MaterialTheme.colorScheme.primary
-    val emptyColor = MaterialTheme.colorScheme.surfaceVariant
-    fun levelColor(level: Int): Color =
-        if (level == 0) emptyColor else primary.copy(alpha = LEVEL_ALPHAS[level - 1]).compositeOver(surface)
-
-    Column(modifier = modifier) {
-        val scrollState = rememberScrollState()
-        // Newest week lives at the right edge; land there on first layout
-        // and whenever the range grows.
-        LaunchedEffect(weeks.size, scrollState.maxValue) {
-            scrollState.scrollTo(scrollState.maxValue)
-        }
-        Row(
-            modifier = Modifier.horizontalScroll(scrollState),
-            horizontalArrangement = Arrangement.spacedBy(cellGap),
-        ) {
-            weeks.forEach { weekStart ->
-                Column(verticalArrangement = Arrangement.spacedBy(cellGap)) {
-                    repeat(DAYS_PER_WEEK) { dayIndex ->
-                        val date = weekStart.plus(dayIndex, DateTimeUnit.DAY)
-                        if (date < from || date > today) {
-                            Spacer(Modifier.size(cellSize))
-                        } else {
-                            val count = countsByDate[date] ?: 0
-                            HeatCell(
-                                color = levelColor(heatLevel(count)),
-                                isToday = date == today,
-                                size = cellSize,
-                                label = "$date: $count",
-                                onClick = onDayClick?.let { { it(date, count) } },
-                            )
-                        }
+    val scrollState = rememberScrollState()
+    // Newest week lives at the right edge; land there on first layout
+    // and whenever the range grows.
+    LaunchedEffect(weeks.size, scrollState.maxValue) {
+        scrollState.scrollTo(scrollState.maxValue)
+    }
+    Row(
+        modifier = modifier.horizontalScroll(scrollState),
+        horizontalArrangement = Arrangement.spacedBy(cellGap),
+    ) {
+        weeks.forEach { weekStart ->
+            Column(verticalArrangement = Arrangement.spacedBy(cellGap)) {
+                repeat(DAYS_PER_WEEK) { dayIndex ->
+                    val date = weekStart.plus(dayIndex, DateTimeUnit.DAY)
+                    if (date < from || date > today) {
+                        Spacer(Modifier.size(cellSize))
+                    } else {
+                        HeatCell(
+                            color = cellColor(date),
+                            isToday = date == today,
+                            size = cellSize,
+                            label = cellLabel(date),
+                            onClick = onDayClick?.let { { it(date) } },
+                        )
                     }
                 }
-            }
-        }
-        if (showLegend) {
-            Spacer(Modifier.size(6.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(cellGap),
-            ) {
-                Text(
-                    text = "less",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.width(2.dp))
-                (0..HEAT_LEVELS).forEach { level ->
-                    Box(
-                        Modifier
-                            .size(cellSize)
-                            .background(levelColor(level), MaterialTheme.shapes.extraSmall),
-                    )
-                }
-                Spacer(Modifier.width(2.dp))
-                Text(
-                    text = "more",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
     }

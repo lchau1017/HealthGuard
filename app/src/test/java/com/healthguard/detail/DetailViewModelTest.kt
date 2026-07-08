@@ -12,6 +12,7 @@ import com.healthguard.shared.db.HealthGuardDb
 import com.healthguard.shared.extraction.Frequency
 import java.util.Properties
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.Dispatchers
@@ -306,17 +307,112 @@ class DetailViewModelTest {
     }
 
     @Test
-    fun `doseDayCounts buckets only taken doses by day`() = runTest(dispatcher) {
+    fun `day statuses classify completeness and adherence counts taken vs missed`() = runTest(dispatcher) {
         insert(startedAt = fixedNow - 48.hours)
+        // Yesterday: one take, one miss -> SOME. Today: takes only -> ALL.
         logDose("d-1", takenAt = fixedNow - 26.hours, plannedAt = fixedNow - 26.hours, status = DoseStatus.TAKEN)
+        logDose("d-m", takenAt = null, plannedAt = fixedNow - 25.hours, status = DoseStatus.MISSED)
         logDose("d-2", takenAt = fixedNow - 2.hours, plannedAt = fixedNow - 2.hours, status = DoseStatus.TAKEN)
         logDose("d-3", takenAt = fixedNow - 1.hours, plannedAt = fixedNow - 1.hours, status = DoseStatus.TAKEN)
+        // Skips demote a day to SOME (not everything scheduled was taken)
+        // but never count against the adherence percentage.
         logDose("d-skip", takenAt = null, plannedAt = fixedNow - 3.hours, status = DoseStatus.SKIPPED)
         val vm = viewModel()
         collectState(vm)
 
-        assertEquals(listOf(1, 2), vm.state.value.doseDayCounts.map { it.count })
-        assertNotNull(vm.state.value.historyFrom)
+        val state = vm.state.value
+        val today = kotlinx.datetime.LocalDate(2024, 7, 3)
+        val yesterday = kotlinx.datetime.LocalDate(2024, 7, 2)
+        assertEquals(DayDoseStatus.SOME, state.doseDayStatuses[yesterday])
+        assertEquals(DayDoseStatus.SOME, state.doseDayStatuses[today])
+        // 3 taken, 1 missed -> 75%.
+        assertEquals(75, state.adherencePercent)
+        assertNotNull(state.historyFrom)
+    }
+
+    @Test
+    fun `adherence is null with no takes or misses`() = runTest(dispatcher) {
+        insert(startedAt = fixedNow - 48.hours)
+        val vm = viewModel()
+        collectState(vm)
+        assertNull(vm.state.value.adherencePercent)
+    }
+
+    @Test
+    fun `takeNow logs a taken dose and refreshes the status`() = runTest(dispatcher) {
+        // EveryHours(6), never taken: due since startedAt.
+        insert(frequency = Frequency.EveryHours(6), startedAt = fixedNow - 2.hours)
+        val vm = viewModel()
+        collectState(vm)
+        assertEquals(fixedNow - 2.hours, vm.state.value.nextDoseAt)
+
+        vm.takeNow()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val logged = repository.latestDose("sch-1")!!
+        assertEquals(DoseStatus.TAKEN, logged.status)
+        assertEquals(fixedNow, logged.takenAt)
+        assertEquals(fixedNow - 2.hours, logged.plannedAt)
+        // The status card and history refresh without an external write.
+        assertEquals(fixedNow + 6.hours, vm.state.value.nextDoseAt)
+        assertEquals(fixedNow, vm.state.value.lastTakenAt)
+        assertEquals(listOf(logged.id), vm.state.value.history.map { it.id })
+        assertEquals("Cetirizine", vm.recentTake.value?.drugName)
+    }
+
+    @Test
+    fun `takeNow within the double dose window raises the guard without logging`() = runTest(dispatcher) {
+        insert(frequency = Frequency.EveryHours(6), startedAt = fixedNow - 5.hours)
+        logDose("d-1", takenAt = fixedNow - 20.minutes, plannedAt = fixedNow - 20.minutes, status = DoseStatus.TAKEN)
+        val vm = viewModel()
+        collectState(vm)
+
+        vm.takeNow()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(20L, vm.takeConfirm.value)
+        assertEquals("d-1", repository.latestDose("sch-1")?.id)
+        assertNull(vm.recentTake.value)
+    }
+
+    @Test
+    fun `confirmTakeAnyway records despite the guard and dismiss does not`() = runTest(dispatcher) {
+        insert(frequency = Frequency.EveryHours(6), startedAt = fixedNow - 5.hours)
+        logDose("d-1", takenAt = fixedNow - 20.minutes, plannedAt = fixedNow - 20.minutes, status = DoseStatus.TAKEN)
+        val vm = viewModel()
+        collectState(vm)
+
+        vm.takeNow()
+        dispatcher.scheduler.advanceUntilIdle()
+        vm.dismissTakeConfirm()
+        assertNull(vm.takeConfirm.value)
+        assertEquals("d-1", repository.latestDose("sch-1")?.id)
+
+        vm.takeNow()
+        dispatcher.scheduler.advanceUntilIdle()
+        vm.confirmTakeAnyway()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(vm.takeConfirm.value)
+        assertEquals(fixedNow, repository.latestDose("sch-1")?.takenAt)
+    }
+
+    @Test
+    fun `undoTake removes the log and restores the previous status`() = runTest(dispatcher) {
+        insert(frequency = Frequency.EveryHours(6), startedAt = fixedNow - 2.hours)
+        val vm = viewModel()
+        collectState(vm)
+        vm.takeNow()
+        dispatcher.scheduler.advanceUntilIdle()
+        val doseId = vm.recentTake.value!!.doseId
+        assertEquals(fixedNow + 6.hours, vm.state.value.nextDoseAt)
+
+        vm.undoTake(doseId)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(repository.latestDose("sch-1"))
+        assertNull(vm.recentTake.value)
+        assertEquals(fixedNow - 2.hours, vm.state.value.nextDoseAt)
     }
 
     @Test
