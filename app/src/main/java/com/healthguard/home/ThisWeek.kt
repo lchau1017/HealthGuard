@@ -2,8 +2,8 @@
 
 package com.healthguard.home
 
-import com.healthguard.activity.DayCompleteness
-import com.healthguard.activity.dayCompleteness
+import com.healthguard.activity.DoseDayStatus
+import com.healthguard.activity.doseDayStatus
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.StoredDoseLog
 import com.healthguard.shared.data.StoredSchedule
@@ -20,7 +20,7 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
 /** One circle of the home "This week" card. */
-data class WeekDay(val date: LocalDate, val state: DayCompleteness)
+data class WeekDay(val date: LocalDate, val state: DoseDayStatus)
 
 private const val WEEK_DAYS = 7
 
@@ -31,7 +31,7 @@ private const val WEEK_DAYS = 7
  * opened the app still counts — and takes/skips from [logs]. Interval
  * (as-needed) schedules neither owe doses nor answer scheduled ones; their
  * logs are ignored here. Today's future slots are not owed yet (`to = now`),
- * so a day on pace reads [DayCompleteness.FULL] all day long.
+ * so a day on pace reads [DoseDayStatus.MET] all day long.
  */
 fun weekDayStates(
     schedules: List<StoredSchedule>,
@@ -63,7 +63,7 @@ fun weekDayStates(
         val date = today.minus(back, DateTimeUnit.DAY)
         WeekDay(
             date = date,
-            state = dayCompleteness(
+            state = doseDayStatus(
                 expected = expectedByDay[date] ?: 0,
                 taken = takenByDay[date] ?: 0,
                 skipped = skippedByDay[date] ?: 0,
@@ -86,20 +86,22 @@ fun todayHasPendingSlots(
 
 /**
  * The line under the week circles. Days that never owed anything
- * ([DayCompleteness.EMPTY]) leave the "K of N" tally entirely. Today joins
- * it once decided: either its slots are all in the past, or it is already
+ * ([DoseDayStatus.OUT_OF_TREATMENT]) and fully skipped days (a deliberate
+ * choice, not a lapse) leave the "K of N" tally entirely. Today joins it
+ * once decided: either its slots are all in the past, or it is already
  * behind (fewer takes than passed slots — off-track immediately). While
  * today is still on pace with slots pending, the caption says so; a full
  * 7-of-7 week earns the celebration variant.
  */
 fun weekCaption(days: List<WeekDay>, todayPending: Boolean): String {
     val today = days.last()
-    val todayOnPace = today.state == DayCompleteness.FULL || today.state == DayCompleteness.EMPTY
+    val untallied = setOf(DoseDayStatus.OUT_OF_TREATMENT, DoseDayStatus.SKIPPED)
+    val todayOnPace = today.state == DoseDayStatus.MET || today.state in untallied
     val todayExcluded = todayPending && todayOnPace
     val counted = days.filter { day ->
-        day.state != DayCompleteness.EMPTY && !(todayExcluded && day === today)
+        day.state !in untallied && !(todayExcluded && day === today)
     }
-    val onTrack = counted.count { it.state == DayCompleteness.FULL }
+    val onTrack = counted.count { it.state == DoseDayStatus.MET }
     return when {
         counted.isEmpty() && !todayExcluded -> "No scheduled doses this week."
         counted.size == WEEK_DAYS && onTrack == WEEK_DAYS ->

@@ -61,64 +61,70 @@ fun adherenceResult(
 )
 
 /**
- * How completely one local day's expected doses were answered. Shared by
- * the detail heat map and the home week circles so "a good day" means the
- * same thing everywhere. (The 16-week Activity grid deliberately stays
- * count-based raw activity across all medications — see ActivityViewModel.)
+ * How one local day answered its expected doses — the categorical
+ * (ABC-taxonomy-flavoured) day states behind the per-medicine heat map and
+ * the home week circles, so "a good day" means the same thing everywhere.
+ * Deliberately categorical, not an intensity ramp: five different answers,
+ * not five amounts. (The combined 16-week Activity grid stays count-based
+ * raw activity across all medications — see ActivityViewModel.)
  */
-enum class DayCompleteness {
-    /** Every non-skipped expected dose taken (taken >= adjusted > 0). */
-    FULL,
+enum class DoseDayStatus {
+    /** Every non-skipped expected dose taken (taken >= expected − skipped > 0). */
+    MET,
 
     /** Some but not all non-skipped expected doses taken. */
     PARTIAL,
 
     /** Doses were expected, none taken — missed or simply not recorded. */
-    NONE,
+    NOT_TAKEN,
 
-    /** Nothing (left) expected: inactive day or every dose skipped. */
-    EMPTY,
+    /** Every expected dose that day deliberately skipped: a choice, not a lapse. */
+    SKIPPED,
+
+    /** No expectation at all: before start, after stop, dormant, or as-needed. */
+    OUT_OF_TREATMENT,
 }
 
 /**
- * Classifies one day. The day's expectation is adjusted for deliberate
- * skips (adjusted = expected − skipped): a fully skipped day is [DayCompleteness.EMPTY],
- * not a lapse. [DayCompleteness.NONE] covers both logged misses and days
- * with no record at all — from a schedule's point of view they are the same.
+ * Classifies one day. Takes are measured against the skip-adjusted
+ * expectation (expected − skipped); with none taken, a fully skipped day is
+ * [DoseDayStatus.SKIPPED] while any unanswered remainder is
+ * [DoseDayStatus.NOT_TAKEN] — logged misses and days with no record at all
+ * read the same, because from a schedule's point of view they are.
  */
-fun dayCompleteness(expected: Int, taken: Int, skipped: Int): DayCompleteness {
+fun doseDayStatus(expected: Int, taken: Int, skipped: Int): DoseDayStatus {
     val adjusted = expected - skipped
     return when {
-        adjusted <= 0 -> DayCompleteness.EMPTY
-        taken >= adjusted -> DayCompleteness.FULL
-        taken > 0 -> DayCompleteness.PARTIAL
-        else -> DayCompleteness.NONE
+        expected <= 0 -> DoseDayStatus.OUT_OF_TREATMENT
+        taken >= adjusted && taken > 0 -> DoseDayStatus.MET
+        taken > 0 -> DoseDayStatus.PARTIAL
+        skipped >= expected -> DoseDayStatus.SKIPPED
+        else -> DoseDayStatus.NOT_TAKEN
     }
 }
 
 /**
  * Buckets [expected] dose instants and [logs] into per-local-day
- * [dayCompleteness]. [DayCompleteness.EMPTY] days are absent from the map —
- * hosts render absent days as blank. Takes bucket by their takenAt day
- * (falling back to plannedAt); skips by their plannedAt day.
+ * [doseDayStatus]. Days with no expectation at all are absent from the map —
+ * hosts render absent days as out-of-treatment blanks. Takes bucket by their
+ * takenAt day (falling back to plannedAt); skips by their plannedAt day.
  */
-fun dayCompletenessByDay(
+fun doseDayStatusByDay(
     expected: List<Instant>,
     logs: List<StoredDoseLog>,
     zone: TimeZone,
-): Map<LocalDate, DayCompleteness> {
+): Map<LocalDate, DoseDayStatus> {
     fun Instant.day(): LocalDate = toLocalDateTime(zone).date
     val expectedByDay = expected.groupingBy { it.day() }.eachCount()
     val takenByDay = logs.filter { it.status == DoseStatus.TAKEN }
         .groupingBy { (it.takenAt ?: it.plannedAt).day() }.eachCount()
     val skippedByDay = logs.filter { it.status == DoseStatus.SKIPPED }
         .groupingBy { it.plannedAt.day() }.eachCount()
-    return expectedByDay.keys.mapNotNull { day ->
-        val completeness = dayCompleteness(
+    return expectedByDay.keys.associateWith { day ->
+        doseDayStatus(
             expected = expectedByDay[day] ?: 0,
             taken = takenByDay[day] ?: 0,
             skipped = skippedByDay[day] ?: 0,
         )
-        if (completeness == DayCompleteness.EMPTY) null else day to completeness
-    }.toMap()
+    }
 }

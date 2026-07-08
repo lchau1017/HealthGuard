@@ -2,7 +2,7 @@
 
 package com.healthguard.home
 
-import com.healthguard.activity.DayCompleteness
+import com.healthguard.activity.DoseDayStatus
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.StoredDoseLog
 import com.healthguard.shared.data.StoredSchedule
@@ -56,7 +56,7 @@ class ThisWeekTest {
         )
     }
 
-    private fun stateOf(days: List<WeekDay>, date: LocalDate): DayCompleteness =
+    private fun stateOf(days: List<WeekDay>, date: LocalDate): DoseDayStatus =
         days.first { it.date == date }.state
 
     // --- weekDayStates ---
@@ -67,7 +67,7 @@ class ThisWeekTest {
         assertEquals(7, days.size)
         assertEquals(LocalDate(2026, 7, 2), days.first().date)
         assertEquals(today, days.last().date)
-        assertEquals(List(7) { DayCompleteness.EMPTY }, days.map { it.state })
+        assertEquals(List(7) { DoseDayStatus.OUT_OF_TREATMENT }, days.map { it.state })
     }
 
     @Test
@@ -79,7 +79,7 @@ class ThisWeekTest {
             now,
             zone,
         )
-        assertEquals(DayCompleteness.FULL, stateOf(days, LocalDate(2026, 7, 6)))
+        assertEquals(DoseDayStatus.MET, stateOf(days, LocalDate(2026, 7, 6)))
     }
 
     @Test
@@ -91,7 +91,7 @@ class ThisWeekTest {
             now,
             zone,
         )
-        assertEquals(DayCompleteness.PARTIAL, stateOf(days, LocalDate(2026, 7, 6)))
+        assertEquals(DoseDayStatus.PARTIAL, stateOf(days, LocalDate(2026, 7, 6)))
     }
 
     @Test
@@ -99,7 +99,7 @@ class ThisWeekTest {
         // The user never opened the app on the 6th: previously that day
         // vanished; now the schedule still owed two doses.
         val days = weekDayStates(listOf(schedule(id = "a")), emptyList(), now, zone)
-        assertEquals(DayCompleteness.NONE, stateOf(days, LocalDate(2026, 7, 6)))
+        assertEquals(DoseDayStatus.NOT_TAKEN, stateOf(days, LocalDate(2026, 7, 6)))
     }
 
     @Test
@@ -111,7 +111,7 @@ class ThisWeekTest {
             now,
             zone,
         )
-        assertEquals(DayCompleteness.NONE, stateOf(days, LocalDate(2026, 7, 6)))
+        assertEquals(DoseDayStatus.NOT_TAKEN, stateOf(days, LocalDate(2026, 7, 6)))
     }
 
     @Test
@@ -120,18 +120,18 @@ class ThisWeekTest {
         val days = weekDayStates(
             listOf(sch),
             listOf(
-                // 5th: both deliberately skipped -> nothing owed.
+                // 5th: both deliberately skipped -> a visible choice.
                 log("a", "2026-07-05T09:00:00Z", status = DoseStatus.SKIPPED),
                 log("a", "2026-07-05T21:00:00Z", status = DoseStatus.SKIPPED),
-                // 6th: one skipped, the other taken -> full.
+                // 6th: one skipped, the other taken -> met.
                 log("a", "2026-07-06T09:00:00Z", status = DoseStatus.SKIPPED),
                 log("a", "2026-07-06T21:00:00Z"),
             ),
             now,
             zone,
         )
-        assertEquals(DayCompleteness.EMPTY, stateOf(days, LocalDate(2026, 7, 5)))
-        assertEquals(DayCompleteness.FULL, stateOf(days, LocalDate(2026, 7, 6)))
+        assertEquals(DoseDayStatus.SKIPPED, stateOf(days, LocalDate(2026, 7, 5)))
+        assertEquals(DoseDayStatus.MET, stateOf(days, LocalDate(2026, 7, 6)))
     }
 
     @Test
@@ -145,7 +145,7 @@ class ThisWeekTest {
             zone,
         )
         // One of the two owed doses taken.
-        assertEquals(DayCompleteness.PARTIAL, stateOf(days, LocalDate(2026, 7, 6)))
+        assertEquals(DoseDayStatus.PARTIAL, stateOf(days, LocalDate(2026, 7, 6)))
     }
 
     @Test
@@ -159,7 +159,7 @@ class ThisWeekTest {
             zone,
         )
         // The as-needed take cannot stand in for the scheduled dose.
-        assertEquals(DayCompleteness.NONE, stateOf(days, LocalDate(2026, 7, 6)))
+        assertEquals(DoseDayStatus.NOT_TAKEN, stateOf(days, LocalDate(2026, 7, 6)))
     }
 
     @Test
@@ -172,15 +172,15 @@ class ThisWeekTest {
             now,
             zone,
         )
-        assertEquals(DayCompleteness.FULL, stateOf(days, today))
+        assertEquals(DoseDayStatus.MET, stateOf(days, today))
     }
 
     @Test
     fun `a schedule started mid-week owes nothing before its start`() {
         val sch = schedule(startedAt = Instant.parse("2026-07-06T00:00:00Z"), id = "a")
         val days = weekDayStates(listOf(sch), emptyList(), now, zone)
-        assertEquals(DayCompleteness.EMPTY, stateOf(days, LocalDate(2026, 7, 5)))
-        assertEquals(DayCompleteness.NONE, stateOf(days, LocalDate(2026, 7, 6)))
+        assertEquals(DoseDayStatus.OUT_OF_TREATMENT, stateOf(days, LocalDate(2026, 7, 5)))
+        assertEquals(DoseDayStatus.NOT_TAKEN, stateOf(days, LocalDate(2026, 7, 6)))
     }
 
     @Test
@@ -197,8 +197,8 @@ class ThisWeekTest {
             zone,
         )
         // The 6th owed only its morning dose (stopped before 21:00) — taken.
-        assertEquals(DayCompleteness.FULL, stateOf(days, LocalDate(2026, 7, 6)))
-        assertEquals(DayCompleteness.EMPTY, stateOf(days, LocalDate(2026, 7, 7)))
+        assertEquals(DoseDayStatus.MET, stateOf(days, LocalDate(2026, 7, 6)))
+        assertEquals(DoseDayStatus.OUT_OF_TREATMENT, stateOf(days, LocalDate(2026, 7, 7)))
     }
 
     // --- todayHasPendingSlots ---
@@ -230,15 +230,15 @@ class ThisWeekTest {
 
     // --- weekCaption ---
 
-    private fun week(vararg states: DayCompleteness): List<WeekDay> =
+    private fun week(vararg states: DoseDayStatus): List<WeekDay> =
         states.mapIndexed { index, state -> WeekDay(LocalDate(2026, 7, 2 + index), state) }
 
     @Test
     fun `on-pace today with pending slots is excluded and announced`() {
         val days = week(
-            DayCompleteness.FULL, DayCompleteness.FULL, DayCompleteness.NONE,
-            DayCompleteness.FULL, DayCompleteness.PARTIAL, DayCompleteness.FULL,
-            DayCompleteness.FULL,
+            DoseDayStatus.MET, DoseDayStatus.MET, DoseDayStatus.NOT_TAKEN,
+            DoseDayStatus.MET, DoseDayStatus.PARTIAL, DoseDayStatus.MET,
+            DoseDayStatus.MET,
         )
         assertEquals(
             "4 of 6 days on track. Today still to come.",
@@ -250,9 +250,9 @@ class ThisWeekTest {
     fun `an empty today with pending slots is excluded and announced`() {
         // Early morning: no slot has passed yet.
         val days = week(
-            DayCompleteness.FULL, DayCompleteness.FULL, DayCompleteness.FULL,
-            DayCompleteness.FULL, DayCompleteness.FULL, DayCompleteness.FULL,
-            DayCompleteness.EMPTY,
+            DoseDayStatus.MET, DoseDayStatus.MET, DoseDayStatus.MET,
+            DoseDayStatus.MET, DoseDayStatus.MET, DoseDayStatus.MET,
+            DoseDayStatus.OUT_OF_TREATMENT,
         )
         assertEquals(
             "6 of 6 days on track. Today still to come.",
@@ -263,9 +263,9 @@ class ThisWeekTest {
     @Test
     fun `a behind-schedule today counts off-track immediately`() {
         val days = week(
-            DayCompleteness.FULL, DayCompleteness.FULL, DayCompleteness.FULL,
-            DayCompleteness.FULL, DayCompleteness.FULL, DayCompleteness.FULL,
-            DayCompleteness.PARTIAL,
+            DoseDayStatus.MET, DoseDayStatus.MET, DoseDayStatus.MET,
+            DoseDayStatus.MET, DoseDayStatus.MET, DoseDayStatus.MET,
+            DoseDayStatus.PARTIAL,
         )
         assertEquals("6 of 7 days on track.", weekCaption(days, todayPending = true))
     }
@@ -273,9 +273,9 @@ class ThisWeekTest {
     @Test
     fun `a finished today is counted without the suffix`() {
         val days = week(
-            DayCompleteness.FULL, DayCompleteness.FULL, DayCompleteness.NONE,
-            DayCompleteness.FULL, DayCompleteness.FULL, DayCompleteness.FULL,
-            DayCompleteness.FULL,
+            DoseDayStatus.MET, DoseDayStatus.MET, DoseDayStatus.NOT_TAKEN,
+            DoseDayStatus.MET, DoseDayStatus.MET, DoseDayStatus.MET,
+            DoseDayStatus.MET,
         )
         assertEquals("6 of 7 days on track.", weekCaption(days, todayPending = false))
     }
@@ -284,19 +284,43 @@ class ThisWeekTest {
     fun `days without expectations leave the tally`() {
         // Schedule started mid-week: the first two days never owed anything.
         val days = week(
-            DayCompleteness.EMPTY, DayCompleteness.EMPTY, DayCompleteness.FULL,
-            DayCompleteness.FULL, DayCompleteness.NONE, DayCompleteness.FULL,
-            DayCompleteness.FULL,
+            DoseDayStatus.OUT_OF_TREATMENT, DoseDayStatus.OUT_OF_TREATMENT, DoseDayStatus.MET,
+            DoseDayStatus.MET, DoseDayStatus.NOT_TAKEN, DoseDayStatus.MET,
+            DoseDayStatus.MET,
         )
         assertEquals("4 of 5 days on track.", weekCaption(days, todayPending = false))
     }
 
     @Test
+    fun `fully skipped days leave the tally like out-of-treatment ones`() {
+        // A deliberate day off is not a lapse, so it never dents the score.
+        val days = week(
+            DoseDayStatus.MET, DoseDayStatus.SKIPPED, DoseDayStatus.MET,
+            DoseDayStatus.MET, DoseDayStatus.NOT_TAKEN, DoseDayStatus.MET,
+            DoseDayStatus.MET,
+        )
+        assertEquals("5 of 6 days on track.", weekCaption(days, todayPending = false))
+    }
+
+    @Test
+    fun `a fully skipped today with pending slots still reads on pace`() {
+        val days = week(
+            DoseDayStatus.MET, DoseDayStatus.MET, DoseDayStatus.MET,
+            DoseDayStatus.MET, DoseDayStatus.MET, DoseDayStatus.MET,
+            DoseDayStatus.SKIPPED,
+        )
+        assertEquals(
+            "6 of 6 days on track. Today still to come.",
+            weekCaption(days, todayPending = true),
+        )
+    }
+
+    @Test
     fun `a perfect fully counted week gets the celebration line`() {
         val days = week(
-            DayCompleteness.FULL, DayCompleteness.FULL, DayCompleteness.FULL,
-            DayCompleteness.FULL, DayCompleteness.FULL, DayCompleteness.FULL,
-            DayCompleteness.FULL,
+            DoseDayStatus.MET, DoseDayStatus.MET, DoseDayStatus.MET,
+            DoseDayStatus.MET, DoseDayStatus.MET, DoseDayStatus.MET,
+            DoseDayStatus.MET,
         )
         assertEquals("7 of 7 days on track — nice work.", weekCaption(days, todayPending = false))
     }
@@ -304,9 +328,9 @@ class ThisWeekTest {
     @Test
     fun `a week with nothing scheduled says so`() {
         val days = week(
-            DayCompleteness.EMPTY, DayCompleteness.EMPTY, DayCompleteness.EMPTY,
-            DayCompleteness.EMPTY, DayCompleteness.EMPTY, DayCompleteness.EMPTY,
-            DayCompleteness.EMPTY,
+            DoseDayStatus.OUT_OF_TREATMENT, DoseDayStatus.OUT_OF_TREATMENT, DoseDayStatus.OUT_OF_TREATMENT,
+            DoseDayStatus.OUT_OF_TREATMENT, DoseDayStatus.OUT_OF_TREATMENT, DoseDayStatus.OUT_OF_TREATMENT,
+            DoseDayStatus.OUT_OF_TREATMENT,
         )
         assertEquals("No scheduled doses this week.", weekCaption(days, todayPending = false))
     }

@@ -3,7 +3,7 @@
 package com.healthguard.home
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
-import com.healthguard.activity.DayCompleteness
+import com.healthguard.activity.DoseDayStatus
 import com.healthguard.format.DoseRowStatus
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
@@ -196,9 +196,9 @@ class HomeViewModelTest {
         assertEquals(7, state.weekDays.size)
         assertEquals(
             listOf(
-                DayCompleteness.EMPTY, DayCompleteness.EMPTY, DayCompleteness.EMPTY,
-                DayCompleteness.FULL, DayCompleteness.FULL, DayCompleteness.PARTIAL,
-                DayCompleteness.FULL,
+                DoseDayStatus.OUT_OF_TREATMENT, DoseDayStatus.OUT_OF_TREATMENT, DoseDayStatus.OUT_OF_TREATMENT,
+                DoseDayStatus.MET, DoseDayStatus.MET, DoseDayStatus.PARTIAL,
+                DoseDayStatus.MET,
             ),
             state.weekDays.map { it.state },
         )
@@ -226,7 +226,7 @@ class HomeViewModelTest {
         val vm = viewModel()
         collectState(vm)
 
-        assertTrue(vm.state.value.weekDays.all { it.state == DayCompleteness.EMPTY })
+        assertTrue(vm.state.value.weekDays.all { it.state == DoseDayStatus.OUT_OF_TREATMENT })
         assertEquals("No scheduled doses this week.", vm.state.value.weekCaption)
     }
 
@@ -247,7 +247,7 @@ class HomeViewModelTest {
         val after = vm.state.value.taking.single()
         assertFalse(after.isDue)
         assertEquals(DoseRowStatus.Next("Next at 9:00 PM"), after.status)
-        assertEquals(DayCompleteness.FULL, vm.state.value.weekDays.last().state)
+        assertEquals(DoseDayStatus.MET, vm.state.value.weekDays.last().state)
     }
 
     @Test

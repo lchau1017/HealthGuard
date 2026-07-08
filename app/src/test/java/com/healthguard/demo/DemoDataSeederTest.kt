@@ -3,7 +3,7 @@
 package com.healthguard.demo
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
-import com.healthguard.activity.DayCompleteness
+import com.healthguard.activity.DoseDayStatus
 import com.healthguard.activity.adherenceResult
 import com.healthguard.home.weekDayStates
 import com.healthguard.shared.data.MedicationRepository
@@ -139,7 +139,7 @@ class DemoDataSeederTest {
 
         assertTrue(
             "expected at least one non-full day, got ${days.map { it.state }}",
-            days.any { it.state != DayCompleteness.FULL },
+            days.any { it.state != DoseDayStatus.MET },
         )
     }
 

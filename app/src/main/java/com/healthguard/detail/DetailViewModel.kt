@@ -5,9 +5,9 @@ package com.healthguard.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthguard.activity.AdherenceResult
-import com.healthguard.activity.DayCompleteness
 import com.healthguard.activity.DayCount
-import com.healthguard.activity.dayCompletenessByDay
+import com.healthguard.activity.DoseDayStatus
+import com.healthguard.activity.doseDayStatusByDay
 import com.healthguard.activity.dayCounts
 import com.healthguard.activity.mondayOf
 import com.healthguard.dose.RecordedTake
@@ -86,11 +86,11 @@ data class DetailUiState(
      */
     val history: List<HistoryEntry> = emptyList(),
     /**
-     * Per-day completeness against the schedule over the heat-map window;
-     * days without (unskipped) expectations are absent. Empty for
-     * as-needed medications.
+     * Per-day status against the schedule over the heat-map window; days
+     * with no expectation at all are absent (rendered as out-of-treatment
+     * blanks). Empty for as-needed medications.
      */
-    val dayCompleteness: Map<LocalDate, DayCompleteness> = emptyMap(),
+    val dayStatuses: Map<LocalDate, DoseDayStatus> = emptyMap(),
     /**
      * Per-day take counts over the window — the heat-map fallback for
      * as-needed medications, where no dose is ever owed.
@@ -162,7 +162,7 @@ class DetailViewModel(
                         nextDoseAt = nextDose(item.schedule, lastTaken, now, zone),
                         lastTakenAt = lastTaken,
                         history = historyEntries(item.schedule, windowLogs, now),
-                        dayCompleteness = dayCompletenessByDay(expected, windowLogs, zone),
+                        dayStatuses = doseDayStatusByDay(expected, windowLogs, zone),
                         dayTakeCounts = dayCounts(
                             windowLogs.filter { it.status == DoseStatus.TAKEN }
                                 .map { it.takenAt ?: it.plannedAt },

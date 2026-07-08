@@ -111,7 +111,10 @@ fun ActivityHeatMap(
  * The bare week-column grid shared by every heat map: one column per week
  * (Monday on top), newest week on the right and auto-scrolled into view,
  * today outlined. Hosts decide each day's color ([cellColor]) and
- * accessibility text ([cellLabel]).
+ * accessibility text ([cellLabel]); optionally a day can carry a short
+ * horizontal dash mark ([cellDash] — the categorical "skipped by choice"
+ * glyph) or a hairline outline ([cellHairline] — out-of-treatment blanks
+ * that would otherwise vanish into the background).
  */
 @Composable
 fun HeatMapGrid(
@@ -122,6 +125,8 @@ fun HeatMapGrid(
     modifier: Modifier = Modifier,
     cellSize: Dp = 14.dp,
     cellGap: Dp = 2.dp,
+    cellDash: (LocalDate) -> Boolean = { false },
+    cellHairline: (LocalDate) -> Boolean = { false },
     onDayClick: ((LocalDate) -> Unit)? = null,
 ) {
     val firstMonday = mondayOf(from)
@@ -154,6 +159,8 @@ fun HeatMapGrid(
                             isToday = date == today,
                             size = cellSize,
                             label = cellLabel(date),
+                            dashed = cellDash(date),
+                            hairline = cellHairline(date),
                             onClick = onDayClick?.let { { it(date) } },
                         )
                     }
@@ -170,6 +177,8 @@ private fun HeatCell(
     size: Dp,
     label: String,
     onClick: (() -> Unit)?,
+    dashed: Boolean = false,
+    hairline: Boolean = false,
 ) {
     var cell = Modifier
         .size(size)
@@ -181,9 +190,23 @@ private fun HeatCell(
             color = MaterialTheme.colorScheme.onSurface,
             shape = MaterialTheme.shapes.extraSmall,
         )
+    } else if (hairline) {
+        cell = cell.border(
+            width = Dp.Hairline,
+            color = MaterialTheme.colorScheme.outlineVariant,
+            shape = MaterialTheme.shapes.extraSmall,
+        )
     }
     if (onClick != null) {
         cell = cell.clickable(onClick = onClick)
     }
-    Box(cell)
+    Box(cell, contentAlignment = Alignment.Center) {
+        if (dashed) {
+            Box(
+                Modifier
+                    .size(width = size / 2, height = 1.5.dp)
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+        }
+    }
 }

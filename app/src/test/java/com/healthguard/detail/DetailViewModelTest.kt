@@ -4,7 +4,7 @@ package com.healthguard.detail
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.healthguard.activity.AdherenceResult
-import com.healthguard.activity.DayCompleteness
+import com.healthguard.activity.DoseDayStatus
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.StoredDoseLog
@@ -356,18 +356,18 @@ class DetailViewModelTest {
         assertEquals(50, state.adherence.percent)
         assertEquals(
             mapOf(
-                kotlinx.datetime.LocalDate(2024, 7, 1) to DayCompleteness.FULL,
-                kotlinx.datetime.LocalDate(2024, 7, 2) to DayCompleteness.PARTIAL,
-                kotlinx.datetime.LocalDate(2024, 7, 3) to DayCompleteness.NONE,
+                kotlinx.datetime.LocalDate(2024, 7, 1) to DoseDayStatus.MET,
+                kotlinx.datetime.LocalDate(2024, 7, 2) to DoseDayStatus.PARTIAL,
+                kotlinx.datetime.LocalDate(2024, 7, 3) to DoseDayStatus.NOT_TAKEN,
             ),
-            state.dayCompleteness,
+            state.dayStatuses,
         )
         assertFalse(state.isAsNeeded)
         assertNotNull(state.historyFrom)
     }
 
     @Test
-    fun `a fully skipped day is empty not a lapse`() = runTest(dispatcher) {
+    fun `a fully skipped day is a visible choice not a lapse`() = runTest(dispatcher) {
         // Both of yesterday's slots deliberately skipped; today's 09:00
         // taken. Skips leave the denominator: 1 of (3-2) = 100%.
         insert(startedAt = Instant.parse("2024-07-02T00:00:00Z"))
@@ -380,10 +380,13 @@ class DetailViewModelTest {
         val state = vm.state.value
         assertEquals(AdherenceResult(taken = 1, expected = 3, skipped = 2), state.adherence)
         assertEquals(100, state.adherence.percent)
-        // The skipped day carries no completeness entry (rendered blank).
+        // The skipped day stays visible as a deliberate choice.
         assertEquals(
-            mapOf(kotlinx.datetime.LocalDate(2024, 7, 3) to DayCompleteness.FULL),
-            state.dayCompleteness,
+            mapOf(
+                kotlinx.datetime.LocalDate(2024, 7, 2) to DoseDayStatus.SKIPPED,
+                kotlinx.datetime.LocalDate(2024, 7, 3) to DoseDayStatus.MET,
+            ),
+            state.dayStatuses,
         )
     }
 
@@ -410,7 +413,7 @@ class DetailViewModelTest {
         assertEquals(2, state.adherence.taken)
         // No expectations: no completeness cells and no not-recorded rows —
         // the heat map falls back to take counts per day.
-        assertTrue(state.dayCompleteness.isEmpty())
+        assertTrue(state.dayStatuses.isEmpty())
         assertTrue(state.history.filterIsInstance<HistoryEntry.NotRecorded>().isEmpty())
         assertEquals(
             listOf(1, 1),

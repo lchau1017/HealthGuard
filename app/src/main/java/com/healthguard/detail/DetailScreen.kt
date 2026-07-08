@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 
 package com.healthguard.detail
 
@@ -7,6 +7,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -54,8 +56,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.healthguard.activity.ActivityHeatMap
 import com.healthguard.activity.AdherenceResult
-import com.healthguard.activity.DayCompleteness
 import com.healthguard.activity.DayCount
+import com.healthguard.activity.DoseDayStatus
 import com.healthguard.activity.HeatMapGrid
 import com.healthguard.format.countdownTextSeconds
 import com.healthguard.format.dayTimeLabel
@@ -255,7 +257,7 @@ fun DetailScreen(
 
             HistorySection(
                 history = state.history,
-                dayCompleteness = state.dayCompleteness,
+                dayStatuses = state.dayStatuses,
                 dayTakeCounts = state.dayTakeCounts,
                 adherence = state.adherence,
                 isAsNeeded = state.isAsNeeded,
@@ -445,14 +447,14 @@ private fun ScheduleRow(label: String, value: String, modifier: Modifier = Modif
 /**
  * Per-drug history: the adherence figure ("N% taken" against the schedule,
  * or a plain take count for as-needed medications), a 16-week heat map —
- * schedule completeness (full / partial / none per day) for scheduled
- * medications, raw take counts for as-needed ones — then the latest dose
- * logs interleaved with derived "Not recorded" slots.
+ * categorical day states (met / partial / not taken / skipped / not
+ * tracking) for scheduled medications, raw take counts for as-needed ones —
+ * then the latest dose logs interleaved with derived "Not recorded" slots.
  */
 @Composable
 private fun HistorySection(
     history: List<HistoryEntry>,
-    dayCompleteness: Map<LocalDate, DayCompleteness>,
+    dayStatuses: Map<LocalDate, DoseDayStatus>,
     dayTakeCounts: List<DayCount>,
     adherence: AdherenceResult,
     isAsNeeded: Boolean,
@@ -495,8 +497,8 @@ private fun HistorySection(
                     today = now.toLocalDate(zone),
                 )
             } else {
-                CompletenessHeatMap(
-                    dayCompleteness = dayCompleteness,
+                DayStatusHeatMap(
+                    dayStatuses = dayStatuses,
                     from = from,
                     today = now.toLocalDate(zone),
                 )
@@ -519,45 +521,66 @@ private fun historyFigure(adherence: AdherenceResult, isAsNeeded: Boolean): Stri
     else -> adherence.percent?.let { "$it% taken" }
 }
 
-/** 16-week grid of per-day schedule completeness with its legend. */
+/**
+ * 16-week grid of categorical per-day states with its five-swatch legend.
+ * Unlike the combined Activity grid (a Less→More intensity ramp), each cell
+ * here is one of five answers: met (deep fill), partial (mid fill), not
+ * taken (pale fill — calm, not alarming), skipped (dash mark: a choice),
+ * or out of treatment (hairline blank).
+ */
 @Composable
-private fun CompletenessHeatMap(
-    dayCompleteness: Map<LocalDate, DayCompleteness>,
+private fun DayStatusHeatMap(
+    dayStatuses: Map<LocalDate, DoseDayStatus>,
     from: LocalDate,
     today: LocalDate,
     modifier: Modifier = Modifier,
 ) {
     val ramp = heatRamp()
+    val skippedFill = MaterialTheme.colorScheme.surfaceVariant
     Column(modifier = modifier) {
         HeatMapGrid(
             from = from,
             today = today,
             cellColor = { date ->
-                when (dayCompleteness[date]) {
-                    DayCompleteness.FULL -> ramp[4]
-                    DayCompleteness.PARTIAL -> ramp[2]
-                    DayCompleteness.NONE -> ramp[1]
-                    // EMPTY days are absent from the map.
-                    DayCompleteness.EMPTY, null -> ramp[0]
+                when (dayStatuses[date]) {
+                    DoseDayStatus.MET -> ramp[4]
+                    DoseDayStatus.PARTIAL -> ramp[2]
+                    DoseDayStatus.NOT_TAKEN -> ramp[1]
+                    DoseDayStatus.SKIPPED -> skippedFill
+                    // Out-of-treatment days are absent from the map.
+                    DoseDayStatus.OUT_OF_TREATMENT, null ->
+                        androidx.compose.ui.graphics.Color.Transparent
                 }
             },
+            cellDash = { date -> dayStatuses[date] == DoseDayStatus.SKIPPED },
+            cellHairline = { date ->
+                dayStatuses[date] == null ||
+                    dayStatuses[date] == DoseDayStatus.OUT_OF_TREATMENT
+            },
             cellLabel = { date ->
-                "$date: " + when (dayCompleteness[date]) {
-                    DayCompleteness.FULL -> "all doses taken"
-                    DayCompleteness.PARTIAL -> "some doses taken"
-                    DayCompleteness.NONE -> "no doses taken"
-                    DayCompleteness.EMPTY, null -> "nothing scheduled"
+                "$date: " + when (dayStatuses[date]) {
+                    DoseDayStatus.MET -> "all doses taken"
+                    DoseDayStatus.PARTIAL -> "some doses taken"
+                    DoseDayStatus.NOT_TAKEN -> "doses not taken"
+                    DoseDayStatus.SKIPPED -> "skipped by choice"
+                    DoseDayStatus.OUT_OF_TREATMENT, null -> "not tracking"
                 }
             },
         )
         Spacer(Modifier.height(6.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        FlowRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             LegendChip(color = ramp[4], text = "All taken")
-            LegendChip(color = ramp[2], text = "Partial")
-            LegendChip(color = ramp[1], text = "None")
+            LegendChip(color = ramp[2], text = "Some")
+            LegendChip(color = ramp[1], text = "Not taken")
+            LegendChip(color = skippedFill, text = "Skipped", dashed = true)
+            LegendChip(
+                color = androidx.compose.ui.graphics.Color.Transparent,
+                text = "Not tracking",
+                hairline = true,
+            )
         }
     }
 }
@@ -567,13 +590,29 @@ private fun LegendChip(
     color: androidx.compose.ui.graphics.Color,
     text: String,
     modifier: Modifier = Modifier,
+    dashed: Boolean = false,
+    hairline: Boolean = false,
 ) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(10.dp)
-                .background(color, MaterialTheme.shapes.extraSmall),
-        )
+        var swatch = Modifier
+            .size(10.dp)
+            .background(color, MaterialTheme.shapes.extraSmall)
+        if (hairline) {
+            swatch = swatch.border(
+                width = androidx.compose.ui.unit.Dp.Hairline,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = MaterialTheme.shapes.extraSmall,
+            )
+        }
+        Box(swatch, contentAlignment = Alignment.Center) {
+            if (dashed) {
+                Box(
+                    Modifier
+                        .size(width = 5.dp, height = 1.5.dp)
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant),
+                )
+            }
+        }
         Spacer(Modifier.width(4.dp))
         Text(
             text = text,

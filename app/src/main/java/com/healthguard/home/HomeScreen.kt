@@ -56,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -64,7 +65,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.healthguard.BuildConfig
-import com.healthguard.activity.DayCompleteness
+import com.healthguard.activity.DoseDayStatus
 import com.healthguard.dose.RecordedTake
 import com.healthguard.format.DoseRowStatus
 import com.healthguard.format.takeByText
@@ -419,9 +420,11 @@ private fun DueBadge(modifier: Modifier = Modifier) {
 }
 
 /**
- * The last seven days as circles (filled = on-track, mid-tone = partial,
- * outlined = nothing; today dashed until decided) with a caption and a link
- * to the full Activity history.
+ * The last seven days as circles — the same categorical day states as the
+ * detail heat map: deep fill = met, mid fill = partial, pale fill = not
+ * taken, dash mark = skipped by choice, hairline outline = nothing owed;
+ * today dashed until decided — with a caption and a link to the full
+ * Activity history.
  */
 @Composable
 private fun ThisWeekCard(
@@ -480,19 +483,23 @@ private fun ThisWeekCard(
 
 @Composable
 private fun WeekCircle(
-    state: DayCompleteness,
+    state: DoseDayStatus,
     isToday: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val ramp = heatRamp()
     val fill = when (state) {
-        DayCompleteness.FULL -> MaterialTheme.colorScheme.primary
-        DayCompleteness.PARTIAL -> heatRamp()[2]
-        DayCompleteness.NONE, DayCompleteness.EMPTY -> Color.Transparent
+        DoseDayStatus.MET -> MaterialTheme.colorScheme.primary
+        DoseDayStatus.PARTIAL -> ramp[2]
+        DoseDayStatus.NOT_TAKEN -> ramp[1]
+        DoseDayStatus.SKIPPED -> MaterialTheme.colorScheme.surfaceVariant
+        DoseDayStatus.OUT_OF_TREATMENT -> Color.Transparent
     }
     val outline = MaterialTheme.colorScheme.outlineVariant
     val todayOutline = MaterialTheme.colorScheme.primary
+    val dashMark = MaterialTheme.colorScheme.onSurfaceVariant
     // Today stays dashed until it is decided fully on-track (then it fills).
-    val dashed = isToday && state != DayCompleteness.FULL
+    val dashed = isToday && state != DoseDayStatus.MET
     Box(
         modifier = modifier
             .size(28.dp)
@@ -511,13 +518,25 @@ private fun WeekCircle(
                         style = Stroke(width = 1.5.dp.toPx()),
                     )
                 }
+                // The categorical "skipped by choice" glyph: a short
+                // horizontal dash, matching the detail heat map.
+                if (state == DoseDayStatus.SKIPPED) {
+                    val half = size.width / 4f
+                    drawLine(
+                        color = dashMark,
+                        start = Offset(center.x - half, center.y),
+                        end = Offset(center.x + half, center.y),
+                        strokeWidth = 1.5.dp.toPx(),
+                    )
+                }
             }
             .semantics {
                 contentDescription = when (state) {
-                    DayCompleteness.FULL -> "on track"
-                    DayCompleteness.PARTIAL -> "partly on track"
-                    DayCompleteness.NONE -> "doses missed or not recorded"
-                    DayCompleteness.EMPTY -> "nothing scheduled"
+                    DoseDayStatus.MET -> "on track"
+                    DoseDayStatus.PARTIAL -> "partly on track"
+                    DoseDayStatus.NOT_TAKEN -> "doses missed or not recorded"
+                    DoseDayStatus.SKIPPED -> "skipped by choice"
+                    DoseDayStatus.OUT_OF_TREATMENT -> "nothing scheduled"
                 }
             },
     )
