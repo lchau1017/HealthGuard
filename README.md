@@ -14,13 +14,11 @@ Ktor backend that talks to a vision LLM.
 
 ## Demo
 
-The whole loop in under a minute — photograph a vitamin C tube, the model
-reads the label, I confirm the extracted fields, take a dose, and it lands in
-the record:
+The whole loop — photograph a vitamin C tube, the model reads the label, I
+confirm the extracted fields, take a dose, and it lands in the record
+(shown at 2× speed; [full-quality video](docs/demo/scan-take-record.mp4)):
 
-[<img src="docs/demo/demo-poster.png" width="300">](docs/demo/scan-take-record.mp4)
-
-*(click the image — GitHub opens the video player)*
+<img src="docs/demo/scan-take-record.gif" width="300">
 
 ## Screenshots
 
