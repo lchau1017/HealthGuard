@@ -30,7 +30,8 @@ import kotlinx.datetime.toLocalDateTime
  */
 object DemoDataSeeder {
 
-    val demoMedicationIds = listOf("demo-med-1", "demo-med-2", "demo-med-3", "demo-med-4")
+    val demoMedicationIds =
+        listOf("demo-med-1", "demo-med-2", "demo-med-3", "demo-med-4", "demo-med-5")
 
     private const val HISTORY_DAYS = 70
     private const val SKIP_DAY_CHANCE = 0.15
@@ -60,6 +61,7 @@ object DemoDataSeeder {
             val frequency: Frequency,
             val slots: List<LocalTime>,
             val startedAt: Instant?,
+            val stoppedAt: Instant? = null,
         )
 
         val demos = listOf(
@@ -85,6 +87,16 @@ object DemoDataSeeder {
                 listOf("amoxicillin trihydrate"), Frequency.TimesPerDay(3),
                 emptyList(), null,
             ),
+            // Started 8 weeks ago, stopped 2 weeks ago: exercises the
+            // "Stopped" phase chip and the out-of-treatment trailing blanks
+            // on its heat map.
+            Demo(
+                "demo-med-5", "demo-sch-5", "Loratadine", "10 mg", "Allergy",
+                listOf("loratadine"), Frequency.TimesPerDay(1),
+                listOf(LocalTime(9, 0)),
+                today.minus(56, DateTimeUnit.DAY).atTime(LocalTime(8, 0)).toInstant(zone),
+                today.minus(14, DateTimeUnit.DAY).atTime(LocalTime(12, 0)).toInstant(zone),
+            ),
         )
 
         demos.forEach { demo ->
@@ -109,6 +121,7 @@ object DemoDataSeeder {
                 ),
             )
             demo.startedAt?.let { repository.activate(demo.medId, it) }
+            demo.stoppedAt?.let { repository.stop(demo.medId, it) }
         }
 
         var doseCounter = 0
@@ -117,8 +130,13 @@ object DemoDataSeeder {
             var day: LocalDate = firstDay
             while (day <= today) {
                 val daysFromToday = today.toEpochDays() - day.toEpochDays()
-                // Guaranteed streak: the last 4 days are never skipped.
-                val skipDay = daysFromToday > 4 && random.nextDouble() < SKIP_DAY_CHANCE
+                // A whole deliberately skipped day five days ago (both of
+                // Cetirizine's doses logged SKIPPED): the dash "skipped by
+                // choice" state is always demonstrable, whatever the RNG does.
+                val forcedSkipDay = demo.medId == "demo-med-2" && daysFromToday == 5L
+                // Guaranteed streak: the last 4 days are never silent.
+                val skipDay = !forcedSkipDay && daysFromToday > 4 &&
+                    random.nextDouble() < SKIP_DAY_CHANCE
                 if (!skipDay) {
                     demo.slots.forEach { slot ->
                         // One deliberate gap two days ago (Cetirizine's evening
@@ -132,13 +150,19 @@ object DemoDataSeeder {
                         val planned = day
                             .atTime(LocalTime(slot.hour, slot.minute))
                             .toInstant(zone)
-                        if (planned <= now) {
-                            val recentMiss =
-                                daysFromToday in 1..14 && random.nextDouble() < RECENT_MISS_CHANCE
-                            val status = if (recentMiss) {
-                                if (random.nextBoolean()) DoseStatus.MISSED else DoseStatus.SKIPPED
+                        val withinTreatment =
+                            demo.stoppedAt == null || planned < demo.stoppedAt
+                        if (planned <= now && withinTreatment) {
+                            val status = if (forcedSkipDay) {
+                                DoseStatus.SKIPPED
                             } else {
-                                DoseStatus.TAKEN
+                                val recentMiss = daysFromToday in 1..14 &&
+                                    random.nextDouble() < RECENT_MISS_CHANCE
+                                if (recentMiss) {
+                                    if (random.nextBoolean()) DoseStatus.MISSED else DoseStatus.SKIPPED
+                                } else {
+                                    DoseStatus.TAKEN
+                                }
                             }
                             repository.logDose(
                                 StoredDoseLog(

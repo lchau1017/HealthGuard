@@ -6,6 +6,7 @@ import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.activity.adherenceResult
 import com.healthguard.home.weekDayStates
+import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.db.HealthGuardDb
 import java.util.Properties
@@ -21,6 +22,7 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -72,18 +74,61 @@ class DemoDataSeederTest {
     }
 
     @Test
-    fun `seeds four medications with three active and recent history`() = runTest {
+    fun `seeds five medications covering every treatment phase`() = runTest {
         val repo = repository()
         DemoDataSeeder.seed(repo, now, zone)
 
         val all = repo.medications().first()
-        assertEquals(4, all.size)
+        assertEquals(5, all.size)
+        assertEquals(
+            listOf("demo-med-1", "demo-med-2", "demo-med-3", "demo-med-4", "demo-med-5"),
+            DemoDataSeeder.demoMedicationIds,
+        )
+        // Three taking, one never started (Amoxicillin), one stopped (Loratadine).
         assertEquals(3, all.count { it.schedule.startedAt != null && it.schedule.stoppedAt == null })
+        assertEquals(1, all.count { it.schedule.startedAt == null })
+        assertEquals(1, all.count { it.schedule.stoppedAt != null })
 
         val taken = repo.takenDosesInRange(now - 71.days, now + 1.days)
         assertTrue("expected substantial history, got ${taken.size}", taken.size > 100)
         // Nothing in the future, nothing older than the window.
         assertTrue(taken.all { it.takenAt <= now + 1.days && it.takenAt >= now - 71.days })
+    }
+
+    @Test
+    fun `stopped loratadine has history only while it was active`() = runTest {
+        val repo = repository()
+        DemoDataSeeder.seed(repo, now, zone)
+
+        val schedule = repo.getMedication("demo-med-5")!!.schedule
+        val startedAt = schedule.startedAt
+        val stoppedAt = schedule.stoppedAt
+        assertTrue(startedAt != null && stoppedAt != null)
+        // Started ~8 weeks ago, stopped ~2 weeks ago: the trailing weeks of
+        // its heat map read out-of-treatment.
+        assertTrue(now - startedAt!! >= 55.days)
+        assertTrue(now - stoppedAt!! >= 13.days)
+
+        val logs = repo.dosesInRange("demo-sch-5", now - 90.days, now + 1.days)
+        assertTrue("expected active-stretch history", logs.isNotEmpty())
+        assertTrue(logs.all { it.plannedAt >= startedAt && it.plannedAt < stoppedAt })
+    }
+
+    @Test
+    fun `cetirizine has a deliberately skipped day five days ago`() = runTest {
+        val repo = repository()
+        DemoDataSeeder.seed(repo, now, zone)
+
+        val skippedDay = now.toLocalDateTime(zone).date.minus(5, DateTimeUnit.DAY)
+        val dayLogs = repo.dosesInRange(
+            "demo-sch-2",
+            skippedDay.atStartOfDayIn(zone),
+            skippedDay.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone),
+        )
+        // Both of the day's doses logged as skipped: the dash state on the
+        // detail heat map is always demonstrable.
+        assertEquals(2, dayLogs.size)
+        assertTrue(dayLogs.all { it.status == DoseStatus.SKIPPED })
     }
 
     @Test
@@ -120,7 +165,7 @@ class DemoDataSeederTest {
         // Deterministic seed -> exact figure. The point is the band: the
         // seeder's skip-days and recent misses must pull the percent
         // visibly below 100 (honest gaps) without looking broken.
-        assertEquals(87, result.percent)
+        assertEquals(86, result.percent)
         assertTrue("expected a plausible band, got ${result.percent}", result.percent!! in 75..95)
     }
 
