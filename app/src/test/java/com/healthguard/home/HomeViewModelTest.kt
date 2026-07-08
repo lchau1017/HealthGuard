@@ -3,6 +3,7 @@
 package com.healthguard.home
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import com.healthguard.format.DoseRowStatus
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.StoredDoseLog
@@ -11,6 +12,7 @@ import com.healthguard.shared.data.StoredSchedule
 import com.healthguard.shared.db.HealthGuardDb
 import com.healthguard.shared.extraction.Frequency
 import java.util.Properties
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
@@ -177,47 +179,78 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `activity aggregates recent takes into day counts streak and today count`() = runTest(dispatcher) {
-        insert("a", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 72.hours)
-        logTaken("a", fixedNow - 26.hours) // yesterday 08:00 UTC
-        logTaken("a", fixedNow - 2.hours) // today 08:00
-        logTaken("a", fixedNow - 1.hours) // today 09:00
+    fun `week card buckets the last seven days and captions them`() = runTest(dispatcher) {
+        insert("a", frequency = Frequency.EveryHours(12), startedAt = fixedNow - 72.hours)
+        logTaken("a", fixedNow - 50.hours) // two days ago
+        logTaken("a", fixedNow - 26.hours) // yesterday
+        logTaken("a", fixedNow - 2.hours) // today
         val vm = viewModel()
         collectState(vm)
 
         val state = vm.state.value
-        assertEquals(2, state.activityStreakDays)
-        assertEquals(2, state.activityTodayCount)
+        assertEquals(7, state.weekDays.size)
         assertEquals(
-            listOf(1, 2),
-            state.activityDayCounts.map { it.count },
+            listOf(
+                WeekDayState.EMPTY, WeekDayState.EMPTY, WeekDayState.EMPTY,
+                WeekDayState.EMPTY, WeekDayState.ON_TRACK, WeekDayState.ON_TRACK,
+                WeekDayState.ON_TRACK,
+            ),
+            state.weekDays.map { it.state },
         )
+        // Next dose is 10h out (today 20:00): today is not complete yet.
+        assertEquals("2 of 6 days on track. Today still to come.", state.weekCaption)
     }
 
     @Test
-    fun `activity ignores takes older than the sixteen week window`() = runTest(dispatcher) {
+    fun `week caption counts today once no dose is left today`() = runTest(dispatcher) {
+        // 1x/day slot at 09:00; taken today at 09:05 -> next dose tomorrow.
+        insert("a", frequency = Frequency.TimesPerDay(1), startedAt = fixedNow - 72.hours)
+        logTaken("a", fixedNow - 55.minutes) // today 09:05
+        val vm = viewModel()
+        collectState(vm)
+
+        assertEquals("1 of 7 days on track.", vm.state.value.weekCaption)
+    }
+
+    @Test
+    fun `week card ignores logs older than seven days`() = runTest(dispatcher) {
         insert("a", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 5000.hours)
-        // Window starts Monday 2024-03-18 (16 heat-map week columns).
-        logTaken("a", Instant.parse("2024-03-17T12:00:00Z")) // just outside
-        logTaken("a", Instant.parse("2024-03-18T00:00:00Z")) // first instant inside
+        logTaken("a", fixedNow - 8.days) // outside the circles
         val vm = viewModel()
         collectState(vm)
 
-        assertEquals(1, vm.state.value.activityDayCounts.sumOf { it.count })
+        assertTrue(vm.state.value.weekDays.all { it.state == WeekDayState.EMPTY })
     }
 
     @Test
-    fun `takeNow refresh folds the new take into activity`() = runTest(dispatcher) {
-        insert("a", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 2.hours)
+    fun `takeNow refresh updates the week card and the row status`() = runTest(dispatcher) {
+        // 2x/day slots 09:00/21:00; overdue 09:00 dose pending.
+        insert("a", frequency = Frequency.TimesPerDay(2), startedAt = fixedNow - 26.hours)
         val vm = viewModel()
         collectState(vm)
-        assertEquals(0, vm.state.value.activityTodayCount)
+        val before = vm.state.value.taking.single()
+        assertTrue(before.isDue)
+        assertEquals(DoseRowStatus.Due, before.status)
 
-        vm.takeNow(vm.state.value.taking.single())
+        vm.takeNow(before)
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(1, vm.state.value.activityTodayCount)
-        assertEquals(1, vm.state.value.activityStreakDays)
+        // The row is no longer a stale "Take": next slot today is 21:00, 11h out.
+        val after = vm.state.value.taking.single()
+        assertFalse(after.isDue)
+        assertEquals(DoseRowStatus.Next("Next at 9:00 PM"), after.status)
+        assertEquals(WeekDayState.ON_TRACK, vm.state.value.weekDays.last().state)
+    }
+
+    @Test
+    fun `row status becomes TakenForToday after the last slot of the day`() = runTest(dispatcher) {
+        // 1x/day slot 09:00, taken at 09:30 -> nothing left today.
+        insert("a", frequency = Frequency.TimesPerDay(1), startedAt = fixedNow - 26.hours)
+        logTaken("a", fixedNow - 30.minutes)
+        val vm = viewModel()
+        collectState(vm)
+
+        assertEquals(DoseRowStatus.TakenForToday, vm.state.value.taking.single().status)
     }
 
     @Test

@@ -52,8 +52,8 @@ import kotlinx.datetime.toLocalDateTime
 @Composable
 fun ActivityScreen(
     viewModel: ActivityViewModel,
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    bottomBar: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     LaunchedEffect(Unit) { viewModel.reload() }
@@ -68,18 +68,9 @@ fun ActivityScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
-                title = { Text("Activity") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back to home",
-                        )
-                    }
-                },
-            )
+            TopAppBar(title = { Text("Activity") })
         },
+        bottomBar = bottomBar,
     ) { innerPadding ->
         Column(
             modifier = Modifier

@@ -4,15 +4,12 @@ package com.healthguard.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.healthguard.activity.ActivityEvent
-import com.healthguard.activity.DayCount
-import com.healthguard.activity.activityStats
-import com.healthguard.activity.dayCounts
-import com.healthguard.activity.mondayOf
 import com.healthguard.demo.DemoDataSeeder
 import com.healthguard.dose.RecordedTake
 import com.healthguard.dose.isDoubleDose
 import com.healthguard.dose.recordTakenDose
+import com.healthguard.format.DoseRowStatus
+import com.healthguard.format.doseRowStatus
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.MedicationWithSchedule
 import com.healthguard.shared.domain.nextDose
@@ -32,7 +29,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
@@ -50,6 +46,8 @@ data class DoseCard(
     val lastTaken: Instant?,
     /** Due now or overdue (as of the state's computation time). */
     val isDue: Boolean = false,
+    /** What the row's trailing status shows (Take button, "Taken ✓", next time). */
+    val status: DoseRowStatus = DoseRowStatus.None,
 )
 
 /** The due-now banner: the most overdue card plus how many others are due. */
@@ -64,12 +62,10 @@ data class HomeUiState(
     val cabinet: List<MedicationWithSchedule> = emptyList(),
     /** How many taking entries are due now or overdue. */
     val dueCount: Int = 0,
-    /** Per-day take counts over the activity strip window, ascending. */
-    val activityDayCounts: List<DayCount> = emptyList(),
-    /** First day of the activity strip window (a Monday). */
-    val activityFrom: LocalDate? = null,
-    val activityStreakDays: Int = 0,
-    val activityTodayCount: Int = 0,
+    /** The last seven days ending today, oldest first (the week circles). */
+    val weekDays: List<WeekDay> = emptyList(),
+    /** Pre-formatted line under the week circles. */
+    val weekCaption: String = "",
 )
 
 /** A takeNow blocked by the double-dose window, awaiting user confirmation. */
@@ -107,6 +103,7 @@ class HomeViewModel(
 
     private suspend fun buildState(rows: List<MedicationWithSchedule>): HomeUiState {
         val now = clock()
+        val today = now.toLocalDateTime(zone).date
         val taking = rows.filter { it.isActive }
             .map { row ->
                 // Only TAKEN doses are ever logged in this slice, so the
@@ -115,11 +112,13 @@ class HomeViewModel(
                 val latest = repository.latestDose(row.schedule.id)
                 val lastTaken = latest?.let { it.takenAt ?: it.plannedAt }
                 val nextDoseAt = nextDose(row.schedule, lastTaken, now, zone)
+                val isDue = nextDoseAt != null && nextDoseAt - now < 1.minutes
                 DoseCard(
                     item = row,
                     nextDoseAt = nextDoseAt,
                     lastTaken = lastTaken,
-                    isDue = nextDoseAt != null && nextDoseAt - now < 1.minutes,
+                    isDue = isDue,
+                    status = doseRowStatus(nextDoseAt, lastTaken, now, zone, isDue),
                 )
             }
             // Ascending nextDoseAt puts the most overdue (earliest) instant
@@ -127,28 +126,28 @@ class HomeViewModel(
             .sortedWith(compareBy(nullsLast()) { it.nextDoseAt })
         val dueCount = taking.count { it.isDue }
 
-        // Activity strip window: today's heat-map column plus the 15 full
-        // weeks before it. Query upper bound is exclusive, so pad past `now`
-        // to include a take recorded at this exact instant.
-        val today = now.toLocalDateTime(zone).date
-        val activityFrom = mondayOf(today).minus(ACTIVITY_STRIP_WEEKS - 1, DateTimeUnit.WEEK)
-        val taken = repository.takenDosesInRange(
-            from = activityFrom.atStartOfDayIn(zone),
+        // Week card window: the last seven days ending today. Query upper
+        // bound is exclusive, so pad past `now` to include a take recorded
+        // at this exact instant.
+        val weekLogs = repository.doseLogsInRange(
+            from = today.minus(WEEK_WINDOW_DAYS - 1, DateTimeUnit.DAY).atStartOfDayIn(zone),
             to = now + 1.minutes,
         )
-        val stats = activityStats(taken.map { ActivityEvent(it.drugName, it.takenAt) }, now, zone)
-        val activityDayCounts = dayCounts(taken.map { it.takenAt }, zone)
+        val weekDays = weekDayStates(weekLogs, today, zone)
+        // Today is complete once no active schedule has a dose left to take
+        // today (due/overdue doses included).
+        val todayComplete = taking.none { card ->
+            val next = card.nextDoseAt ?: return@none false
+            next.toLocalDateTime(zone).date <= today
+        }
 
         return HomeUiState(
             dueAlert = taking.firstOrNull { it.isDue }?.let { DueAlert(it, dueCount - 1) },
             taking = taking,
             cabinet = rows.filterNot { it.isActive },
             dueCount = dueCount,
-            activityDayCounts = activityDayCounts,
-            activityFrom = activityFrom,
-            activityStreakDays = stats.currentStreakDays,
-            activityTodayCount = activityDayCounts.lastOrNull()
-                ?.takeIf { it.date == today }?.count ?: 0,
+            weekDays = weekDays,
+            weekCaption = weekCaption(weekDays, todayComplete),
         )
     }
 
@@ -236,8 +235,8 @@ class HomeViewModel(
     }
 }
 
-/** Heat-map columns on the home activity strip (current week included). */
-private const val ACTIVITY_STRIP_WEEKS = 16
+/** Days covered by the home "This week" card, today included. */
+private const val WEEK_WINDOW_DAYS = 7
 
 private const val TICK_MILLIS = 60_000L
 

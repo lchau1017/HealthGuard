@@ -37,6 +37,8 @@ import com.healthguard.detail.DetailScreen
 import com.healthguard.detail.DetailViewModel
 import com.healthguard.home.HomeScreen
 import com.healthguard.home.HomeViewModel
+import com.healthguard.ui.AppNavBar
+import com.healthguard.ui.AppTab
 import com.healthguard.ui.theme.HealthGuardTheme
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -59,10 +61,11 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Three-screen shell driven by plain saveable state: the medication detail
- * page when [detailMedicationId] is set, the Activity dashboard when
- * [showActivity], Home otherwise — so rotation and process death keep the
- * open screen. The import/confirm flow floats above whichever screen is
+ * Tab shell driven by plain saveable state: two bottom-bar tabs (Home and
+ * Activity) with the medication detail page pushed above whichever tab is
+ * current when [detailMedicationId] is set — so rotation and process death
+ * keep the open screen, and backing out of the detail returns to the
+ * previous tab. The import/confirm flow floats above whichever screen is
  * showing as a dialog whose visibility derives from [ConfirmViewModel]'s
  * state (Idle = hidden), so it survives rotation without extra plumbing.
  */
@@ -71,7 +74,7 @@ private fun HealthGuardApp(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var detailMedicationId by rememberSaveable { mutableStateOf<String?>(null) }
-    var showActivity by rememberSaveable { mutableStateOf(false) }
+    var selectedTab by rememberSaveable { mutableStateOf(AppTab.HOME) }
     // Saveable so rotation (or process death while the camera app is in the
     // foreground) keeps the pending capture target. Uri has no built-in
     // saver; persist its string form instead.
@@ -169,12 +172,12 @@ private fun HealthGuardApp(modifier: Modifier = Modifier) {
                 null -> Unit
             }
         }
-    } else if (showActivity) {
+    } else if (selectedTab == AppTab.ACTIVITY) {
         val activityViewModel: ActivityViewModel = koinViewModel()
-        BackHandler { showActivity = false }
+        BackHandler { selectedTab = AppTab.HOME }
         ActivityScreen(
             viewModel = activityViewModel,
-            onBack = { showActivity = false },
+            bottomBar = { AppNavBar(selected = selectedTab, onSelect = { selectedTab = it }) },
             modifier = modifier,
         )
     } else {
@@ -188,15 +191,15 @@ private fun HealthGuardApp(modifier: Modifier = Modifier) {
             onUndoTake = homeViewModel::undoTake,
             onRecentTakeHandled = homeViewModel::clearRecentTake,
             onPlay = homeViewModel::onPlay,
-            onDelete = homeViewModel::onDelete,
             onOpenDetail = { detailMedicationId = it },
-            onOpenActivity = { showActivity = true },
+            onOpenActivity = { selectedTab = AppTab.ACTIVITY },
             onTakePhoto = ::launchCamera,
             onPickFromGallery = {
                 pickImageLauncher.launch(
                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                 )
             },
+            bottomBar = { AppNavBar(selected = selectedTab, onSelect = { selectedTab = it }) },
             onLoadDemoData = homeViewModel::loadDemoData,
             onRemoveDemoData = homeViewModel::removeDemoData,
             modifier = modifier,

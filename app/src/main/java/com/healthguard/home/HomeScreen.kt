@@ -2,8 +2,10 @@
 
 package com.healthguard.home
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,20 +18,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import com.healthguard.BuildConfig
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalButton
@@ -52,37 +52,37 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.healthguard.activity.ActivityHeatMap
-import com.healthguard.activity.DayCount
-import com.healthguard.activity.dayLabel
+import com.healthguard.BuildConfig
 import com.healthguard.dose.RecordedTake
-import com.healthguard.format.countdownText
-import com.healthguard.format.doseTimeText
-import com.healthguard.format.toHumanText
+import com.healthguard.format.DoseRowStatus
+import com.healthguard.format.takeByText
+import com.healthguard.format.todayLabel
 import com.healthguard.shared.data.MedicationWithSchedule
-import com.healthguard.ui.DeleteConfirmationDialog
+import com.healthguard.ui.CategoryChip
+import com.healthguard.ui.PillAvatar
+import com.healthguard.ui.theme.heatRamp
 import kotlin.time.Clock
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
-import kotlinx.coroutines.launch
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 /**
- * The home screen: a "Next dose" hero card, the active "Taking now" list,
- * and the dormant "My cabinet" below, with the scan flow on an extended FAB.
- * Every card and row opens the medication detail page.
+ * The home tab: a "Today" header, the due-dose alert card, the "This week"
+ * circles, the active "Taking now" list and the dormant "My cabinet" below,
+ * with the scan flow on an extended FAB. Every card and row opens the
+ * medication detail page; deleting lives there too.
  */
 @Composable
 fun HomeScreen(
@@ -95,25 +95,24 @@ fun HomeScreen(
     onUndoTake: (String) -> Unit,
     onRecentTakeHandled: () -> Unit,
     onPlay: (String) -> Unit,
-    onDelete: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
     onOpenActivity: () -> Unit,
     onTakePhoto: () -> Unit,
     onPickFromGallery: () -> Unit,
+    modifier: Modifier = Modifier,
+    bottomBar: @Composable () -> Unit = {},
     onLoadDemoData: () -> Unit = {},
     onRemoveDemoData: () -> Unit = {},
-    modifier: Modifier = Modifier,
 ) {
     var showSourceSheet by remember { mutableStateOf(false) }
     var showDisclaimer by remember { mutableStateOf(false) }
-    var pendingDelete by remember { mutableStateOf<MedicationWithSchedule?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
 
     // Fresh wall-clock reading per state emission: the view model re-emits at
     // least every minute, which is exactly the countdown's resolution.
     val now = remember(state) { Clock.System.now() }
     val zone = remember { TimeZone.currentSystemDefault() }
+    val today = now.toLocalDateTime(zone).date
 
     // One undo snackbar per recorded take; timing out or dismissing keeps
     // the dose, only the explicit Undo action removes it.
@@ -136,7 +135,9 @@ fun HomeScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("HealthGuard") },
+                title = {
+                    Text("HealthGuard", style = MaterialTheme.typography.titleMedium)
+                },
                 actions = {
                     IconButton(onClick = { showDisclaimer = true }) {
                         Icon(
@@ -176,6 +177,7 @@ fun HomeScreen(
                 },
             )
         },
+        bottomBar = bottomBar,
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { showSourceSheet = true },
@@ -192,12 +194,25 @@ fun HomeScreen(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(key = "disclaimer-line") {
-                Text(
-                    text = "Information tool — not medical advice.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            item(key = "today-header") {
+                Column {
+                    Text(
+                        text = "Today",
+                        style = MaterialTheme.typography.headlineLarge,
+                    )
+                    Text(
+                        text = todayLabel(today),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "For your records only — always consult your " +
+                            "doctor or pharmacist.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             state.dueAlert?.let { alert ->
@@ -215,25 +230,12 @@ fun HomeScreen(
             if (state.taking.isEmpty() && state.cabinet.isEmpty()) {
                 item(key = "empty-all") { OverallEmptyState() }
             } else {
-                state.activityFrom?.let { activityFrom ->
-                    item(key = "activity-strip") {
-                        ActivityStrip(
-                            dayCounts = state.activityDayCounts,
-                            from = activityFrom,
-                            today = now.toLocalDateTime(zone).date,
-                            streakDays = state.activityStreakDays,
-                            todayCount = state.activityTodayCount,
-                            onOpen = onOpenActivity,
-                            onDayClick = { date, count ->
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        dayCountMessage(date, count),
-                                        duration = SnackbarDuration.Short,
-                                    )
-                                }
-                            },
-                        )
-                    }
+                item(key = "this-week") {
+                    ThisWeekCard(
+                        weekDays = state.weekDays,
+                        caption = state.weekCaption,
+                        onOpenActivity = onOpenActivity,
+                    )
                 }
                 item(key = "taking-header") { SectionHeader("Taking now") }
                 if (state.taking.isEmpty()) {
@@ -245,10 +247,8 @@ fun HomeScreen(
                     }
                 } else {
                     items(state.taking, key = { "taking-${it.item.medication.id}" }) { card ->
-                        TakingCard(
+                        TakingRow(
                             card = card,
-                            now = now,
-                            zone = zone,
                             onTakeNow = { onTakeNow(card) },
                             onClick = { onOpenDetail(card.item.medication.id) },
                         )
@@ -265,7 +265,6 @@ fun HomeScreen(
                         CabinetRow(
                             row = row,
                             onPlay = { onPlay(row.medication.id) },
-                            onDelete = { pendingDelete = row },
                             onClick = { onOpenDetail(row.medication.id) },
                         )
                     }
@@ -281,18 +280,6 @@ fun HomeScreen(
             minutesAgo = confirm.minutesAgo,
             onConfirm = onConfirmTakeAnyway,
             onDismiss = onDismissTakeConfirm,
-        )
-    }
-
-    pendingDelete?.let { row ->
-        DeleteConfirmationDialog(
-            medicationName = row.medication.drugName,
-            isActive = row.isActive,
-            onConfirm = {
-                onDelete(row.medication.id)
-                pendingDelete = null
-            },
-            onDismiss = { pendingDelete = null },
         )
     }
 
@@ -346,27 +333,10 @@ fun HomeScreen(
     }
 }
 
-private enum class Urgency { OVERDUE, DUE_SOON, UPCOMING, NONE }
-
-private fun urgencyOf(nextDoseAt: Instant?, now: Instant): Urgency {
-    val untilDose = (nextDoseAt ?: return Urgency.NONE) - now
-    return when {
-        untilDose <= (-1).minutes -> Urgency.OVERDUE
-        untilDose <= 30.minutes -> Urgency.DUE_SOON
-        else -> Urgency.UPCOMING
-    }
-}
-
-@Composable
-private fun Urgency.countdownColor(): Color = when (this) {
-    Urgency.OVERDUE -> MaterialTheme.colorScheme.error
-    Urgency.DUE_SOON -> MaterialTheme.colorScheme.tertiary
-    else -> MaterialTheme.colorScheme.onSurfaceVariant
-}
-
 /**
- * Shown only while something is due: the most urgent item front and center
- * with the guarded Take action, plus a count of any other due items.
+ * Shown only while something is due: a surface card with an error-tinted
+ * border, the most urgent item's "take by" line and the guarded Take action,
+ * plus a count of any other due items.
  */
 @Composable
 private fun DueAlertCard(
@@ -379,50 +349,44 @@ private fun DueAlertCard(
 ) {
     val card = alert.card
     val medication = card.item.medication
-    val overdue = urgencyOf(card.nextDoseAt, now) == Urgency.OVERDUE
     Card(
         onClick = onClick,
         colors = CardDefaults.cardColors(
-            containerColor = if (overdue) {
-                MaterialTheme.colorScheme.errorContainer
-            } else {
-                MaterialTheme.colorScheme.tertiaryContainer
-            },
+            containerColor = MaterialTheme.colorScheme.surface,
         ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
         modifier = modifier
             .fillMaxWidth()
             .semanticsLabel("Dose due: ${medication.drugName}, open details"),
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                text = "Dose due",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = listOfNotNull(medication.drugName, medication.dosage)
-                    .joinToString(" · "),
-                style = MaterialTheme.typography.titleLarge,
-            )
-            Text(
-                text = countdownText(card.nextDoseAt, now, zone),
-                style = MaterialTheme.typography.titleMedium,
-                color = if (overdue) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                DueBadge()
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = listOfNotNull(medication.drugName, medication.dosage)
+                            .joinToString(" ") + " is due",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    card.nextDoseAt?.let { nextDoseAt ->
+                        Text(
+                            text = takeByText(nextDoseAt, now, zone),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
             if (alert.othersDueCount > 0) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     text = "and ${alert.othersDueCount} more due now",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
             Button(
                 onClick = onTakeNow,
                 modifier = Modifier
@@ -436,56 +400,76 @@ private fun DueAlertCard(
     }
 }
 
-/** Transient text for a tapped heat-map day — the non-color value channel. */
-private fun dayCountMessage(date: LocalDate, count: Int): String {
-    val doses = if (count == 1) "1 dose" else "$count doses"
-    return "${dayLabel(date)} — $doses"
+/** Circular "!" badge on the due card. */
+@Composable
+private fun DueBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(36.dp)
+            .background(MaterialTheme.colorScheme.errorContainer, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "!",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+        )
+    }
 }
 
 /**
- * Compact tappable activity summary: a short 16-week heat map plus one
- * streak/today line. Tapping the card opens the Activity screen; tapping a
- * cell surfaces that day's count as a snackbar instead.
+ * The last seven days as circles (filled = on-track, mid-tone = partial,
+ * outlined = nothing; today dashed until decided) with a caption and a link
+ * to the full Activity history.
  */
 @Composable
-private fun ActivityStrip(
-    dayCounts: List<DayCount>,
-    from: LocalDate,
-    today: LocalDate,
-    streakDays: Int,
-    todayCount: Int,
-    onOpen: () -> Unit,
-    onDayClick: (LocalDate, Int) -> Unit,
+private fun ThisWeekCard(
+    weekDays: List<WeekDay>,
+    caption: String,
+    onOpenActivity: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(
-        onClick = onOpen,
-        modifier = modifier
-            .fillMaxWidth()
-            .semanticsLabel("Activity, open dashboard"),
-    ) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Activity",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "This week",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                TextButton(
+                    onClick = onOpenActivity,
+                    modifier = Modifier.semanticsLabel("Open full activity history"),
+                ) {
+                    Text("Full history →")
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                weekDays.forEachIndexed { index, day ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        WeekCircle(
+                            state = day.state,
+                            isToday = index == weekDays.lastIndex,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = day.date.dayOfWeek.name.take(1),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(8.dp))
-            ActivityHeatMap(
-                dayCounts = dayCounts,
-                from = from,
-                today = today,
-                cellSize = 12.dp,
-                // The strip stays compact; the Activity screen carries the legend.
-                showLegend = false,
-                onDayClick = onDayClick,
-            )
-            Spacer(Modifier.height(8.dp))
             Text(
-                text = listOfNotNull(
-                    streakDays.takeIf { it > 0 }?.let { "$it-day streak" },
-                    "$todayCount today",
-                ).joinToString(" · "),
+                text = caption,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -494,17 +478,58 @@ private fun ActivityStrip(
 }
 
 @Composable
-private fun TakingCard(
+private fun WeekCircle(
+    state: WeekDayState,
+    isToday: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val fill = when (state) {
+        WeekDayState.ON_TRACK -> MaterialTheme.colorScheme.primary
+        WeekDayState.PARTIAL -> heatRamp()[2]
+        WeekDayState.EMPTY -> Color.Transparent
+    }
+    val outline = MaterialTheme.colorScheme.outlineVariant
+    val todayOutline = MaterialTheme.colorScheme.primary
+    // Today stays dashed until it is decided on-track (then it fills solid).
+    val dashed = isToday && state != WeekDayState.ON_TRACK
+    Box(
+        modifier = modifier
+            .size(28.dp)
+            .drawBehind {
+                if (fill != Color.Transparent) drawCircle(color = fill)
+                when {
+                    dashed -> drawCircle(
+                        color = todayOutline,
+                        style = Stroke(
+                            width = 1.5.dp.toPx(),
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)),
+                        ),
+                    )
+                    state == WeekDayState.EMPTY -> drawCircle(
+                        color = outline,
+                        style = Stroke(width = 1.5.dp.toPx()),
+                    )
+                }
+            }
+            .semantics {
+                contentDescription = when (state) {
+                    WeekDayState.ON_TRACK -> "on track"
+                    WeekDayState.PARTIAL -> "partly on track"
+                    WeekDayState.EMPTY -> "no doses"
+                }
+            },
+    )
+}
+
+/** One "Taking now" row: category avatar, name, chip + form, trailing status. */
+@Composable
+private fun TakingRow(
     card: DoseCard,
-    now: Instant,
-    zone: TimeZone,
     onTakeNow: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val medication = card.item.medication
-    val schedule = card.item.schedule
-    val urgency = urgencyOf(card.nextDoseAt, now)
     Card(
         onClick = onClick,
         modifier = modifier
@@ -512,65 +537,53 @@ private fun TakingCard(
             .semanticsLabel("${medication.drugName}, open details"),
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            PillAvatar(label = medication.label)
+            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = listOfNotNull(medication.drugName, medication.dosage)
-                        .joinToString(" · "),
+                        .joinToString(" "),
                     style = MaterialTheme.typography.titleMedium,
                 )
-                schedule.frequency?.let { frequency ->
-                    Text(
-                        text = frequency.toHumanText(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (schedule.withFood == true) {
-                    Spacer(Modifier.height(2.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    medication.label?.let { label ->
+                        CategoryChip(label)
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    medication.form?.let { form ->
                         Text(
-                            text = "Take with food",
-                            style = MaterialTheme.typography.labelMedium,
+                            text = form.replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-                medication.label?.let { label ->
-                    AssistChip(onClick = onClick, label = { Text(label) })
-                }
             }
             Spacer(Modifier.width(12.dp))
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = card.nextDoseAt?.let { doseTimeText(it, zone) }.orEmpty(),
-                    style = MaterialTheme.typography.headlineSmall,
-                )
-                Text(
-                    text = countdownText(card.nextDoseAt, now, zone),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = urgency.countdownColor(),
-                )
-                if (card.isDue) {
-                    Spacer(Modifier.height(4.dp))
-                    FilledTonalButton(
-                        onClick = onTakeNow,
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = 48.dp)
-                            .semanticsLabel("Take ${medication.drugName} now"),
-                    ) {
-                        Text("Take")
-                    }
+            when (val status = card.status) {
+                DoseRowStatus.Due -> FilledTonalButton(
+                    onClick = onTakeNow,
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = 48.dp)
+                        .semanticsLabel("Take ${medication.drugName} now"),
+                ) {
+                    Text("Take")
                 }
+                DoseRowStatus.TakenForToday -> Text(
+                    text = "Taken ✓",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                is DoseRowStatus.Next -> Text(
+                    text = status.text,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                DoseRowStatus.None -> Unit
             }
         }
     }
@@ -606,56 +619,57 @@ private fun DoubleDoseDialog(
     )
 }
 
+/** Cabinet rows share the taking-row look; the play affordance starts tracking. */
 @Composable
 private fun CabinetRow(
     row: MedicationWithSchedule,
     onPlay: () -> Unit,
-    onDelete: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val medication = row.medication
-    Row(
+    Card(
+        onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 56.dp)
-            .clickable(onClick = onClick)
-            .semanticsLabel("${medication.drugName}, open details")
-            .padding(horizontal = 4.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .semanticsLabel("${medication.drugName}, open details"),
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = listOfNotNull(medication.drugName, medication.dosage)
-                    .joinToString(" · "),
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            medication.label?.let { label ->
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PillAvatar(label = medication.label)
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = listOfNotNull(medication.drugName, medication.dosage)
+                        .joinToString(" "),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    medication.label?.let { label ->
+                        CategoryChip(label)
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    medication.form?.let { form ->
+                        Text(
+                            text = form.replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            FilledTonalIconButton(
+                onClick = onPlay,
+                modifier = Modifier.size(48.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = "Start taking ${medication.drugName}",
                 )
             }
-        }
-        FilledTonalIconButton(
-            onClick = onPlay,
-            modifier = Modifier.size(48.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.PlayArrow,
-                contentDescription = "Start taking ${medication.drugName}",
-            )
-        }
-        IconButton(
-            onClick = onDelete,
-            modifier = Modifier.size(48.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Delete,
-                contentDescription = "Delete ${medication.drugName}",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
