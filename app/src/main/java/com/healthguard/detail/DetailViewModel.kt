@@ -4,12 +4,18 @@ package com.healthguard.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.healthguard.activity.DayCount
+import com.healthguard.activity.dayCounts
+import com.healthguard.activity.mondayOf
 import com.healthguard.format.parseFrequency
 import com.healthguard.format.toHumanText
 import com.healthguard.home.isActive
+import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.MedicationWithSchedule
+import com.healthguard.shared.data.StoredDoseLog
 import com.healthguard.shared.domain.nextDose
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,10 +23,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.minus
+import kotlinx.datetime.toLocalDateTime
 
 /** One-shot navigation results: the host pops back to Home on either. */
 enum class DetailFinished { SAVED, DELETED }
+
+/** History rows shown on the detail page. */
+private const val HISTORY_LIMIT = 30
+
+/** Heat-map columns on the detail page (current week included). */
+private const val HEAT_MAP_WEEKS = 16
 
 /**
  * Editable detail form plus the live persisted [item]. Field values are
@@ -41,6 +58,12 @@ data class DetailUiState(
     val withFood: Boolean? = null,
     val nextDoseAt: Instant? = null,
     val lastTakenAt: Instant? = null,
+    /** Latest dose logs (any status), newest planned first, capped at 30. */
+    val history: List<StoredDoseLog> = emptyList(),
+    /** Per-day TAKEN counts over the heat-map window. */
+    val doseDayCounts: List<DayCount> = emptyList(),
+    /** First day of the heat-map window (a Monday). */
+    val historyFrom: LocalDate? = null,
     val finished: DetailFinished? = null,
 ) {
     val isActive: Boolean get() = item?.isActive == true
@@ -69,11 +92,24 @@ class DetailViewModel(
                     ?: return@collect // deleted (or bad id): keep last state
                 val latest = repository.latestDose(item.schedule.id)
                 val lastTaken = latest?.let { it.takenAt ?: it.plannedAt }
+                val now = clock()
+                val today = now.toLocalDateTime(zone).date
+                val historyFrom = mondayOf(today).minus(HEAT_MAP_WEEKS - 1, DateTimeUnit.WEEK)
+                // Range query is on plannedAt (exclusive upper bound, hence
+                // the pad); TAKEN doses are then bucketed by their takenAt.
+                val takes = repository.dosesInRange(
+                    scheduleId = item.schedule.id,
+                    from = historyFrom.atStartOfDayIn(zone),
+                    to = now + 1.minutes,
+                ).filter { it.status == DoseStatus.TAKEN }
                 _state.update { current ->
                     val tracked = current.copy(
                         item = item,
-                        nextDoseAt = nextDose(item.schedule, lastTaken, clock(), zone),
+                        nextDoseAt = nextDose(item.schedule, lastTaken, now, zone),
                         lastTakenAt = lastTaken,
+                        history = repository.recentDoses(item.schedule.id, HISTORY_LIMIT),
+                        doseDayCounts = dayCounts(takes.mapNotNull { it.takenAt }, zone),
+                        historyFrom = historyFrom,
                     )
                     if (fieldsSeeded) {
                         tracked

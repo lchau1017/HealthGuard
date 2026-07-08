@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.healthguard.ui.CategoryLabelInput
 
 /**
  * The import/confirm flow, presented as a full-width dialog card over the
@@ -141,12 +142,9 @@ private fun ReviewContent(
             Spacer(Modifier.height(12.dp))
         }
 
-        OutlinedTextField(
-            value = label,
-            onValueChange = { label = it },
-            label = { Text("Label (optional)") },
-            supportingText = { Text("A category chip for your list, e.g. Heart") },
-            modifier = Modifier.fillMaxWidth(),
+        CategoryLabelInput(
+            label = label,
+            onLabelChange = { label = it },
         )
 
         Spacer(Modifier.height(20.dp))

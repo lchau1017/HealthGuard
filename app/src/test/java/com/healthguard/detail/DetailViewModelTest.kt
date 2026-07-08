@@ -3,7 +3,9 @@
 package com.healthguard.detail
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
+import com.healthguard.shared.data.StoredDoseLog
 import com.healthguard.shared.data.StoredMedication
 import com.healthguard.shared.data.StoredSchedule
 import com.healthguard.shared.db.HealthGuardDb
@@ -272,6 +274,65 @@ class DetailViewModelTest {
 
         assertNull(repository.getMedication("med-1"))
         assertEquals(DetailFinished.DELETED, vm.state.value.finished)
+    }
+
+    private suspend fun logDose(
+        id: String,
+        takenAt: Instant?,
+        plannedAt: Instant,
+        status: DoseStatus,
+    ) {
+        repository.logDose(
+            StoredDoseLog(
+                id = id,
+                scheduleId = "sch-1",
+                plannedAt = plannedAt,
+                takenAt = takenAt,
+                status = status,
+            ),
+        )
+    }
+
+    @Test
+    fun `history lists recent dose logs newest planned first`() = runTest(dispatcher) {
+        insert(startedAt = fixedNow - 5.hours)
+        logDose("d-1", takenAt = fixedNow - 4.hours, plannedAt = fixedNow - 4.hours, status = DoseStatus.TAKEN)
+        logDose("d-2", takenAt = null, plannedAt = fixedNow - 2.hours, status = DoseStatus.SKIPPED)
+        logDose("d-3", takenAt = fixedNow - 1.hours, plannedAt = fixedNow - 1.hours, status = DoseStatus.TAKEN)
+        val vm = viewModel()
+        collectState(vm)
+
+        assertEquals(listOf("d-3", "d-2", "d-1"), vm.state.value.history.map { it.id })
+    }
+
+    @Test
+    fun `doseDayCounts buckets only taken doses by day`() = runTest(dispatcher) {
+        insert(startedAt = fixedNow - 48.hours)
+        logDose("d-1", takenAt = fixedNow - 26.hours, plannedAt = fixedNow - 26.hours, status = DoseStatus.TAKEN)
+        logDose("d-2", takenAt = fixedNow - 2.hours, plannedAt = fixedNow - 2.hours, status = DoseStatus.TAKEN)
+        logDose("d-3", takenAt = fixedNow - 1.hours, plannedAt = fixedNow - 1.hours, status = DoseStatus.TAKEN)
+        logDose("d-skip", takenAt = null, plannedAt = fixedNow - 3.hours, status = DoseStatus.SKIPPED)
+        val vm = viewModel()
+        collectState(vm)
+
+        assertEquals(listOf(1, 2), vm.state.value.doseDayCounts.map { it.count })
+        assertNotNull(vm.state.value.historyFrom)
+    }
+
+    @Test
+    fun `a take recorded elsewhere appears after any repository re-emission`() = runTest(dispatcher) {
+        insert(startedAt = fixedNow - 5.hours)
+        val vm = viewModel()
+        collectState(vm)
+        assertTrue(vm.state.value.history.isEmpty())
+
+        logDose("d-1", takenAt = fixedNow, plannedAt = fixedNow, status = DoseStatus.TAKEN)
+        // Dose logs alone do not retrigger the medications flow; any
+        // medication write does (same trigger the home refresh relies on).
+        repository.activate("med-1", fixedNow)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(listOf("d-1"), vm.state.value.history.map { it.id })
     }
 
     @Test
