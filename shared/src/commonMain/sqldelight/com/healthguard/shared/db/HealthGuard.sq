@@ -140,16 +140,3 @@ SELECT * FROM doseLog
 WHERE COALESCE(takenAt, plannedAt) >= :fromMillis
   AND COALESCE(takenAt, plannedAt) < :toMillis
 ORDER BY plannedAt ASC;
-
--- TAKEN vs MISSED tallies per medication over the same effective-time range:
--- the adherence breakdown. SKIPPED and PENDING are deliberately excluded —
--- a deliberate skip is not a lapse.
-adherenceTalliesInRange:
-SELECT s.medicationId, m.drugName, d.status, COUNT(*) AS n
-FROM doseLog d
-INNER JOIN schedule s ON s.id = d.scheduleId
-INNER JOIN medication m ON m.id = s.medicationId
-WHERE d.status IN ('TAKEN', 'MISSED')
-  AND COALESCE(d.takenAt, d.plannedAt) >= :fromMillis
-  AND COALESCE(d.takenAt, d.plannedAt) < :toMillis
-GROUP BY s.medicationId, m.drugName, d.status;

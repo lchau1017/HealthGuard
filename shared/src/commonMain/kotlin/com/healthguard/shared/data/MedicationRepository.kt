@@ -185,30 +185,6 @@ class MedicationRepository(
             ).executeAsList().map { it.toStored() }
         }
 
-    /**
-     * TAKEN vs MISSED counts per medication over the effective-time range
-     * [from, to) (half-open, takenAt when present else plannedAt). SKIPPED
-     * doses are excluded on both sides — a deliberate skip is not a lapse.
-     * Medications with neither a TAKEN nor a MISSED dose are absent.
-     */
-    suspend fun adherenceTallies(from: Instant, to: Instant): List<AdherenceTally> =
-        withContext(dispatcher) {
-            queries.adherenceTalliesInRange(
-                fromMillis = from.toEpochMilliseconds(),
-                toMillis = to.toEpochMilliseconds(),
-            ).executeAsList()
-                .groupBy { it.medicationId to it.drugName }
-                .map { (key, rows) ->
-                    AdherenceTally(
-                        medicationId = key.first,
-                        drugName = key.second,
-                        taken = rows.firstOrNull { it.status == DoseStatus.TAKEN.name }
-                            ?.n?.toInt() ?: 0,
-                        missed = rows.firstOrNull { it.status == DoseStatus.MISSED.name }
-                            ?.n?.toInt() ?: 0,
-                    )
-                }
-        }
 }
 
 private const val FREQ_TIMES_PER_DAY = "TIMES_PER_DAY"
