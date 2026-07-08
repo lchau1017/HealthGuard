@@ -66,6 +66,8 @@ import com.healthguard.format.lastTakenLabel
 import com.healthguard.format.mediumDateLabel
 import com.healthguard.format.timeLabel
 import com.healthguard.format.toHumanText
+import com.healthguard.home.MedicationPhase
+import com.healthguard.home.phaseChipText
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.StoredDoseLog
 import com.healthguard.shared.domain.doseSlots
@@ -73,6 +75,7 @@ import com.healthguard.shared.extraction.Frequency
 import com.healthguard.ui.CategoryChip
 import com.healthguard.ui.CategoryLabelInput
 import com.healthguard.ui.DeleteConfirmationDialog
+import com.healthguard.ui.StatusChip
 import com.healthguard.ui.theme.heatRamp
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -164,7 +167,7 @@ fun DetailScreen(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            HeaderBlock(state = state)
+            HeaderBlock(state = state, now = now, zone = zone)
 
             if (state.isActive) {
                 StatusCard(
@@ -283,7 +286,13 @@ fun DetailScreen(
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 48.dp),
                 ) {
-                    Text("Start taking")
+                    Text(
+                        if (state.phase == MedicationPhase.STOPPED) {
+                            "Resume taking"
+                        } else {
+                            "Start taking"
+                        },
+                    )
                 }
             }
             Spacer(Modifier.height(20.dp))
@@ -327,9 +336,18 @@ fun DetailScreen(
     }
 }
 
-/** Identity block: name, "500 mg · Capsule" line, category chip. */
+/**
+ * Identity block: name, "500 mg · Capsule" line, category chip, and — while
+ * the medication is not actively taken — the phase chip ("Not started" /
+ * "Stopped 3 Jul").
+ */
 @Composable
-private fun HeaderBlock(state: DetailUiState, modifier: Modifier = Modifier) {
+private fun HeaderBlock(
+    state: DetailUiState,
+    now: Instant,
+    zone: TimeZone,
+    modifier: Modifier = Modifier,
+) {
     val medication = state.item?.medication
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
@@ -347,9 +365,21 @@ private fun HeaderBlock(state: DetailUiState, modifier: Modifier = Modifier) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        medication?.label?.let { label ->
+        val phaseText = state.item?.schedule?.let { phaseChipText(it, now, zone) }
+        if (medication?.label != null || phaseText != null) {
             Spacer(Modifier.height(6.dp))
-            CategoryChip(label)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                medication?.label?.let { label ->
+                    CategoryChip(label)
+                    Spacer(Modifier.width(6.dp))
+                }
+                phaseText?.let { text ->
+                    StatusChip(
+                        text = text,
+                        outlined = state.phase == MedicationPhase.NOT_STARTED,
+                    )
+                }
+            }
         }
     }
 }

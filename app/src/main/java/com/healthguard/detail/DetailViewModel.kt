@@ -15,7 +15,9 @@ import com.healthguard.dose.isDoubleDose
 import com.healthguard.dose.recordTakenDose
 import com.healthguard.format.parseFrequency
 import com.healthguard.format.toHumanText
+import com.healthguard.home.MedicationPhase
 import com.healthguard.home.isActive
+import com.healthguard.home.phase
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.MedicationWithSchedule
@@ -103,6 +105,10 @@ data class DetailUiState(
     val finished: DetailFinished? = null,
 ) {
     val isActive: Boolean get() = item?.isActive == true
+
+    /** Treatment lifecycle phase; an unloaded item reads as not started. */
+    val phase: MedicationPhase
+        get() = item?.schedule?.phase ?: MedicationPhase.NOT_STARTED
 
     /** Interval dosing ("every N hours") is an as-needed ceiling, not a plan. */
     val isAsNeeded: Boolean get() = item?.schedule?.frequency is Frequency.EveryHours

@@ -73,6 +73,7 @@ import com.healthguard.format.todayLabel
 import com.healthguard.shared.data.MedicationWithSchedule
 import com.healthguard.ui.CategoryChip
 import com.healthguard.ui.PillAvatar
+import com.healthguard.ui.StatusChip
 import com.healthguard.ui.theme.heatRamp
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -266,6 +267,8 @@ fun HomeScreen(
                     items(state.cabinet, key = { "cabinet-${it.medication.id}" }) { row ->
                         CabinetRow(
                             row = row,
+                            now = now,
+                            zone = zone,
                             onPlay = { onPlay(row.medication.id) },
                             onClick = { onOpenDetail(row.medication.id) },
                         )
@@ -640,15 +643,22 @@ private fun DoubleDoseDialog(
     )
 }
 
-/** Cabinet rows share the taking-row look; the play affordance starts tracking. */
+/**
+ * Cabinet rows share the taking-row look plus a phase chip — "Not started"
+ * or "Stopped 3 Jul" — so the two dormant states read differently at a
+ * glance; the play affordance starts (or resumes) tracking.
+ */
 @Composable
 private fun CabinetRow(
     row: MedicationWithSchedule,
+    now: Instant,
+    zone: TimeZone,
     onPlay: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val medication = row.medication
+    val phase = row.schedule.phase
     Card(
         onClick = onClick,
         modifier = modifier
@@ -669,6 +679,13 @@ private fun CabinetRow(
                 )
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    phaseChipText(row.schedule, now, zone)?.let { text ->
+                        StatusChip(
+                            text = text,
+                            outlined = phase == MedicationPhase.NOT_STARTED,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    }
                     medication.label?.let { label ->
                         CategoryChip(label)
                         Spacer(Modifier.width(6.dp))
@@ -682,13 +699,14 @@ private fun CabinetRow(
                     }
                 }
             }
+            val verb = if (phase == MedicationPhase.STOPPED) "Resume" else "Start"
             FilledTonalIconButton(
                 onClick = onPlay,
                 modifier = Modifier.size(48.dp),
             ) {
                 Icon(
                     imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = "Start taking ${medication.drugName}",
+                    contentDescription = "$verb taking ${medication.drugName}",
                 )
             }
         }

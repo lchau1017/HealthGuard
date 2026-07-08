@@ -5,6 +5,7 @@ package com.healthguard.detail
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DoseDayStatus
+import com.healthguard.home.MedicationPhase
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.StoredDoseLog
@@ -235,16 +236,19 @@ class DetailViewModelTest {
         val vm = viewModel()
         collectState(vm)
         assertFalse(vm.state.value.isActive)
+        assertEquals(MedicationPhase.NOT_STARTED, vm.state.value.phase)
 
         vm.toggleTaking()
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value.isActive)
         assertEquals(fixedNow, vm.state.value.item?.schedule?.startedAt)
+        assertEquals(MedicationPhase.TAKING, vm.state.value.phase)
 
         vm.toggleTaking()
         dispatcher.scheduler.advanceUntilIdle()
         assertFalse(vm.state.value.isActive)
         assertEquals(fixedNow, vm.state.value.item?.schedule?.stoppedAt)
+        assertEquals(MedicationPhase.STOPPED, vm.state.value.phase)
     }
 
     @Test

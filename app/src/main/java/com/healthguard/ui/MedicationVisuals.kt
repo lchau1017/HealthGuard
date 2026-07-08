@@ -2,6 +2,7 @@ package com.healthguard.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -50,6 +51,29 @@ fun PillAvatar(label: String?, modifier: Modifier = Modifier) {
                 )
             }
         }
+    }
+}
+
+/**
+ * Small neutral status chip for a medication's treatment phase: outlined for
+ * "Not started" (nothing has happened yet), tonal for "Stopped 3 Jul" (a past
+ * fact). Deliberately grey either way — a phase is information, not a warning.
+ */
+@Composable
+fun StatusChip(text: String, modifier: Modifier = Modifier, outlined: Boolean = false) {
+    val shape = RoundedCornerShape(8.dp)
+    val base = if (outlined) {
+        modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+    } else {
+        modifier.background(MaterialTheme.colorScheme.surfaceVariant, shape)
+    }
+    Box(modifier = base.padding(horizontal = 8.dp, vertical = 2.dp)) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
     }
 }
 
