@@ -64,6 +64,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.healthguard.BuildConfig
+import com.healthguard.activity.DayCompleteness
 import com.healthguard.dose.RecordedTake
 import com.healthguard.format.DoseRowStatus
 import com.healthguard.format.takeByText
@@ -479,19 +480,19 @@ private fun ThisWeekCard(
 
 @Composable
 private fun WeekCircle(
-    state: WeekDayState,
+    state: DayCompleteness,
     isToday: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val fill = when (state) {
-        WeekDayState.ON_TRACK -> MaterialTheme.colorScheme.primary
-        WeekDayState.PARTIAL -> heatRamp()[2]
-        WeekDayState.EMPTY -> Color.Transparent
+        DayCompleteness.FULL -> MaterialTheme.colorScheme.primary
+        DayCompleteness.PARTIAL -> heatRamp()[2]
+        DayCompleteness.NONE, DayCompleteness.EMPTY -> Color.Transparent
     }
     val outline = MaterialTheme.colorScheme.outlineVariant
     val todayOutline = MaterialTheme.colorScheme.primary
-    // Today stays dashed until it is decided on-track (then it fills solid).
-    val dashed = isToday && state != WeekDayState.ON_TRACK
+    // Today stays dashed until it is decided fully on-track (then it fills).
+    val dashed = isToday && state != DayCompleteness.FULL
     Box(
         modifier = modifier
             .size(28.dp)
@@ -505,7 +506,7 @@ private fun WeekCircle(
                             pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)),
                         ),
                     )
-                    state == WeekDayState.EMPTY -> drawCircle(
+                    fill == Color.Transparent -> drawCircle(
                         color = outline,
                         style = Stroke(width = 1.5.dp.toPx()),
                     )
@@ -513,9 +514,10 @@ private fun WeekCircle(
             }
             .semantics {
                 contentDescription = when (state) {
-                    WeekDayState.ON_TRACK -> "on track"
-                    WeekDayState.PARTIAL -> "partly on track"
-                    WeekDayState.EMPTY -> "no doses"
+                    DayCompleteness.FULL -> "on track"
+                    DayCompleteness.PARTIAL -> "partly on track"
+                    DayCompleteness.NONE -> "doses missed or not recorded"
+                    DayCompleteness.EMPTY -> "nothing scheduled"
                 }
             },
     )

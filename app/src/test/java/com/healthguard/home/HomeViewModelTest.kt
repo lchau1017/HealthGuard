@@ -3,6 +3,7 @@
 package com.healthguard.home
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import com.healthguard.activity.DayCompleteness
 import com.healthguard.format.DoseRowStatus
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
@@ -179,11 +180,15 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `week card buckets the last seven days and captions them`() = runTest(dispatcher) {
-        insert("a", frequency = Frequency.EveryHours(12), startedAt = fixedNow - 72.hours)
-        logTaken("a", fixedNow - 50.hours) // two days ago
-        logTaken("a", fixedNow - 26.hours) // yesterday
-        logTaken("a", fixedNow - 2.hours) // today
+    fun `week card measures each day against the schedule and captions it`() = runTest(dispatcher) {
+        // 2x/day since Sunday 6/30 10:00: owed 21:00 that day, both slots
+        // on 7/1 and 7/2, and 09:00 today so far.
+        insert("a", frequency = Frequency.TimesPerDay(2), startedAt = fixedNow - 72.hours)
+        logTaken("a", Instant.parse("2024-06-30T21:00:00Z"))
+        logTaken("a", Instant.parse("2024-07-01T09:00:00Z"))
+        logTaken("a", Instant.parse("2024-07-01T21:05:00Z"))
+        logTaken("a", Instant.parse("2024-07-02T09:00:00Z")) // 21:00 silent
+        logTaken("a", Instant.parse("2024-07-03T09:02:00Z"))
         val vm = viewModel()
         collectState(vm)
 
@@ -191,35 +196,38 @@ class HomeViewModelTest {
         assertEquals(7, state.weekDays.size)
         assertEquals(
             listOf(
-                WeekDayState.EMPTY, WeekDayState.EMPTY, WeekDayState.EMPTY,
-                WeekDayState.EMPTY, WeekDayState.ON_TRACK, WeekDayState.ON_TRACK,
-                WeekDayState.ON_TRACK,
+                DayCompleteness.EMPTY, DayCompleteness.EMPTY, DayCompleteness.EMPTY,
+                DayCompleteness.FULL, DayCompleteness.FULL, DayCompleteness.PARTIAL,
+                DayCompleteness.FULL,
             ),
             state.weekDays.map { it.state },
         )
-        // Next dose is 10h out (today 20:00): today is not complete yet.
-        assertEquals("2 of 6 days on track. Today still to come.", state.weekCaption)
+        // Today's 21:00 slot is still ahead and the day is on pace so far:
+        // excluded from the tally, as are the days before the schedule began.
+        assertEquals("2 of 3 days on track. Today still to come.", state.weekCaption)
     }
 
     @Test
-    fun `week caption counts today once no dose is left today`() = runTest(dispatcher) {
-        // 1x/day slot at 09:00; taken today at 09:05 -> next dose tomorrow.
+    fun `week caption counts today once no slot is left today`() = runTest(dispatcher) {
+        // 1x/day slot at 09:00; taken today at 09:05 -> nothing pending.
+        // 7/1 and 7/2 passed silently: they count against the week now.
         insert("a", frequency = Frequency.TimesPerDay(1), startedAt = fixedNow - 72.hours)
         logTaken("a", fixedNow - 55.minutes) // today 09:05
         val vm = viewModel()
         collectState(vm)
 
-        assertEquals("1 of 7 days on track.", vm.state.value.weekCaption)
+        assertEquals("1 of 3 days on track.", vm.state.value.weekCaption)
     }
 
     @Test
-    fun `week card ignores logs older than seven days`() = runTest(dispatcher) {
+    fun `as-needed schedules leave the week card unscheduled`() = runTest(dispatcher) {
         insert("a", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 5000.hours)
-        logTaken("a", fixedNow - 8.days) // outside the circles
+        logTaken("a", fixedNow - 2.hours)
         val vm = viewModel()
         collectState(vm)
 
-        assertTrue(vm.state.value.weekDays.all { it.state == WeekDayState.EMPTY })
+        assertTrue(vm.state.value.weekDays.all { it.state == DayCompleteness.EMPTY })
+        assertEquals("No scheduled doses this week.", vm.state.value.weekCaption)
     }
 
     @Test
@@ -239,7 +247,7 @@ class HomeViewModelTest {
         val after = vm.state.value.taking.single()
         assertFalse(after.isDue)
         assertEquals(DoseRowStatus.Next("Next at 9:00 PM"), after.status)
-        assertEquals(WeekDayState.ON_TRACK, vm.state.value.weekDays.last().state)
+        assertEquals(DayCompleteness.FULL, vm.state.value.weekDays.last().state)
     }
 
     @Test

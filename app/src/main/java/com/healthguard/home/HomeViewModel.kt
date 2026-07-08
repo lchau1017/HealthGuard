@@ -133,13 +133,11 @@ class HomeViewModel(
             from = today.minus(WEEK_WINDOW_DAYS - 1, DateTimeUnit.DAY).atStartOfDayIn(zone),
             to = now + 1.minutes,
         )
-        val weekDays = weekDayStates(weekLogs, today, zone)
-        // Today is complete once no active schedule has a dose left to take
-        // today (due/overdue doses included).
-        val todayComplete = taking.none { card ->
-            val next = card.nextDoseAt ?: return@none false
-            next.toLocalDateTime(zone).date <= today
-        }
+        // Every schedule goes in: expected doses clip themselves to each
+        // schedule's active stretch, so a medication stopped mid-week still
+        // counts for the days it was owed.
+        val schedules = rows.map { it.schedule }
+        val weekDays = weekDayStates(schedules, weekLogs, now, zone)
 
         return HomeUiState(
             dueAlert = taking.firstOrNull { it.isDue }?.let { DueAlert(it, dueCount - 1) },
@@ -147,7 +145,7 @@ class HomeViewModel(
             cabinet = rows.filterNot { it.isActive },
             dueCount = dueCount,
             weekDays = weekDays,
-            weekCaption = weekCaption(weekDays, todayComplete),
+            weekCaption = weekCaption(weekDays, todayHasPendingSlots(schedules, now, zone)),
         )
     }
 
