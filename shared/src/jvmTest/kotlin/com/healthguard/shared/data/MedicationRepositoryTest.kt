@@ -303,6 +303,115 @@ class MedicationRepositoryTest {
         assertEquals(schedule(), only.schedule)
     }
 
+    private suspend fun MedicationRepository.logTaken(
+        id: String,
+        scheduleId: String = "sch-1",
+        takenAtMillis: Long,
+        plannedAtMillis: Long = takenAtMillis,
+    ) = logDose(
+        StoredDoseLog(
+            id = id,
+            scheduleId = scheduleId,
+            plannedAt = Instant.fromEpochMilliseconds(plannedAtMillis),
+            takenAt = Instant.fromEpochMilliseconds(takenAtMillis),
+            status = DoseStatus.TAKEN,
+        ),
+    )
+
+    @Test
+    fun `takenDosesInRange is half open on takenAt`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(), schedule())
+        repo.logTaken("d-before", takenAtMillis = 999)
+        repo.logTaken("d-from", takenAtMillis = 1_000)
+        repo.logTaken("d-mid", takenAtMillis = 1_500)
+        repo.logTaken("d-to", takenAtMillis = 2_000)
+
+        val inRange = repo.takenDosesInRange(
+            from = Instant.fromEpochMilliseconds(1_000),
+            to = Instant.fromEpochMilliseconds(2_000),
+        )
+        assertEquals(
+            listOf(Instant.fromEpochMilliseconds(1_000), Instant.fromEpochMilliseconds(1_500)),
+            inRange.map { it.takenAt },
+        )
+    }
+
+    @Test
+    fun `takenDosesInRange only returns TAKEN rows with a takenAt`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(), schedule())
+        repo.logTaken("d-taken", takenAtMillis = 1_000)
+        // PENDING with null takenAt.
+        repo.logDose(dose("d-pending", plannedAtMillis = 1_100))
+        repo.logDose(
+            dose("d-skipped", plannedAtMillis = 1_200).copy(status = DoseStatus.SKIPPED),
+        )
+        // MISSED row that oddly carries a takenAt: status must still exclude it.
+        repo.logDose(
+            StoredDoseLog(
+                id = "d-missed",
+                scheduleId = "sch-1",
+                plannedAt = Instant.fromEpochMilliseconds(1_300),
+                takenAt = Instant.fromEpochMilliseconds(1_300),
+                status = DoseStatus.MISSED,
+            ),
+        )
+
+        val inRange = repo.takenDosesInRange(
+            from = Instant.fromEpochMilliseconds(0),
+            to = Instant.fromEpochMilliseconds(10_000),
+        )
+        assertEquals(listOf(Instant.fromEpochMilliseconds(1_000)), inRange.map { it.takenAt })
+    }
+
+    @Test
+    fun `takenDosesInRange joins medication identity through the schedule`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(id = "med-a"), schedule(id = "sch-a", medicationId = "med-a"))
+        repo.insertMedication(
+            medication(id = "med-b").copy(drugName = "Loratadine"),
+            schedule(id = "sch-b", medicationId = "med-b"),
+        )
+        repo.logTaken("d-a", scheduleId = "sch-a", takenAtMillis = 1_000)
+        repo.logTaken("d-b", scheduleId = "sch-b", takenAtMillis = 2_000)
+
+        val inRange = repo.takenDosesInRange(
+            from = Instant.fromEpochMilliseconds(0),
+            to = Instant.fromEpochMilliseconds(10_000),
+        )
+        assertEquals(
+            listOf(
+                TakenDose("med-a", "Cetirizine Hydrochloride", Instant.fromEpochMilliseconds(1_000)),
+                TakenDose("med-b", "Loratadine", Instant.fromEpochMilliseconds(2_000)),
+            ),
+            inRange,
+        )
+    }
+
+    @Test
+    fun `recentDoses returns newest planned first capped at limit across statuses`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(), schedule())
+        repo.logTaken("d-1", takenAtMillis = 1_000)
+        repo.logDose(dose("d-2", plannedAtMillis = 2_000))
+        repo.logDose(dose("d-3", plannedAtMillis = 3_000).copy(status = DoseStatus.SKIPPED))
+        repo.logTaken("d-4", takenAtMillis = 4_000)
+
+        assertEquals(
+            listOf("d-4", "d-3", "d-2"),
+            repo.recentDoses("sch-1", limit = 3).map { it.id },
+        )
+        assertEquals(4, repo.recentDoses("sch-1", limit = 10).size)
+    }
+
+    @Test
+    fun `recentDoses of an unknown schedule is empty`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(), schedule())
+        assertTrue(repo.recentDoses("sch-ghost", limit = 5).isEmpty())
+    }
+
     @Test
     fun `list orders newest first`() = runTest {
         val repo = repository()

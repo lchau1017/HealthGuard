@@ -45,6 +45,13 @@ data class MedicationWithSchedule(
 
 enum class DoseStatus { TAKEN, MISSED, SKIPPED, PENDING }
 
+/** One recorded take, resolved to its medication: an activity-history event. */
+data class TakenDose(
+    val medicationId: String,
+    val drugName: String,
+    val takenAt: Instant,
+)
+
 data class StoredDoseLog(
     val id: String,
     val scheduleId: String,

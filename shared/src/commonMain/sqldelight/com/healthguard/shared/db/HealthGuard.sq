@@ -108,6 +108,24 @@ SELECT * FROM doseLog
 WHERE scheduleId = :scheduleId AND plannedAt >= :fromMillis AND plannedAt < :toMillis
 ORDER BY plannedAt ASC;
 
+-- All TAKEN doses across every schedule, half-open on takenAt in [from, to),
+-- with the owning medication's identity: the activity history feed.
+takenDosesInRange:
+SELECT s.medicationId, m.drugName, d.takenAt
+FROM doseLog d
+INNER JOIN schedule s ON s.id = d.scheduleId
+INNER JOIN medication m ON m.id = s.medicationId
+WHERE d.status = 'TAKEN' AND d.takenAt IS NOT NULL
+  AND d.takenAt >= :fromMillis AND d.takenAt < :toMillis
+ORDER BY d.takenAt ASC;
+
+-- Latest dose logs of one schedule, any status, newest planned first.
+recentDoseLogsForSchedule:
+SELECT * FROM doseLog
+WHERE scheduleId = :scheduleId
+ORDER BY plannedAt DESC
+LIMIT :limit;
+
 latestDoseLogForSchedule:
 SELECT * FROM doseLog
 WHERE scheduleId = :scheduleId

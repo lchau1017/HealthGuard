@@ -146,6 +146,32 @@ class MedicationRepository(
     suspend fun latestDose(scheduleId: String): StoredDoseLog? = withContext(dispatcher) {
         queries.latestDoseLogForSchedule(scheduleId).executeAsOneOrNull()?.toStored()
     }
+
+    /**
+     * Every TAKEN dose across all schedules with takenAt in [from, to)
+     * (half-open), oldest first, resolved to its medication.
+     */
+    suspend fun takenDosesInRange(from: Instant, to: Instant): List<TakenDose> =
+        withContext(dispatcher) {
+            queries.takenDosesInRange(
+                fromMillis = from.toEpochMilliseconds(),
+                toMillis = to.toEpochMilliseconds(),
+            ) { medicationId, drugName, takenAt ->
+                TakenDose(
+                    medicationId = medicationId,
+                    drugName = drugName,
+                    // Never null: the query filters on takenAt IS NOT NULL.
+                    takenAt = Instant.fromEpochMilliseconds(takenAt!!),
+                )
+            }.executeAsList()
+        }
+
+    /** The schedule's latest [limit] dose logs, any status, newest planned first. */
+    suspend fun recentDoses(scheduleId: String, limit: Int): List<StoredDoseLog> =
+        withContext(dispatcher) {
+            queries.recentDoseLogsForSchedule(scheduleId, limit.toLong())
+                .executeAsList().map { it.toStored() }
+        }
 }
 
 private const val FREQ_TIMES_PER_DAY = "TIMES_PER_DAY"
