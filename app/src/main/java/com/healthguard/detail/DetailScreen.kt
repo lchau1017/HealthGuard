@@ -53,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.healthguard.activity.ActivityHeatMap
 import com.healthguard.activity.AdherenceResult
@@ -505,6 +506,23 @@ private fun HistorySection(
                     text = figure,
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+        // The quiet 80%-target verdict under the percent: informational,
+        // never alarming (as-needed medications have no target).
+        if (!isAsNeeded) {
+            adherence.meetsTarget?.let { meets ->
+                Text(
+                    text = if (meets) "Meets 80% target" else "Below 80% target",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (meets) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }

@@ -40,6 +40,20 @@ data class AdherenceResult(
             val denominator = (expected - skipped).coerceAtLeast(1)
             return (taken * 100.0 / denominator).roundToInt().coerceIn(0, 100)
         }
+
+    /**
+     * Whether [percent] reaches the 80% threshold commonly used in clinical
+     * adherence research (PDC ≥ 80%). Informational, never alarming — the
+     * app surfaces it as a quiet caption, not an error. Null when there is
+     * no percent to measure.
+     */
+    val meetsTarget: Boolean?
+        get() = percent?.let { it >= TARGET_PERCENT }
+
+    companion object {
+        /** The conventional PDC adherence target. */
+        const val TARGET_PERCENT = 80
+    }
 }
 
 /**

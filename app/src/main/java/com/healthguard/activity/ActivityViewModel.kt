@@ -36,6 +36,8 @@ data class MedicationAdherence(
     val taken: Int,
     val skipped: Int,
     val asNeeded: Boolean,
+    /** Whether [percent] reaches the 80% PDC target; null without a percent. */
+    val meetsTarget: Boolean? = null,
 )
 
 private val EMPTY_STATS = ActivityStats(0, 0, 0, 0, null, null)
@@ -158,6 +160,7 @@ class ActivityViewModel(
                     taken = result.taken,
                     skipped = result.skipped,
                     asNeeded = row.schedule.frequency is Frequency.EveryHours,
+                    meetsTarget = result.meetsTarget,
                 )
             }
             .sortedWith(

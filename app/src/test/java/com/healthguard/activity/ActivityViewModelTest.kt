@@ -183,8 +183,8 @@ class ActivityViewModelTest {
 
         assertEquals(
             listOf(
-                MedicationAdherence("Cetirizine", percent = 100, taken = 2, skipped = 0, asNeeded = false),
-                MedicationAdherence("Ibuprofen", percent = 67, taken = 2, skipped = 1, asNeeded = false),
+                MedicationAdherence("Cetirizine", percent = 100, taken = 2, skipped = 0, asNeeded = false, meetsTarget = true),
+                MedicationAdherence("Ibuprofen", percent = 67, taken = 2, skipped = 1, asNeeded = false, meetsTarget = false),
             ),
             vm.state.value.breakdown,
         )
@@ -201,7 +201,7 @@ class ActivityViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
-            listOf(MedicationAdherence("Ibuprofen", percent = 40, taken = 2, skipped = 0, asNeeded = false)),
+            listOf(MedicationAdherence("Ibuprofen", percent = 40, taken = 2, skipped = 0, asNeeded = false, meetsTarget = false)),
             vm.state.value.breakdown,
         )
     }
@@ -219,8 +219,8 @@ class ActivityViewModelTest {
 
         assertEquals(
             listOf(
-                MedicationAdherence("Cetirizine", percent = 100, taken = 2, skipped = 0, asNeeded = false),
-                MedicationAdherence("Ibuprofen", percent = null, taken = 2, skipped = 0, asNeeded = true),
+                MedicationAdherence("Cetirizine", percent = 100, taken = 2, skipped = 0, asNeeded = false, meetsTarget = true),
+                MedicationAdherence("Ibuprofen", percent = null, taken = 2, skipped = 0, asNeeded = true, meetsTarget = null),
             ),
             vm.state.value.breakdown,
         )
@@ -242,7 +242,7 @@ class ActivityViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
-            listOf(MedicationAdherence("Loratadine", percent = 50, taken = 1, skipped = 0, asNeeded = false)),
+            listOf(MedicationAdherence("Loratadine", percent = 50, taken = 1, skipped = 0, asNeeded = false, meetsTarget = false)),
             vm.state.value.breakdown,
         )
     }

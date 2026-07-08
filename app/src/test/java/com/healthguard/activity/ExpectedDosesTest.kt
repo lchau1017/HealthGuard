@@ -60,6 +60,22 @@ class ExpectedDosesTest {
         assertEquals(100, AdherenceResult(taken = 1, expected = 2, skipped = 2).percent)
     }
 
+    // --- AdherenceResult.meetsTarget ---
+
+    @Test
+    fun `meets the 80 percent target exactly at the boundary`() {
+        // 79 / 80 / 81 around the clinical PDC threshold.
+        assertEquals(false, AdherenceResult(taken = 79, expected = 100, skipped = 0).meetsTarget)
+        assertEquals(true, AdherenceResult(taken = 80, expected = 100, skipped = 0).meetsTarget)
+        assertEquals(true, AdherenceResult(taken = 81, expected = 100, skipped = 0).meetsTarget)
+    }
+
+    @Test
+    fun `no percent means no target verdict`() {
+        assertNull(AdherenceResult(taken = 0, expected = 0, skipped = 0).meetsTarget)
+        assertNull(AdherenceResult(taken = 3, expected = 0, skipped = 0).meetsTarget)
+    }
+
     // --- adherenceResult over a window ---
 
     private fun schedule(

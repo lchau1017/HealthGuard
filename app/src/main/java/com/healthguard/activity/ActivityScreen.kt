@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,9 +33,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlinx.datetime.LocalDate
@@ -246,8 +250,49 @@ private fun BreakdownList(rows: List<MedicationAdherence>, modifier: Modifier = 
                         )
                     }
                 }
+                row.meetsTarget?.let { meets ->
+                    Spacer(Modifier.height(4.dp))
+                    TargetCaption(meets = meets)
+                }
             }
         }
+    }
+}
+
+/**
+ * The quiet 80%-target line under a scheduled row: a filled check-dot when
+ * the percent reaches the clinical threshold, plain informational text when
+ * it does not — never error-red; falling short is a conversation with a
+ * pharmacist, not an alarm.
+ */
+@Composable
+private fun TargetCaption(meets: Boolean, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        if (meets) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "✓",
+                    fontSize = 8.sp,
+                    lineHeight = 8.sp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+            }
+            Spacer(Modifier.width(4.dp))
+        }
+        Text(
+            text = if (meets) "Meets 80% target" else "Below 80% target",
+            style = MaterialTheme.typography.labelSmall,
+            color = if (meets) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
     }
 }
 
