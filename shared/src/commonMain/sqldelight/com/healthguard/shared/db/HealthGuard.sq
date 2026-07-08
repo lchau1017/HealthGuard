@@ -140,3 +140,14 @@ SELECT * FROM doseLog
 WHERE COALESCE(takenAt, plannedAt) >= :fromMillis
   AND COALESCE(takenAt, plannedAt) < :toMillis
 ORDER BY plannedAt ASC;
+
+-- Same effective-time window as doseLogsInRange, but resolved through the
+-- schedule to the owning medication's identity: the day-detail sheet feed.
+doseLogsWithMedicationInRange:
+SELECT s.medicationId, m.drugName, m.dosage, d.plannedAt, d.takenAt, d.status
+FROM doseLog d
+INNER JOIN schedule s ON s.id = d.scheduleId
+INNER JOIN medication m ON m.id = s.medicationId
+WHERE COALESCE(d.takenAt, d.plannedAt) >= :fromMillis
+  AND COALESCE(d.takenAt, d.plannedAt) < :toMillis
+ORDER BY COALESCE(d.takenAt, d.plannedAt) ASC;

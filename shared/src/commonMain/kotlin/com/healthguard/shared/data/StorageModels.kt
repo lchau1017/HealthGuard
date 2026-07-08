@@ -52,6 +52,20 @@ data class TakenDose(
     val takenAt: Instant,
 )
 
+/**
+ * One dose log resolved to its medication's display identity — what a
+ * day-detail view needs to group a day's events by medicine without a
+ * second lookup.
+ */
+data class DoseLogWithMedication(
+    val medicationId: String,
+    val drugName: String,
+    val dosage: String?,
+    val plannedAt: Instant,
+    val takenAt: Instant?,
+    val status: DoseStatus,
+)
+
 data class StoredDoseLog(
     val id: String,
     val scheduleId: String,

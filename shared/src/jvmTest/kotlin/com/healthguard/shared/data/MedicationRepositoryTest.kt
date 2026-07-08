@@ -433,6 +433,68 @@ class MedicationRepositoryTest {
     }
 
     @Test
+    fun `doseLogsWithMedicationInRange joins medication identity and keeps every status`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(id = "med-a"), schedule(id = "sch-a", medicationId = "med-a"))
+        repo.insertMedication(
+            medication(id = "med-b").copy(drugName = "Loratadine", dosage = null),
+            schedule(id = "sch-b", medicationId = "med-b"),
+        )
+        repo.logTaken("d-taken", scheduleId = "sch-a", takenAtMillis = 1_000)
+        repo.logDose(
+            dose("d-skipped", scheduleId = "sch-b", plannedAtMillis = 1_500)
+                .copy(status = DoseStatus.SKIPPED),
+        )
+
+        val inRange = repo.doseLogsWithMedicationInRange(
+            from = Instant.fromEpochMilliseconds(0),
+            to = Instant.fromEpochMilliseconds(10_000),
+        )
+        assertEquals(
+            listOf(
+                DoseLogWithMedication(
+                    medicationId = "med-a",
+                    drugName = "Cetirizine Hydrochloride",
+                    dosage = "10 mg",
+                    plannedAt = Instant.fromEpochMilliseconds(1_000),
+                    takenAt = Instant.fromEpochMilliseconds(1_000),
+                    status = DoseStatus.TAKEN,
+                ),
+                DoseLogWithMedication(
+                    medicationId = "med-b",
+                    drugName = "Loratadine",
+                    dosage = null,
+                    plannedAt = Instant.fromEpochMilliseconds(1_500),
+                    takenAt = null,
+                    status = DoseStatus.SKIPPED,
+                ),
+            ),
+            inRange,
+        )
+    }
+
+    @Test
+    fun `doseLogsWithMedicationInRange is half open on the effective time`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(), schedule())
+        // TAKEN late: planned before the range but taken inside it — the
+        // effective time (takenAt) decides membership, like doseLogsInRange.
+        repo.logTaken("d-late", takenAtMillis = 1_200, plannedAtMillis = 500)
+        repo.logTaken("d-before", takenAtMillis = 999)
+        repo.logTaken("d-from", takenAtMillis = 1_000)
+        repo.logDose(dose("d-at-to", plannedAtMillis = 2_000).copy(status = DoseStatus.MISSED))
+
+        val inRange = repo.doseLogsWithMedicationInRange(
+            from = Instant.fromEpochMilliseconds(1_000),
+            to = Instant.fromEpochMilliseconds(2_000),
+        )
+        assertEquals(
+            listOf(Instant.fromEpochMilliseconds(1_000), Instant.fromEpochMilliseconds(1_200)),
+            inRange.map { it.takenAt },
+        )
+    }
+
+    @Test
     fun `recentDoses of an unknown schedule is empty`() = runTest {
         val repo = repository()
         repo.insertMedication(medication(), schedule())

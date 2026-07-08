@@ -185,6 +185,29 @@ class MedicationRepository(
             ).executeAsList().map { it.toStored() }
         }
 
+    /**
+     * Like [doseLogsInRange] (any status, effective time in [from, to),
+     * half-open), but each log carries its medication's identity — the
+     * day-detail sheet's per-medicine grouping input.
+     */
+    suspend fun doseLogsWithMedicationInRange(
+        from: Instant,
+        to: Instant,
+    ): List<DoseLogWithMedication> = withContext(dispatcher) {
+        queries.doseLogsWithMedicationInRange(
+            fromMillis = from.toEpochMilliseconds(),
+            toMillis = to.toEpochMilliseconds(),
+        ) { medicationId, drugName, dosage, plannedAt, takenAt, status ->
+            DoseLogWithMedication(
+                medicationId = medicationId,
+                drugName = drugName,
+                dosage = dosage,
+                plannedAt = Instant.fromEpochMilliseconds(plannedAt),
+                takenAt = takenAt?.let(Instant::fromEpochMilliseconds),
+                status = DoseStatus.valueOf(status),
+            )
+        }.executeAsList()
+    }
 }
 
 private const val FREQ_TIMES_PER_DAY = "TIMES_PER_DAY"
