@@ -3,6 +3,8 @@
 package com.healthguard.detail
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import com.healthguard.activity.AdherenceResult
+import com.healthguard.activity.DayCompleteness
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.StoredDoseLog
@@ -294,8 +296,11 @@ class DetailViewModelTest {
         )
     }
 
+    private fun loggedIds(vm: DetailViewModel): List<String> =
+        vm.state.value.history.filterIsInstance<HistoryEntry.Logged>().map { it.log.id }
+
     @Test
-    fun `history lists recent dose logs newest planned first`() = runTest(dispatcher) {
+    fun `history lists recent dose logs newest first`() = runTest(dispatcher) {
         insert(startedAt = fixedNow - 5.hours)
         logDose("d-1", takenAt = fixedNow - 4.hours, plannedAt = fixedNow - 4.hours, status = DoseStatus.TAKEN)
         logDose("d-2", takenAt = null, plannedAt = fixedNow - 2.hours, status = DoseStatus.SKIPPED)
@@ -303,39 +308,122 @@ class DetailViewModelTest {
         val vm = viewModel()
         collectState(vm)
 
-        assertEquals(listOf("d-3", "d-2", "d-1"), vm.state.value.history.map { it.id })
+        assertEquals(listOf("d-3", "d-2", "d-1"), loggedIds(vm))
     }
 
     @Test
-    fun `day statuses classify completeness and adherence counts taken vs missed`() = runTest(dispatcher) {
+    fun `history synthesizes not-recorded rows for silent expected slots`() = runTest(dispatcher) {
+        // 2x/day since 2024-06-30: slots 09:00/21:00. Fully logged on 6/30,
+        // morning-only on 7/1, silent on 7/2. Today's 09:00 slot is within
+        // the 90-minute answer window (now is 10:00), so it is not a gap yet.
+        insert(startedAt = Instant.parse("2024-06-30T00:00:00Z"))
+        logDose("d-1", takenAt = Instant.parse("2024-06-30T09:05:00Z"), plannedAt = Instant.parse("2024-06-30T09:00:00Z"), status = DoseStatus.TAKEN)
+        logDose("d-2", takenAt = Instant.parse("2024-06-30T21:00:00Z"), plannedAt = Instant.parse("2024-06-30T21:00:00Z"), status = DoseStatus.TAKEN)
+        logDose("d-3", takenAt = Instant.parse("2024-07-01T09:10:00Z"), plannedAt = Instant.parse("2024-07-01T09:00:00Z"), status = DoseStatus.TAKEN)
+        val vm = viewModel()
+        collectState(vm)
+
+        assertEquals(
+            listOf(
+                HistoryEntry.NotRecorded(Instant.parse("2024-07-02T21:00:00Z")),
+                HistoryEntry.NotRecorded(Instant.parse("2024-07-02T09:00:00Z")),
+                HistoryEntry.NotRecorded(Instant.parse("2024-07-01T21:00:00Z")),
+            ),
+            vm.state.value.history.filterIsInstance<HistoryEntry.NotRecorded>(),
+        )
+        assertEquals(listOf("d-3", "d-2", "d-1"), loggedIds(vm))
+        // Interleaved chronologically: the three gaps precede the logged rows.
+        assertEquals(
+            listOf(true, true, true, false, false, false),
+            vm.state.value.history.map { it is HistoryEntry.NotRecorded },
+        )
+    }
+
+    @Test
+    fun `day completeness and adherence measure against the schedule`() = runTest(dispatcher) {
+        // 2x/day started 7/1 at 10:00: owed 21:00 that day, both slots on
+        // 7/2, and 09:00 today = 4 expected. Taken 2, one logged miss, one
+        // silent slot -> 50%; the silent day counts exactly like the miss.
         insert(startedAt = fixedNow - 48.hours)
-        // Yesterday: one take, one miss -> SOME. Today: takes only -> ALL.
-        logDose("d-1", takenAt = fixedNow - 26.hours, plannedAt = fixedNow - 26.hours, status = DoseStatus.TAKEN)
-        logDose("d-m", takenAt = null, plannedAt = fixedNow - 25.hours, status = DoseStatus.MISSED)
-        logDose("d-2", takenAt = fixedNow - 2.hours, plannedAt = fixedNow - 2.hours, status = DoseStatus.TAKEN)
-        logDose("d-3", takenAt = fixedNow - 1.hours, plannedAt = fixedNow - 1.hours, status = DoseStatus.TAKEN)
-        // Skips demote a day to SOME (not everything scheduled was taken)
-        // but never count against the adherence percentage.
-        logDose("d-skip", takenAt = null, plannedAt = fixedNow - 3.hours, status = DoseStatus.SKIPPED)
+        logDose("d-1", takenAt = fixedNow - 37.hours, plannedAt = fixedNow - 37.hours, status = DoseStatus.TAKEN)
+        logDose("d-2", takenAt = fixedNow - 25.hours, plannedAt = fixedNow - 25.hours, status = DoseStatus.TAKEN)
+        logDose("d-m", takenAt = null, plannedAt = fixedNow - 13.hours, status = DoseStatus.MISSED)
         val vm = viewModel()
         collectState(vm)
 
         val state = vm.state.value
-        val today = kotlinx.datetime.LocalDate(2024, 7, 3)
-        val yesterday = kotlinx.datetime.LocalDate(2024, 7, 2)
-        assertEquals(DayDoseStatus.SOME, state.doseDayStatuses[yesterday])
-        assertEquals(DayDoseStatus.SOME, state.doseDayStatuses[today])
-        // 3 taken, 1 missed -> 75%.
-        assertEquals(75, state.adherencePercent)
+        assertEquals(AdherenceResult(taken = 2, expected = 4, skipped = 0), state.adherence)
+        assertEquals(50, state.adherence.percent)
+        assertEquals(
+            mapOf(
+                kotlinx.datetime.LocalDate(2024, 7, 1) to DayCompleteness.FULL,
+                kotlinx.datetime.LocalDate(2024, 7, 2) to DayCompleteness.PARTIAL,
+                kotlinx.datetime.LocalDate(2024, 7, 3) to DayCompleteness.NONE,
+            ),
+            state.dayCompleteness,
+        )
+        assertFalse(state.isAsNeeded)
         assertNotNull(state.historyFrom)
     }
 
     @Test
-    fun `adherence is null with no takes or misses`() = runTest(dispatcher) {
+    fun `a fully skipped day is empty not a lapse`() = runTest(dispatcher) {
+        // Both of yesterday's slots deliberately skipped; today's 09:00
+        // taken. Skips leave the denominator: 1 of (3-2) = 100%.
+        insert(startedAt = Instant.parse("2024-07-02T00:00:00Z"))
+        logDose("d-s1", takenAt = null, plannedAt = Instant.parse("2024-07-02T09:00:00Z"), status = DoseStatus.SKIPPED)
+        logDose("d-s2", takenAt = null, plannedAt = Instant.parse("2024-07-02T21:00:00Z"), status = DoseStatus.SKIPPED)
+        logDose("d-t", takenAt = Instant.parse("2024-07-03T09:00:00Z"), plannedAt = Instant.parse("2024-07-03T09:00:00Z"), status = DoseStatus.TAKEN)
+        val vm = viewModel()
+        collectState(vm)
+
+        val state = vm.state.value
+        assertEquals(AdherenceResult(taken = 1, expected = 3, skipped = 2), state.adherence)
+        assertEquals(100, state.adherence.percent)
+        // The skipped day carries no completeness entry (rendered blank).
+        assertEquals(
+            mapOf(kotlinx.datetime.LocalDate(2024, 7, 3) to DayCompleteness.FULL),
+            state.dayCompleteness,
+        )
+    }
+
+    @Test
+    fun `a scheduled stretch with no records scores zero not null`() = runTest(dispatcher) {
         insert(startedAt = fixedNow - 48.hours)
         val vm = viewModel()
         collectState(vm)
-        assertNull(vm.state.value.adherencePercent)
+
+        assertEquals(0, vm.state.value.adherence.percent)
+    }
+
+    @Test
+    fun `an interval medication is as-needed with counts instead of a percent`() = runTest(dispatcher) {
+        insert(frequency = Frequency.EveryHours(6), startedAt = fixedNow - 48.hours)
+        logDose("d-1", takenAt = fixedNow - 26.hours, plannedAt = fixedNow - 26.hours, status = DoseStatus.TAKEN)
+        logDose("d-2", takenAt = fixedNow - 2.hours, plannedAt = fixedNow - 2.hours, status = DoseStatus.TAKEN)
+        val vm = viewModel()
+        collectState(vm)
+
+        val state = vm.state.value
+        assertTrue(state.isAsNeeded)
+        assertNull(state.adherence.percent)
+        assertEquals(2, state.adherence.taken)
+        // No expectations: no completeness cells and no not-recorded rows —
+        // the heat map falls back to take counts per day.
+        assertTrue(state.dayCompleteness.isEmpty())
+        assertTrue(state.history.filterIsInstance<HistoryEntry.NotRecorded>().isEmpty())
+        assertEquals(
+            listOf(1, 1),
+            state.dayTakeCounts.map { it.count },
+        )
+    }
+
+    @Test
+    fun `dormant schedule has a null percent`() = runTest(dispatcher) {
+        insert()
+        val vm = viewModel()
+        collectState(vm)
+        assertNull(vm.state.value.adherence.percent)
     }
 
     @Test
@@ -356,7 +444,7 @@ class DetailViewModelTest {
         // The status card and history refresh without an external write.
         assertEquals(fixedNow + 6.hours, vm.state.value.nextDoseAt)
         assertEquals(fixedNow, vm.state.value.lastTakenAt)
-        assertEquals(listOf(logged.id), vm.state.value.history.map { it.id })
+        assertEquals(listOf(logged.id), loggedIds(vm))
         assertEquals("Cetirizine", vm.recentTake.value?.drugName)
     }
 
@@ -428,7 +516,7 @@ class DetailViewModelTest {
         vm.refresh()
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(listOf("d-1"), vm.state.value.history.map { it.id })
+        assertEquals(listOf("d-1"), loggedIds(vm))
         assertEquals(fixedNow, vm.state.value.lastTakenAt)
     }
 
@@ -445,7 +533,7 @@ class DetailViewModelTest {
         repository.activate("med-1", fixedNow)
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(listOf("d-1"), vm.state.value.history.map { it.id })
+        assertEquals(listOf("d-1"), loggedIds(vm))
     }
 
     @Test

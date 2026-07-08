@@ -52,6 +52,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.healthguard.activity.ActivityHeatMap
+import com.healthguard.activity.AdherenceResult
+import com.healthguard.activity.DayCompleteness
+import com.healthguard.activity.DayCount
 import com.healthguard.activity.HeatMapGrid
 import com.healthguard.format.countdownTextSeconds
 import com.healthguard.format.dayTimeLabel
@@ -251,8 +255,10 @@ fun DetailScreen(
 
             HistorySection(
                 history = state.history,
-                doseDayStatuses = state.doseDayStatuses,
-                adherencePercent = state.adherencePercent,
+                dayCompleteness = state.dayCompleteness,
+                dayTakeCounts = state.dayTakeCounts,
+                adherence = state.adherence,
+                isAsNeeded = state.isAsNeeded,
                 historyFrom = state.historyFrom,
                 now = now,
                 zone = zone,
@@ -437,14 +443,19 @@ private fun ScheduleRow(label: String, value: String, modifier: Modifier = Modif
 }
 
 /**
- * Per-drug history: the adherence figure, a 16-week completeness heat map
- * (all taken / some / missed per day), then the latest dose logs.
+ * Per-drug history: the adherence figure ("N% taken" against the schedule,
+ * or a plain take count for as-needed medications), a 16-week heat map —
+ * schedule completeness (full / partial / none per day) for scheduled
+ * medications, raw take counts for as-needed ones — then the latest dose
+ * logs interleaved with derived "Not recorded" slots.
  */
 @Composable
 private fun HistorySection(
-    history: List<StoredDoseLog>,
-    doseDayStatuses: Map<LocalDate, DayDoseStatus>,
-    adherencePercent: Int?,
+    history: List<HistoryEntry>,
+    dayCompleteness: Map<LocalDate, DayCompleteness>,
+    dayTakeCounts: List<DayCount>,
+    adherence: AdherenceResult,
+    isAsNeeded: Boolean,
     historyFrom: LocalDate?,
     now: Instant,
     zone: TimeZone,
@@ -457,9 +468,9 @@ private fun HistorySection(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SectionTitle("History")
-            adherencePercent?.let { percent ->
+            historyFigure(adherence, isAsNeeded)?.let { figure ->
                 Text(
-                    text = "$percent% taken",
+                    text = figure,
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -475,41 +486,78 @@ private fun HistorySection(
             return@Column
         }
         historyFrom?.let { from ->
-            val ramp = heatRamp()
             Spacer(Modifier.height(8.dp))
-            HeatMapGrid(
-                from = from,
-                today = now.toLocalDate(zone),
-                cellColor = { date ->
-                    when (doseDayStatuses[date]) {
-                        DayDoseStatus.ALL -> ramp[4]
-                        DayDoseStatus.SOME -> ramp[2]
-                        DayDoseStatus.MISSED -> ramp[1]
-                        null -> ramp[0]
-                    }
-                },
-                cellLabel = { date ->
-                    "$date: " + when (doseDayStatuses[date]) {
-                        DayDoseStatus.ALL -> "all doses taken"
-                        DayDoseStatus.SOME -> "some doses taken"
-                        DayDoseStatus.MISSED -> "doses missed"
-                        null -> "no doses"
-                    }
-                },
-            )
-            Spacer(Modifier.height(6.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                LegendChip(color = ramp[4], text = "All taken")
-                LegendChip(color = ramp[2], text = "Some")
-                LegendChip(color = ramp[1], text = "Missed")
+            if (isAsNeeded) {
+                // No dose is ever owed: intensity is honest, completeness is not.
+                ActivityHeatMap(
+                    dayCounts = dayTakeCounts,
+                    from = from,
+                    today = now.toLocalDate(zone),
+                )
+            } else {
+                CompletenessHeatMap(
+                    dayCompleteness = dayCompleteness,
+                    from = from,
+                    today = now.toLocalDate(zone),
+                )
             }
         }
         Spacer(Modifier.height(8.dp))
-        history.forEach { log ->
-            HistoryRow(log = log, now = now, zone = zone)
+        history.forEach { entry ->
+            when (entry) {
+                is HistoryEntry.Logged -> HistoryRow(log = entry.log, now = now, zone = zone)
+                is HistoryEntry.NotRecorded ->
+                    NotRecordedRow(slotAt = entry.slotAt, now = now, zone = zone)
+            }
+        }
+    }
+}
+
+/** "84% taken" against the schedule; "12 taken" for as-needed medications. */
+private fun historyFigure(adherence: AdherenceResult, isAsNeeded: Boolean): String? = when {
+    isAsNeeded -> if (adherence.taken == 1) "1 taken" else "${adherence.taken} taken"
+    else -> adherence.percent?.let { "$it% taken" }
+}
+
+/** 16-week grid of per-day schedule completeness with its legend. */
+@Composable
+private fun CompletenessHeatMap(
+    dayCompleteness: Map<LocalDate, DayCompleteness>,
+    from: LocalDate,
+    today: LocalDate,
+    modifier: Modifier = Modifier,
+) {
+    val ramp = heatRamp()
+    Column(modifier = modifier) {
+        HeatMapGrid(
+            from = from,
+            today = today,
+            cellColor = { date ->
+                when (dayCompleteness[date]) {
+                    DayCompleteness.FULL -> ramp[4]
+                    DayCompleteness.PARTIAL -> ramp[2]
+                    DayCompleteness.NONE -> ramp[1]
+                    // EMPTY days are absent from the map.
+                    DayCompleteness.EMPTY, null -> ramp[0]
+                }
+            },
+            cellLabel = { date ->
+                "$date: " + when (dayCompleteness[date]) {
+                    DayCompleteness.FULL -> "all doses taken"
+                    DayCompleteness.PARTIAL -> "some doses taken"
+                    DayCompleteness.NONE -> "no doses taken"
+                    DayCompleteness.EMPTY, null -> "nothing scheduled"
+                }
+            },
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            LegendChip(color = ramp[4], text = "All taken")
+            LegendChip(color = ramp[2], text = "Partial")
+            LegendChip(color = ramp[1], text = "None")
         }
     }
 }
@@ -583,6 +631,51 @@ private fun HistoryRow(
                     DoseStatus.MISSED -> MaterialTheme.colorScheme.error
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
+            )
+        }
+    }
+}
+
+/**
+ * A derived gap row: an expected slot nothing was logged against. Muted on
+ * purpose — it is an absence, not an accusation.
+ */
+@Composable
+private fun NotRecordedRow(
+    slotAt: Instant,
+    now: Instant,
+    zone: TimeZone,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "–",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(
+                text = dayTimeLabel(slotAt, now, zone),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "Not recorded",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
             )
         }
     }

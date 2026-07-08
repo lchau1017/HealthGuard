@@ -4,7 +4,11 @@ package com.healthguard.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.healthguard.activity.adherencePercent
+import com.healthguard.activity.AdherenceResult
+import com.healthguard.activity.DayCompleteness
+import com.healthguard.activity.DayCount
+import com.healthguard.activity.dayCompletenessByDay
+import com.healthguard.activity.dayCounts
 import com.healthguard.activity.mondayOf
 import com.healthguard.dose.RecordedTake
 import com.healthguard.dose.isDoubleDose
@@ -16,7 +20,11 @@ import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.MedicationWithSchedule
 import com.healthguard.shared.data.StoredDoseLog
+import com.healthguard.shared.data.StoredSchedule
+import com.healthguard.shared.domain.expectedDoseTimes
 import com.healthguard.shared.domain.nextDose
+import com.healthguard.shared.extraction.Frequency
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -42,6 +50,16 @@ private const val HISTORY_LIMIT = 30
 /** Heat-map columns on the detail page (current week included). */
 private const val HEAT_MAP_WEEKS = 16
 
+/** How far back derived "Not recorded" rows reach. */
+private val GAP_LOOKBACK = 14.days
+
+/**
+ * A slot stays open this long before it can become a "Not recorded" row —
+ * the same distance a log may sit from a slot and still answer it, so a
+ * slot is never declared unrecorded while a matching take is still likely.
+ */
+private val SLOT_ANSWER_GRACE = 90.minutes
+
 /**
  * Editable detail form plus the live persisted [item]. Field values are
  * seeded from the first repository emission and never overwritten afterwards
@@ -61,17 +79,33 @@ data class DetailUiState(
     val withFood: Boolean? = null,
     val nextDoseAt: Instant? = null,
     val lastTakenAt: Instant? = null,
-    /** Latest dose logs (any status), newest planned first, capped at 30. */
-    val history: List<StoredDoseLog> = emptyList(),
-    /** Per-day completeness over the heat-map window; absent days are empty. */
-    val doseDayStatuses: Map<LocalDate, DayDoseStatus> = emptyMap(),
-    /** TAKEN/(TAKEN+MISSED) over the window; null with nothing to measure. */
-    val adherencePercent: Int? = null,
+    /**
+     * Latest dose logs newest first, interleaved with derived "Not
+     * recorded" rows for recent expected slots nothing answered, capped
+     * at 30 entries.
+     */
+    val history: List<HistoryEntry> = emptyList(),
+    /**
+     * Per-day completeness against the schedule over the heat-map window;
+     * days without (unskipped) expectations are absent. Empty for
+     * as-needed medications.
+     */
+    val dayCompleteness: Map<LocalDate, DayCompleteness> = emptyMap(),
+    /**
+     * Per-day take counts over the window — the heat-map fallback for
+     * as-needed medications, where no dose is ever owed.
+     */
+    val dayTakeCounts: List<DayCount> = emptyList(),
+    /** Schedule-based adherence over the heat-map window. */
+    val adherence: AdherenceResult = AdherenceResult(0, 0, 0),
     /** First day of the heat-map window (a Monday). */
     val historyFrom: LocalDate? = null,
     val finished: DetailFinished? = null,
 ) {
     val isActive: Boolean get() = item?.isActive == true
+
+    /** Interval dosing ("every N hours") is an as-needed ceiling, not a plan. */
+    val isAsNeeded: Boolean get() = item?.schedule?.frequency is Frequency.EveryHours
     val nameError: Boolean get() = item != null && name.isBlank()
     val frequencyError: Boolean
         get() = frequencyText.isNotBlank() && parseFrequency(frequencyText) == null
@@ -111,23 +145,33 @@ class DetailViewModel(
                 val now = clock()
                 val today = now.toLocalDateTime(zone).date
                 val historyFrom = mondayOf(today).minus(HEAT_MAP_WEEKS - 1, DateTimeUnit.WEEK)
+                val windowFrom = historyFrom.atStartOfDayIn(zone)
                 // Range query is on plannedAt (exclusive upper bound, hence
                 // the pad); statuses are then bucketed by their effective day.
                 val windowLogs = repository.dosesInRange(
                     scheduleId = item.schedule.id,
-                    from = historyFrom.atStartOfDayIn(zone),
+                    from = windowFrom,
                     to = now + 1.minutes,
                 )
+                // What the schedule owed over the window; `to = now` so
+                // today's future slots are never counted against the user.
+                val expected = expectedDoseTimes(item.schedule, windowFrom, now, zone)
                 _state.update { current ->
                     val tracked = current.copy(
                         item = item,
                         nextDoseAt = nextDose(item.schedule, lastTaken, now, zone),
                         lastTakenAt = lastTaken,
-                        history = repository.recentDoses(item.schedule.id, HISTORY_LIMIT),
-                        doseDayStatuses = doseDayStatuses(windowLogs, zone),
-                        adherencePercent = adherencePercent(
+                        history = historyEntries(item.schedule, windowLogs, now),
+                        dayCompleteness = dayCompletenessByDay(expected, windowLogs, zone),
+                        dayTakeCounts = dayCounts(
+                            windowLogs.filter { it.status == DoseStatus.TAKEN }
+                                .map { it.takenAt ?: it.plannedAt },
+                            zone,
+                        ),
+                        adherence = AdherenceResult(
                             taken = windowLogs.count { it.status == DoseStatus.TAKEN },
-                            missed = windowLogs.count { it.status == DoseStatus.MISSED },
+                            expected = expected.size,
+                            skipped = windowLogs.count { it.status == DoseStatus.SKIPPED },
                         ),
                         historyFrom = historyFrom,
                     )
@@ -148,6 +192,26 @@ class DetailViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * The recent-list rows, newest first, capped at [HISTORY_LIMIT]: the
+     * last 14 days' logs interleaved with derived "Not recorded" slots
+     * (matched against the complete window logs, so a capped recent query
+     * can never fake a gap), then older logs from the capped recent query.
+     */
+    private suspend fun historyEntries(
+        schedule: StoredSchedule,
+        windowLogs: List<StoredDoseLog>,
+        now: Instant,
+    ): List<HistoryEntry> {
+        val cutoff = now - GAP_LOOKBACK
+        val recentLogs = windowLogs.filter { (it.takenAt ?: it.plannedAt) >= cutoff }
+        val gapSlots = expectedDoseTimes(schedule, cutoff, now - SLOT_ANSWER_GRACE, zone)
+        val older = repository.recentDoses(schedule.id, HISTORY_LIMIT)
+            .filter { (it.takenAt ?: it.plannedAt) < cutoff }
+            .map { HistoryEntry.Logged(it) }
+        return (historyWithGaps(recentLogs, gapSlots) + older).take(HISTORY_LIMIT)
     }
 
     fun onNameChange(value: String) = _state.update { it.copy(name = value) }
