@@ -169,8 +169,9 @@ after a few days, re-check the IP and update `local.properties`.
    confident about is highlighted and must be confirmed or corrected before
    **Accept** unlocks. Add an optional label (e.g. *hay fever*) if you like.
 4. Accept — the medication appears in the home list.
-5. Press **▶** on a row to mark it as actively taking; it moves to the top
-   with a *Taking* badge. Press stop to pause it, or the bin icon to delete.
+5. Press **▶** on a cabinet row to mark it as actively taking; it moves up
+   into *Taking now* with its next dose on the row. Open a medication for
+   the full detail page — take a dose, stop taking, or delete it there.
 
 No backend running? The app degrades gracefully to
 *"Service unavailable — check connection"* with a Retry button.

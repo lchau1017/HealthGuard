@@ -71,7 +71,9 @@ object DemoDataSeeder {
             Demo(
                 "demo-med-2", "demo-sch-2", "Cetirizine", "10 mg", "Allergy",
                 listOf("cetirizine hydrochloride"), Frequency.TimesPerDay(2),
-                listOf(LocalTime(8, 30), LocalTime(20, 30)), longStart,
+                // Matches the 2x/day meal-aligned anchors (09:00, 21:00) so
+                // seeded history lines up with computed next-dose slots.
+                listOf(LocalTime(9, 0), LocalTime(21, 0)), longStart,
             ),
             Demo(
                 "demo-med-3", "demo-sch-3", "Ibuprofen", "200 mg", "Pain relief",

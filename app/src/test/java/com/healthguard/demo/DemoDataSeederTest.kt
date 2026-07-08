@@ -13,7 +13,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -76,6 +78,27 @@ class DemoDataSeederTest {
         assertTrue("expected substantial history, got ${taken.size}", taken.size > 100)
         // Nothing in the future, nothing older than the window.
         assertTrue(taken.all { it.takenAt <= now + 1.days && it.takenAt >= now - 71.days })
+    }
+
+    @Test
+    fun `seeded times-per-day history sits on the meal-aligned anchors`() = runTest {
+        val repo = repository()
+        DemoDataSeeder.seed(repo, now, zone)
+
+        // Cetirizine is 2x/day: every planned dose lies on the 09:00/21:00
+        // anchors, so seeded history matches the computed next-dose slots.
+        val planned = repo.dosesInRange("demo-sch-2", now - 90.days, now + 1.days)
+            .map { it.plannedAt.toLocalDateTime(zone).time }
+        assertTrue(planned.isNotEmpty())
+        assertTrue(
+            "unexpected times: ${planned.distinct()}",
+            planned.all { it == LocalTime(9, 0) || it == LocalTime(21, 0) },
+        )
+
+        // Vitamin D3 is 1x/day on the 09:00 anchor.
+        val vitamin = repo.dosesInRange("demo-sch-1", now - 90.days, now + 1.days)
+            .map { it.plannedAt.toLocalDateTime(zone).time }
+        assertTrue(vitamin.all { it == LocalTime(9, 0) })
     }
 
     @Test
