@@ -12,6 +12,16 @@ Ktor backend that talks to a vision LLM.
 > **HealthGuard is an informational and reminder tool, not medical advice.**
 > It never makes medical judgements. Always consult your doctor or pharmacist.
 
+## Demo
+
+The whole loop in under a minute — photograph a vitamin C tube, the model
+reads the label, I confirm the extracted fields, take a dose, and it lands in
+the record:
+
+[<img src="docs/demo/demo-poster.png" width="300">](docs/demo/scan-take-record.mp4)
+
+*(click the image — GitHub opens the video player)*
+
 ## Screenshots
 
 | Scan a real box | Home |
