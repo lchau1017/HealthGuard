@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -42,14 +44,49 @@ fun heatLevel(count: Int): Int = count.coerceIn(0, HEAT_LEVELS)
 fun mondayOf(date: LocalDate): LocalDate =
     date.minus(date.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
 
+/** The Monday week-column starts spanning [from]..[today], ascending. */
+fun weekStarts(from: LocalDate, today: LocalDate): List<LocalDate> =
+    generateSequence(mondayOf(from)) { it.plus(DAYS_PER_WEEK, DateTimeUnit.DAY) }
+        .takeWhile { it <= mondayOf(today) }
+        .toList()
+
+/**
+ * GitHub-style month labels for a run of [weekStarts] columns: the month's
+ * short name at each column whose Monday enters a new month, null elsewhere.
+ * The first column is labeled too, unless its month ends within the next two
+ * columns — a too-narrow leading month would collide with the next label.
+ */
+fun monthLabels(weekStarts: List<LocalDate>): List<String?> {
+    val changes = weekStarts.mapIndexed { index, monday ->
+        if (index > 0 && monday.month != weekStarts[index - 1].month) {
+            monday.shortMonthName()
+        } else {
+            null
+        }
+    }
+    if (weekStarts.isEmpty()) return changes
+    val firstMonthRoom = changes.drop(1).take(2).all { it == null }
+    return if (firstMonthRoom) {
+        listOf(weekStarts.first().shortMonthName()) + changes.drop(1)
+    } else {
+        changes
+    }
+}
+
+/** Single-letter weekday mark under the 7-day row: M T W T F S S. */
+fun weekdayInitial(date: LocalDate): String = date.dayOfWeek.name.take(1)
+
+private fun LocalDate.shortMonthName(): String =
+    month.name.lowercase().replaceFirstChar { it.uppercase() }.take(3)
+
 private const val HEAT_LEVELS = 4
 private const val DAYS_PER_WEEK = 7
 
 /**
  * GitHub-style count heat map: the brand's sequential sage ramp over the
  * shared [HeatMapGrid], one intensity step per [heatLevel]. [onDayClick]
- * lets hosts surface the tapped day's exact figure in text so color is
- * never the only way to read a value.
+ * lets hosts open the tapped day's exact figures in text (the day-detail
+ * sheet) so color is never the only way to read a value.
  */
 @Composable
 fun ActivityHeatMap(
@@ -60,6 +97,7 @@ fun ActivityHeatMap(
     cellSize: Dp = 14.dp,
     cellGap: Dp = 2.dp,
     showLegend: Boolean = true,
+    showMonthLabels: Boolean = false,
     onDayClick: ((LocalDate, Int) -> Unit)? = null,
 ) {
     val countsByDate = remember(dayCounts) { dayCounts.associate { it.date to it.count } }
@@ -71,6 +109,7 @@ fun ActivityHeatMap(
             today = today,
             cellSize = cellSize,
             cellGap = cellGap,
+            showMonthLabels = showMonthLabels,
             cellColor = { date -> ramp[heatLevel(countsByDate[date] ?: 0)] },
             cellLabel = { date -> "$date: ${countsByDate[date] ?: 0}" },
             onDayClick = onDayClick?.let { click ->
@@ -79,31 +118,90 @@ fun ActivityHeatMap(
         )
         if (showLegend) {
             Spacer(Modifier.size(6.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(cellGap),
-            ) {
-                Text(
-                    text = "Less",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.width(2.dp))
-                ramp.forEach { color ->
-                    Box(
-                        Modifier
-                            .size(cellSize)
-                            .background(color, MaterialTheme.shapes.extraSmall),
+            HeatLegend(swatchSize = minOf(cellSize, LEGEND_MAX_SWATCH), swatchGap = cellGap)
+        }
+    }
+}
+
+/** Legend swatches never grow past this, whatever the grid's cell size. */
+private val LEGEND_MAX_SWATCH = 14.dp
+
+/** The Less→More intensity legend shared by the count-based heat maps. */
+@Composable
+private fun HeatLegend(swatchSize: Dp, swatchGap: Dp, modifier: Modifier = Modifier) {
+    val ramp = heatRamp()
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(swatchGap),
+    ) {
+        Text(
+            text = "Less",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(2.dp))
+        ramp.forEach { color ->
+            Box(
+                Modifier
+                    .size(swatchSize)
+                    .background(color, MaterialTheme.shapes.extraSmall),
+            )
+        }
+        Spacer(Modifier.width(2.dp))
+        Text(
+            text = "More",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * The 7-day record: one horizontal row of large day cells, oldest on the
+ * left, a weekday initial under each — at a week's zoom the week-column
+ * grid would be a single skinny stripe, so the days spread out instead.
+ */
+@Composable
+fun DayRowHeatMap(
+    dayCounts: List<DayCount>,
+    from: LocalDate,
+    today: LocalDate,
+    modifier: Modifier = Modifier,
+    cellSize: Dp = 36.dp,
+    cellGap: Dp = 6.dp,
+    onDayClick: ((LocalDate, Int) -> Unit)? = null,
+) {
+    val countsByDate = remember(dayCounts) { dayCounts.associate { it.date to it.count } }
+    val ramp = heatRamp()
+    val days = remember(from, today) {
+        generateSequence(from) { it.plus(1, DateTimeUnit.DAY) }
+            .takeWhile { it <= today }
+            .toList()
+    }
+    Column(modifier = modifier) {
+        Row(horizontalArrangement = Arrangement.spacedBy(cellGap)) {
+            days.forEach { date ->
+                val count = countsByDate[date] ?: 0
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    HeatCell(
+                        color = ramp[heatLevel(count)],
+                        isToday = date == today,
+                        size = cellSize,
+                        label = "$date: $count",
+                        onClick = onDayClick?.let { { it(date, count) } },
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = weekdayInitial(date),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Spacer(Modifier.width(2.dp))
-                Text(
-                    text = "More",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
+        Spacer(Modifier.height(6.dp))
+        HeatLegend(swatchSize = LEGEND_MAX_SWATCH, swatchGap = 2.dp)
     }
 }
 
@@ -114,7 +212,8 @@ fun ActivityHeatMap(
  * accessibility text ([cellLabel]); optionally a day can carry a short
  * horizontal dash mark ([cellDash] — the categorical "skipped by choice"
  * glyph) or a hairline outline ([cellHairline] — out-of-treatment blanks
- * that would otherwise vanish into the background).
+ * that would otherwise vanish into the background). [showMonthLabels] adds
+ * the GitHub-style month strip along the top edge, scrolling with the grid.
  */
 @Composable
 fun HeatMapGrid(
@@ -125,17 +224,12 @@ fun HeatMapGrid(
     modifier: Modifier = Modifier,
     cellSize: Dp = 14.dp,
     cellGap: Dp = 2.dp,
+    showMonthLabels: Boolean = false,
     cellDash: (LocalDate) -> Boolean = { false },
     cellHairline: (LocalDate) -> Boolean = { false },
     onDayClick: ((LocalDate) -> Unit)? = null,
 ) {
-    val firstMonday = mondayOf(from)
-    val lastMonday = mondayOf(today)
-    val weeks = remember(firstMonday, lastMonday) {
-        generateSequence(firstMonday) { it.plus(DAYS_PER_WEEK, DateTimeUnit.DAY) }
-            .takeWhile { it <= lastMonday }
-            .toList()
-    }
+    val weeks = remember(from, today) { weekStarts(from, today) }
 
     val scrollState = rememberScrollState()
     // Newest week lives at the right edge; land there on first layout
@@ -143,26 +237,51 @@ fun HeatMapGrid(
     LaunchedEffect(weeks.size, scrollState.maxValue) {
         scrollState.scrollTo(scrollState.maxValue)
     }
-    Row(
-        modifier = modifier.horizontalScroll(scrollState),
-        horizontalArrangement = Arrangement.spacedBy(cellGap),
-    ) {
-        weeks.forEach { weekStart ->
-            Column(verticalArrangement = Arrangement.spacedBy(cellGap)) {
-                repeat(DAYS_PER_WEEK) { dayIndex ->
-                    val date = weekStart.plus(dayIndex, DateTimeUnit.DAY)
-                    if (date < from || date > today) {
-                        Spacer(Modifier.size(cellSize))
-                    } else {
-                        HeatCell(
-                            color = cellColor(date),
-                            isToday = date == today,
-                            size = cellSize,
-                            label = cellLabel(date),
-                            dashed = cellDash(date),
-                            hairline = cellHairline(date),
-                            onClick = onDayClick?.let { { it(date) } },
-                        )
+    Column(modifier = modifier.horizontalScroll(scrollState)) {
+        if (showMonthLabels) {
+            val labels = remember(weeks) { monthLabels(weeks) }
+            Row(horizontalArrangement = Arrangement.spacedBy(cellGap)) {
+                labels.forEach { label ->
+                    Box(Modifier.width(cellSize)) {
+                        if (label != null) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                softWrap = false,
+                                // Wider than its 1-cell slot on purpose: the
+                                // text hangs over the following columns,
+                                // GitHub-style, without stretching the column.
+                                modifier = Modifier.wrapContentWidth(
+                                    align = Alignment.Start,
+                                    unbounded = true,
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(2.dp))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(cellGap)) {
+            weeks.forEach { weekStart ->
+                Column(verticalArrangement = Arrangement.spacedBy(cellGap)) {
+                    repeat(DAYS_PER_WEEK) { dayIndex ->
+                        val date = weekStart.plus(dayIndex, DateTimeUnit.DAY)
+                        if (date < from || date > today) {
+                            Spacer(Modifier.size(cellSize))
+                        } else {
+                            HeatCell(
+                                color = cellColor(date),
+                                isToday = date == today,
+                                size = cellSize,
+                                label = cellLabel(date),
+                                dashed = cellDash(date),
+                                hairline = cellHairline(date),
+                                onClick = onDayClick?.let { { it(date) } },
+                            )
+                        }
                     }
                 }
             }

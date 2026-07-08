@@ -90,37 +90,15 @@ fun ActivityScreen(
             } else {
                 StatTiles(stats = state.stats)
 
-                state.heatFrom?.let { from ->
-                    Column {
-                        Text(
-                            text = "16-week record",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            text = "Each square is one day — darker means more doses taken.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        ActivityHeatMap(
-                            dayCounts = state.dayCounts,
-                            from = from,
-                            today = today,
-                            cellSize = 18.dp,
-                            cellGap = 3.dp,
-                            onDayClick = { date, count -> selectedDay = date to count },
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = selectedDay?.let { (date, count) ->
-                                val doses = if (count == 1) "1 dose" else "$count doses"
-                                "${dayLabel(date)} — $doses"
-                            } ?: "Tap a day for its count",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                state.from?.let { from ->
+                    RecordSection(
+                        filter = state.filter,
+                        dayCounts = state.dayCounts,
+                        from = from,
+                        today = today,
+                        onDayClick = { date, count -> selectedDay = date to count },
+                        selectedDay = selectedDay,
+                    )
                 }
 
                 BreakdownList(rows = state.breakdown)
@@ -136,20 +114,81 @@ private fun FilterRow(
     onSelect: (ActivityFilter) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val options = listOf(
-        "All time" to ActivityFilter.ALL,
-        "30 days" to ActivityFilter.DAYS_30,
-        "7 days" to ActivityFilter.DAYS_7,
-    )
+    val options = listOf(ActivityFilter.DAYS_7, ActivityFilter.DAYS_30, ActivityFilter.MONTHS_12)
     SingleChoiceSegmentedButtonRow(modifier = modifier.fillMaxWidth()) {
-        options.forEachIndexed { index, (label, filter) ->
+        options.forEachIndexed { index, filter ->
             SegmentedButton(
                 selected = selected == filter,
                 onClick = { onSelect(filter) },
                 shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-                label = { Text(label, maxLines = 1) },
+                label = { Text(windowChipLabel(filter), maxLines = 1) },
             )
         }
+    }
+}
+
+/**
+ * The record grid for the selected window, at that window's natural zoom:
+ * a single row of large day cells for 7 days, a handful of week columns for
+ * 30 days, and the scrollable GitHub-style year with month labels for 12
+ * months. Same data, same Less→More ramp — only the magnification changes.
+ */
+@Composable
+private fun RecordSection(
+    filter: ActivityFilter,
+    dayCounts: List<DayCount>,
+    from: LocalDate,
+    today: LocalDate,
+    onDayClick: (LocalDate, Int) -> Unit,
+    selectedDay: Pair<LocalDate, Int>?,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = windowHeading(filter),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = "Each square is one day — darker means more doses taken.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        when (filter) {
+            ActivityFilter.DAYS_7 -> DayRowHeatMap(
+                dayCounts = dayCounts,
+                from = from,
+                today = today,
+                onDayClick = onDayClick,
+            )
+            ActivityFilter.DAYS_30 -> ActivityHeatMap(
+                dayCounts = dayCounts,
+                from = from,
+                today = today,
+                cellSize = 20.dp,
+                cellGap = 3.dp,
+                onDayClick = onDayClick,
+            )
+            ActivityFilter.MONTHS_12 -> ActivityHeatMap(
+                dayCounts = dayCounts,
+                from = from,
+                today = today,
+                cellSize = 11.dp,
+                cellGap = 2.dp,
+                showMonthLabels = true,
+                onDayClick = onDayClick,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = selectedDay?.let { (date, count) ->
+                val doses = if (count == 1) "1 dose" else "$count doses"
+                "${dayLabel(date)} — $doses"
+            } ?: "Tap a day for its count",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

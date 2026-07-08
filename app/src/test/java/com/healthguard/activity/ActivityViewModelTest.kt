@@ -104,21 +104,39 @@ class ActivityViewModelTest {
     }
 
     @Test
-    fun `all filter loads the last twelve months of takes`() = runTest(dispatcher) {
+    fun `thirty days is the default window`() = runTest(dispatcher) {
         insert("a", "Ibuprofen")
-        logTaken("a", fixedNow - 370.days) // outside the 12-month cap
+        logTaken("a", fixedNow - 31.days)
+        logTaken("a", fixedNow - 15.days)
+        val vm = viewModel()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val state = vm.state.value
+        assertEquals(ActivityFilter.DAYS_30, state.filter)
+        assertEquals(1, state.stats.totalEvents)
+        assertEquals(LocalDate(2024, 6, 4), state.from)
+        // The grid follows the window: only the in-window take shows.
+        assertEquals(1, state.dayCounts.sumOf { it.count })
+    }
+
+    @Test
+    fun `twelve month filter loads a year of takes`() = runTest(dispatcher) {
+        insert("a", "Ibuprofen")
+        logTaken("a", fixedNow - 370.days) // outside the 12-month window
         logTaken("a", fixedNow - 300.days)
         logTaken("a", fixedNow - 1.hours)
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
+        vm.setFilter(ActivityFilter.MONTHS_12)
+        dispatcher.scheduler.advanceUntilIdle()
+
         val state = vm.state.value
-        assertEquals(ActivityFilter.ALL, state.filter)
+        assertEquals(ActivityFilter.MONTHS_12, state.filter)
         assertEquals(2, state.stats.totalEvents)
-        // The heat map is a fixed 16-week record: only the recent take shows.
-        assertEquals(1, state.dayCounts.sumOf { it.count })
-        // 16 heat-map week columns ending this week start Monday 2024-03-18.
-        assertEquals(LocalDate(2024, 3, 18), state.heatFrom)
+        assertEquals(LocalDate(2023, 7, 3), state.from)
+        // The grid covers the whole window now, not a fixed 16-week record.
+        assertEquals(2, state.dayCounts.sumOf { it.count })
     }
 
     @Test
@@ -139,21 +157,7 @@ class ActivityViewModelTest {
         assertEquals(2, state.stats.totalEvents)
         // Window shows exactly the last 7 days: 2024-06-27..2024-07-03.
         assertEquals(LocalDate(2024, 6, 27), state.from)
-    }
-
-    @Test
-    fun `thirty day filter keeps a month of takes`() = runTest(dispatcher) {
-        insert("a", "Ibuprofen")
-        logTaken("a", fixedNow - 31.days)
-        logTaken("a", fixedNow - 15.days)
-        val vm = viewModel()
-        dispatcher.scheduler.advanceUntilIdle()
-
-        vm.setFilter(ActivityFilter.DAYS_30)
-        dispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(1, vm.state.value.stats.totalEvents)
-        assertEquals(LocalDate(2024, 6, 4), vm.state.value.from)
+        assertEquals(2, state.dayCounts.sumOf { it.count })
     }
 
     private suspend fun logSkipped(medicationId: String, plannedAt: Instant) {

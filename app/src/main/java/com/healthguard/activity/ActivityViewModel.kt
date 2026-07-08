@@ -17,15 +17,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
-import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
-
-/** Time windows on the Activity dashboard. */
-enum class ActivityFilter { ALL, DAYS_30, DAYS_7 }
 
 /**
  * One "Adherence by medicine" row: every medication gets one, typed by its
@@ -52,42 +47,25 @@ data class MedicationAdherence(
 private val EMPTY_STATS = ActivityStats(0, 0, 0, 0, null, null)
 
 data class ActivityUiState(
-    val filter: ActivityFilter = ActivityFilter.ALL,
-    /** First day of the stats window (not the heat map's). */
+    val filter: ActivityFilter = ActivityFilter.DAYS_30,
+    /** First day of the selected window; the record grid starts here too. */
     val from: LocalDate? = null,
     val stats: ActivityStats = EMPTY_STATS,
-    /** First day of the fixed 16-week heat-map record (a Monday). */
-    val heatFrom: LocalDate? = null,
-    /** Per-day take counts over the 16-week heat-map record. */
+    /** Per-day take counts over the selected window. */
     val dayCounts: List<DayCount> = emptyList(),
     /** Best adherence first; ties break alphabetically. */
     val breakdown: List<MedicationAdherence> = emptyList(),
 )
 
-/** Days shown by the 7-day window, today included. */
-private const val WEEK_WINDOW_DAYS = 7
-
-/** Days shown by the 30-day window, today included. */
-private const val MONTH_WINDOW_DAYS = 30
-
 /**
- * "All" is capped at the last 12 months rather than "since the first take":
- * one bounded query, bounded stats, and a year is the natural ceiling for a
- * streak/history dashboard.
- */
-private const val ALL_WINDOW_MONTHS = 12
-
-/** The heat map always shows this fixed record, whatever the filter. */
-private const val HEAT_MAP_WEEKS = 16
-
-/**
- * Backs the Activity dashboard. The stat tiles and per-medicine adherence
- * follow the selected window; the heat map is a fixed 16-week record. Data
- * loads once per [filter] change plus explicit [reload]s (the host calls it
- * whenever the screen is (re)entered, catching takes recorded elsewhere
- * since the last load).
+ * Backs the Activity dashboard. Everything — stat tiles, the record grid,
+ * and the per-medicine adherence — recomputes for the selected window
+ * ([activityWindowStart]). Data loads once per [filter] change plus explicit
+ * [reload]s (the host calls it whenever the screen is (re)entered, catching
+ * takes recorded elsewhere since the last load); the filter itself lives in
+ * the retained view-model state, so it survives tab switches.
  *
- * The 16-week grid deliberately stays count-based raw activity across all
+ * The record grid deliberately stays count-based raw activity across all
  * medications (how much was logged, GitHub-style) — schedule-based
  * completeness only drives the per-medication views (detail heat map, week
  * circles) where "which schedule?" has a single answer.
@@ -117,20 +95,11 @@ class ActivityViewModel(
         viewModelScope.launch {
             val now = clock()
             val today = now.toLocalDateTime(zone).date
-            val from = when (filter) {
-                ActivityFilter.ALL -> today.minus(ALL_WINDOW_MONTHS, DateTimeUnit.MONTH)
-                ActivityFilter.DAYS_30 -> today.minus(MONTH_WINDOW_DAYS - 1, DateTimeUnit.DAY)
-                ActivityFilter.DAYS_7 -> today.minus(WEEK_WINDOW_DAYS - 1, DateTimeUnit.DAY)
-            }
+            val from = activityWindowStart(filter, today)
             // Exclusive upper bounds: pad past `now` so a take recorded at
             // this exact instant still counts.
             val taken = repository.takenDosesInRange(
                 from = from.atStartOfDayIn(zone),
-                to = now + 1.minutes,
-            )
-            val heatFrom = mondayOf(today).minus(HEAT_MAP_WEEKS - 1, DateTimeUnit.WEEK)
-            val heatTaken = repository.takenDosesInRange(
-                from = heatFrom.atStartOfDayIn(zone),
                 to = now + 1.minutes,
             )
             _state.value = ActivityUiState(
@@ -141,8 +110,7 @@ class ActivityViewModel(
                     now,
                     zone,
                 ),
-                heatFrom = heatFrom,
-                dayCounts = dayCounts(heatTaken.map { it.takenAt }, zone),
+                dayCounts = dayCounts(taken.map { it.takenAt }, zone),
                 breakdown = breakdown(from.atStartOfDayIn(zone), now),
             )
         }
