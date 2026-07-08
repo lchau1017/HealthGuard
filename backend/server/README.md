@@ -1,4 +1,4 @@
-# MedGuard extraction proxy
+# HealthGuard extraction proxy
 
 Ktor server that holds the OpenRouter API key so it never ships in the app.
 One endpoint:

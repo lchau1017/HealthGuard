@@ -22,7 +22,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MedGuard"
+rootProject.name = "HealthGuard"
 include(":app")
 include(":shared")
 include(":backend:server")

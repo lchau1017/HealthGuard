@@ -9,15 +9,15 @@ plugins {
 
 sqldelight {
     databases {
-        create("MedGuardDb") {
-            packageName.set("com.medguard.shared.db")
+        create("HealthGuardDb") {
+            packageName.set("com.healthguard.shared.db")
         }
     }
 }
 
 kotlin {
     androidLibrary {
-        namespace = "com.medguard.shared"
+        namespace = "com.healthguard.shared"
         compileSdk = 36
         minSdk = 24
 

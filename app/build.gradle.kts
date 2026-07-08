@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.medguard"
+    namespace = "com.healthguard"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -14,7 +14,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.medguard"
+        applicationId = "com.healthguard"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -26,14 +26,14 @@ android {
     buildTypes {
         debug {
             // Overridable per developer machine without touching the repo:
-            // set medguard.proxyBaseUrl in local.properties (e.g. the Mac's
+            // set healthguard.proxyBaseUrl in local.properties (e.g. the Mac's
             // LAN IP for a Wi-Fi device, or 127.0.0.1 with adb reverse).
             val localProperties = Properties().apply {
                 val file = rootProject.file("local.properties")
                 if (file.exists()) file.inputStream().use { load(it) }
             }
             val proxyBaseUrl =
-                localProperties.getProperty("medguard.proxyBaseUrl") ?: "http://10.0.2.2:8787"
+                localProperties.getProperty("healthguard.proxyBaseUrl") ?: "http://10.0.2.2:8787"
             buildConfigField("String", "PROXY_BASE_URL", "\"$proxyBaseUrl\"")
         }
         release {
@@ -43,7 +43,7 @@ android {
             buildConfigField(
                 "String",
                 "PROXY_BASE_URL",
-                "\"https://medguard-proxy.example.workers.dev\"",
+                "\"https://healthguard-proxy.example.workers.dev\"",
             )
         }
     }

@@ -7,7 +7,7 @@ plugins {
 }
 
 application {
-    mainClass.set("com.medguard.server.MainKt")
+    mainClass.set("com.healthguard.server.MainKt")
 }
 
 // Let `run` work straight from the IDE run button: load KEY=VALUE pairs from

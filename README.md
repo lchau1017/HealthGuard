@@ -1,10 +1,15 @@
-# MedGuard
+# HealthGuard
 
-Photograph a medication package, and MedGuard reads the label with a vision
-LLM, extracts structured data (name, dosage, frequency, ingredients), and adds
-it to your medication list — where you can press ▶ to start taking it.
+HealthGuard is a personal health-behaviour tracker. Its first module is
+AI-powered medication tracking: photograph a medication package, and
+HealthGuard reads the label with a vision LLM, extracts structured data
+(name, dosage, frequency, ingredients), and turns it into schedules and dose
+logging — press ▶ on a medication to start taking it.
 
-> **MedGuard is an informational and reminder tool, not medical advice.**
+Roadmap: further modules — activity/running, food, and sleep tracking — will
+feed the same single activity history.
+
+> **HealthGuard is an informational and reminder tool, not medical advice.**
 > It never makes medical judgements. Always consult your doctor or pharmacist.
 
 ## How it works
@@ -51,7 +56,7 @@ The `run` task loads that file automatically, so starting the server is just:
 ```
 
 **From Android Studio instead of a terminal:** open the Gradle tool window
-(the elephant icon, right edge) → `MedGuard → backend → server → Tasks →
+(the elephant icon, right edge) → `HealthGuard → backend → server → Tasks →
 application → run` and double-click it. Android Studio adds it to the run
 configuration dropdown next to ▶, so from then on you can start the backend
 with the Run button and stop it with the red ■ — no terminal needed. (A
@@ -118,7 +123,7 @@ without Wi-Fi.
 2. Add this line to `local.properties`:
 
    ```properties
-   medguard.proxyBaseUrl=http://127.0.0.1:8787
+   healthguard.proxyBaseUrl=http://127.0.0.1:8787
    ```
 
 3. Create the tunnel (re-run this any time the phone is re-plugged, rebooted,
@@ -142,7 +147,7 @@ Wi-Fi network**.
 2. Add it to `local.properties`:
 
    ```properties
-   medguard.proxyBaseUrl=http://192.168.1.42:8787   # use YOUR IP
+   healthguard.proxyBaseUrl=http://192.168.1.42:8787   # use YOUR IP
    ```
 
 3. Start the backend (step 1), select the device, press **Run ▶**.
