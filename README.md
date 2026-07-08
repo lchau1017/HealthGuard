@@ -76,8 +76,6 @@ record (2× speed; [full-quality video](docs/demo/scan-take-record.mp4)):
 
 ## How adherence is counted
 
-This took a few iterations to get honest:
-
 - Percentages are measured against the **schedule**, not against whatever got
   logged — ignore the app for three days and those days count as gaps instead
   of disappearing from the maths.
