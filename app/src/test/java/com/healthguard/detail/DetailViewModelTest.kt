@@ -416,6 +416,23 @@ class DetailViewModelTest {
     }
 
     @Test
+    fun `refresh picks up dose logs written since the last emission`() = runTest(dispatcher) {
+        insert(startedAt = fixedNow - 5.hours)
+        val vm = viewModel()
+        collectState(vm)
+        assertTrue(vm.state.value.history.isEmpty())
+
+        // Dose logs alone never retrigger the medications flow; the screen
+        // calls refresh() on entry so a retained view model catches up.
+        logDose("d-1", takenAt = fixedNow, plannedAt = fixedNow, status = DoseStatus.TAKEN)
+        vm.refresh()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(listOf("d-1"), vm.state.value.history.map { it.id })
+        assertEquals(fixedNow, vm.state.value.lastTakenAt)
+    }
+
+    @Test
     fun `a take recorded elsewhere appears after any repository re-emission`() = runTest(dispatcher) {
         insert(startedAt = fixedNow - 5.hours)
         val vm = viewModel()

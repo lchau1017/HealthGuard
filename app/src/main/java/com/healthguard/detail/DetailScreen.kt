@@ -95,6 +95,10 @@ fun DetailScreen(
     var confirmingDelete by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Catch takes recorded elsewhere (or a seeding pass) since this view
+    // model was last active — dose writes don't retrigger its queries.
+    LaunchedEffect(Unit) { viewModel.refresh() }
+
     // Per-second countdown: the detail page is where precision matters.
     var now by remember { mutableStateOf(Clock.System.now()) }
     LaunchedEffect(Unit) {

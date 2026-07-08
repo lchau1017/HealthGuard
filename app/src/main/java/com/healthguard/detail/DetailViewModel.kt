@@ -198,6 +198,15 @@ class DetailViewModel(
         _recentTake.value = null
     }
 
+    /**
+     * Re-queries dose data. The screen calls this on entry: dose logs alone
+     * never retrigger the medications flow, so a view model retained across
+     * navigation could otherwise keep showing a stale status and history.
+     */
+    fun refresh() {
+        refresh.update { it + 1 }
+    }
+
     private fun record() {
         val current = _state.value
         val item = current.item ?: return
