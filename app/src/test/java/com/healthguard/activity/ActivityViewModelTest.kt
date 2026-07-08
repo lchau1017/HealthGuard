@@ -3,6 +3,7 @@
 package com.healthguard.activity
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import com.healthguard.home.MedicationPhase
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.StoredDoseLog
@@ -66,6 +67,7 @@ class ActivityViewModelTest {
         drugName: String,
         frequency: Frequency? = null,
         startedAt: Instant? = null,
+        stoppedAt: Instant? = null,
     ) {
         repository.insertMedication(
             StoredMedication(
@@ -84,7 +86,7 @@ class ActivityViewModelTest {
                 frequency = frequency,
                 withFood = null,
                 startedAt = startedAt,
-                stoppedAt = null,
+                stoppedAt = stoppedAt,
             ),
         )
     }
@@ -183,8 +185,8 @@ class ActivityViewModelTest {
 
         assertEquals(
             listOf(
-                MedicationAdherence("Cetirizine", percent = 100, taken = 2, skipped = 0, asNeeded = false, meetsTarget = true),
-                MedicationAdherence("Ibuprofen", percent = 67, taken = 2, skipped = 1, asNeeded = false, meetsTarget = false),
+                takingRow("Cetirizine", percent = 100, taken = 2, meetsTarget = true),
+                takingRow("Ibuprofen", percent = 67, taken = 2, skipped = 1, meetsTarget = false),
             ),
             vm.state.value.breakdown,
         )
@@ -201,35 +203,67 @@ class ActivityViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
-            listOf(MedicationAdherence("Ibuprofen", percent = 40, taken = 2, skipped = 0, asNeeded = false, meetsTarget = false)),
+            listOf(takingRow("Ibuprofen", percent = 40, taken = 2, meetsTarget = false)),
             vm.state.value.breakdown,
         )
     }
 
     @Test
-    fun `interval medicines are as-needed rows after scheduled ones`() = runTest(dispatcher) {
-        insert("a", "Ibuprofen", Frequency.EveryHours(6), Instant.parse("2024-07-01T00:00:00Z"))
-        logTaken("a", fixedNow - 3.hours)
-        logTaken("a", fixedNow - 9.hours)
-        insert("b", "Cetirizine", Frequency.TimesPerDay(1), Instant.parse("2024-07-02T00:00:00Z"))
-        logTaken("b", Instant.parse("2024-07-02T09:00:00Z"))
-        logTaken("b", Instant.parse("2024-07-03T09:00:00Z"))
+    fun `every medicine gets a row typed by its treatment phase`() = runTest(dispatcher) {
+        // Taking + scheduled: a percent row.
+        insert("a", "Cetirizine", Frequency.TimesPerDay(1), Instant.parse("2024-07-02T00:00:00Z"))
+        logTaken("a", Instant.parse("2024-07-02T09:00:00Z"))
+        logTaken("a", Instant.parse("2024-07-03T09:00:00Z"))
+        // Taking + interval: an as-needed count row.
+        insert("b", "Ibuprofen", Frequency.EveryHours(6), Instant.parse("2024-07-01T00:00:00Z"))
+        logTaken("b", fixedNow - 3.hours)
+        // Never activated: a not-started row, no longer silently omitted.
+        insert("c", "Amoxicillin", Frequency.TimesPerDay(3))
+        // Stopped yesterday noon after three owed slots, two answered:
+        // 2 of 3 = 67% while taking.
+        insert(
+            "d", "Loratadine", Frequency.TimesPerDay(1),
+            startedAt = Instant.parse("2024-06-30T00:00:00Z"),
+            stoppedAt = Instant.parse("2024-07-02T12:00:00Z"),
+        )
+        logTaken("d", Instant.parse("2024-06-30T09:00:00Z"))
+        logTaken("d", Instant.parse("2024-07-01T09:00:00Z"))
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
             listOf(
-                MedicationAdherence("Cetirizine", percent = 100, taken = 2, skipped = 0, asNeeded = false, meetsTarget = true),
-                MedicationAdherence("Ibuprofen", percent = null, taken = 2, skipped = 0, asNeeded = true, meetsTarget = null),
+                takingRow("Cetirizine", percent = 100, taken = 2, meetsTarget = true),
+                takingRow("Ibuprofen", percent = null, taken = 1, asNeeded = true),
+                MedicationAdherence(
+                    name = "Loratadine",
+                    phase = MedicationPhase.STOPPED,
+                    asNeeded = false,
+                    percent = 67,
+                    taken = 2,
+                    skipped = 0,
+                    meetsTarget = false,
+                    stoppedText = "Stopped yesterday",
+                ),
+                MedicationAdherence(
+                    name = "Amoxicillin",
+                    phase = MedicationPhase.NOT_STARTED,
+                    asNeeded = false,
+                    percent = null,
+                    taken = 0,
+                    skipped = 0,
+                    meetsTarget = null,
+                    stoppedText = null,
+                ),
             ),
             vm.state.value.breakdown,
         )
     }
 
     @Test
-    fun `breakdown omits medicines with nothing expected and nothing taken in the window`() = runTest(dispatcher) {
-        // Dormant, never taken: no row. Interval with takes only before the
-        // 7-day window: no row either.
+    fun `quiet medicines keep their rows instead of vanishing`() = runTest(dispatcher) {
+        // Dormant and never taken; as-needed with takes only before the
+        // 7-day window: both previously omitted, both now typed rows.
         insert("a", "Ibuprofen")
         insert("b", "Cetirizine", Frequency.EveryHours(6), fixedNow - 30.days)
         logTaken("b", fixedNow - 10.days)
@@ -242,13 +276,26 @@ class ActivityViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
-            listOf(MedicationAdherence("Loratadine", percent = 50, taken = 1, skipped = 0, asNeeded = false, meetsTarget = false)),
+            listOf(
+                takingRow("Loratadine", percent = 50, taken = 1, meetsTarget = false),
+                takingRow("Cetirizine", percent = null, taken = 0, asNeeded = true),
+                MedicationAdherence(
+                    name = "Ibuprofen",
+                    phase = MedicationPhase.NOT_STARTED,
+                    asNeeded = false,
+                    percent = null,
+                    taken = 0,
+                    skipped = 0,
+                    meetsTarget = null,
+                    stoppedText = null,
+                ),
+            ),
             vm.state.value.breakdown,
         )
     }
 
     @Test
-    fun `no takes yield an empty state`() = runTest(dispatcher) {
+    fun `no takes yield an empty state with the medicines still listed`() = runTest(dispatcher) {
         insert("a", "Ibuprofen")
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
@@ -256,8 +303,27 @@ class ActivityViewModelTest {
         val state = vm.state.value
         assertEquals(0, state.stats.totalEvents)
         assertTrue(state.dayCounts.isEmpty())
-        assertTrue(state.breakdown.isEmpty())
+        assertEquals(listOf(MedicationPhase.NOT_STARTED), state.breakdown.map { it.phase })
     }
+
+    /** A TAKING-phase row; percent == null means an as-needed count row. */
+    private fun takingRow(
+        name: String,
+        percent: Int?,
+        taken: Int,
+        skipped: Int = 0,
+        asNeeded: Boolean = false,
+        meetsTarget: Boolean? = null,
+    ) = MedicationAdherence(
+        name = name,
+        phase = MedicationPhase.TAKING,
+        asNeeded = asNeeded,
+        percent = percent,
+        taken = taken,
+        skipped = skipped,
+        meetsTarget = meetsTarget,
+        stoppedText = null,
+    )
 
     @Test
     fun `reload picks up takes recorded since the last load`() = runTest(dispatcher) {

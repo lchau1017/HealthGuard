@@ -35,9 +35,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.healthguard.home.MedicationPhase
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlinx.datetime.LocalDate
@@ -94,6 +97,11 @@ fun ActivityScreen(
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )
+                        Text(
+                            text = "Each square is one day — darker means more doses taken.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         Spacer(Modifier.height(8.dp))
                         ActivityHeatMap(
                             dayCounts = state.dayCounts,
@@ -145,23 +153,46 @@ private fun FilterRow(
     }
 }
 
-/** Exactly four tiles: doses taken, current run, active days, most consistent. */
+/** Exactly four tiles: doses taken, day streak, active days, usual dose time. */
 @Composable
 private fun StatTiles(stats: ActivityStats, modifier: Modifier = Modifier) {
-    val runValue = if (stats.currentStreakDays == 1) "1 day" else "${stats.currentStreakDays} days"
+    val streakValue =
+        if (stats.currentStreakDays == 1) "1 day" else "${stats.currentStreakDays} days"
+    data class Tile(val value: String, val label: String, val description: String)
     val tiles = listOf(
-        "${stats.totalEvents}" to "Doses taken",
-        runValue to "Current run",
-        "${stats.activeDays}" to "Active days",
-        (stats.peakHour?.let(::hourLabel) ?: "—") to "Most consistent",
+        Tile(
+            value = "${stats.totalEvents}",
+            label = "Doses taken",
+            description = "${stats.totalEvents} doses recorded as taken in the selected window",
+        ),
+        Tile(
+            value = streakValue,
+            label = "Day streak",
+            description = "Day streak: ${stats.currentStreakDays} consecutive days " +
+                "with at least one dose",
+        ),
+        Tile(
+            value = "${stats.activeDays}",
+            label = "Active days",
+            description = "Active days: ${stats.activeDays} days with at least one dose " +
+                "in the selected window",
+        ),
+        Tile(
+            value = stats.peakHour?.let(::hourLabel) ?: "—",
+            label = "Usual dose time",
+            description = stats.peakHour
+                ?.let { "Usual dose time: doses are most often taken around ${hourLabel(it)}" }
+                ?: "Usual dose time: not enough doses yet",
+        ),
     )
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         tiles.chunked(2).forEach { rowTiles ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                rowTiles.forEach { (value, label) ->
+                rowTiles.forEach { tile ->
                     StatTile(
-                        label = label,
-                        value = value,
+                        label = tile.label,
+                        value = tile.value,
+                        description = tile.description,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -174,9 +205,10 @@ private fun StatTiles(stats: ActivityStats, modifier: Modifier = Modifier) {
 private fun StatTile(
     label: String,
     value: String,
+    description: String,
     modifier: Modifier = Modifier,
 ) {
-    Card(modifier = modifier) {
+    Card(modifier = modifier.semantics { contentDescription = description }) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = value,
@@ -194,67 +226,112 @@ private fun StatTile(
 }
 
 /**
- * Per-medicine adherence against each schedule. Scheduled medicines get a
- * percent plus a thin progress bar (skips noted beside the figure);
- * as-needed (interval) medicines get a bar-less "As needed · N taken" row —
- * a percent would presume doses that were never mandatory.
+ * "Adherence by medicine": one row per medication, typed by treatment phase
+ * — actively scheduled medicines get a percent (against their *own*
+ * schedule, spelled out in the caption) plus a thin progress bar with an
+ * 80%-target tick; as-needed medicines a bar-less count row; never-started
+ * and stopped medicines their phase text instead of vanishing from the list.
  */
 @Composable
 private fun BreakdownList(rows: List<MedicationAdherence>, modifier: Modifier = Modifier) {
     if (rows.isEmpty()) return
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "By medicine",
+            text = "Adherence by medicine",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
         )
+        Text(
+            text = "How closely each medicine's own schedule was followed",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Spacer(Modifier.height(8.dp))
-        rows.forEach { row ->
-            Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = row.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f, fill = false),
-                        maxLines = 1,
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = breakdownFigure(row),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                row.percent?.let { percent ->
-                    Spacer(Modifier.height(4.dp))
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .background(
-                                MaterialTheme.colorScheme.secondaryContainer,
-                                MaterialTheme.shapes.extraSmall,
-                            ),
-                    ) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth(percent / 100f)
-                                .height(6.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.shapes.extraSmall,
-                                ),
-                        )
-                    }
-                }
-                row.meetsTarget?.let { meets ->
-                    Spacer(Modifier.height(4.dp))
-                    TargetCaption(meets = meets)
-                }
+        rows.forEach { row -> BreakdownRow(row) }
+    }
+}
+
+@Composable
+private fun BreakdownRow(row: MedicationAdherence, modifier: Modifier = Modifier) {
+    val muted = row.phase != MedicationPhase.TAKING || row.percent == null
+    Column(
+        modifier = modifier
+            .padding(vertical = 6.dp)
+            .semantics { contentDescription = adherenceRowDescription(row) },
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = row.name,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (muted) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                modifier = Modifier.weight(1f, fill = false),
+                maxLines = 1,
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = adherenceRowFigure(row),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        row.percent?.let { percent ->
+            Spacer(Modifier.height(4.dp))
+            TargetTickedBar(percent = percent)
+        }
+        if (row.phase == MedicationPhase.TAKING) {
+            row.meetsTarget?.let { meets ->
+                Spacer(Modifier.height(4.dp))
+                TargetCaption(meets = meets)
             }
+        }
+    }
+}
+
+/**
+ * The thin adherence bar with a subtle tick at the 80% target so "meets
+ * target" is readable from the bar itself, not only from the caption.
+ */
+@Composable
+private fun TargetTickedBar(percent: Int, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .background(
+                MaterialTheme.colorScheme.secondaryContainer,
+                MaterialTheme.shapes.extraSmall,
+            ),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth(percent / 100f)
+                .height(6.dp)
+                .background(
+                    MaterialTheme.colorScheme.primary,
+                    MaterialTheme.shapes.extraSmall,
+                ),
+        )
+        Box(
+            Modifier
+                .fillMaxWidth(AdherenceResult.TARGET_PERCENT / 100f)
+                .height(6.dp),
+            contentAlignment = Alignment.CenterEnd,
+        ) {
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .height(6.dp)
+                    .background(
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    ),
+            )
         }
     }
 }
@@ -293,17 +370,6 @@ private fun TargetCaption(meets: Boolean, modifier: Modifier = Modifier) {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
         )
-    }
-}
-
-/** "84%", "84% · 2 skipped", "As needed · 5 taken", or a bare "5 taken". */
-private fun breakdownFigure(row: MedicationAdherence): String {
-    val takenText = if (row.taken == 1) "1 taken" else "${row.taken} taken"
-    return when {
-        row.asNeeded -> "As needed · $takenText"
-        row.percent == null -> takenText
-        row.skipped > 0 -> "${row.percent}% · ${row.skipped} skipped"
-        else -> "${row.percent}%"
     }
 }
 

@@ -4,6 +4,9 @@ package com.healthguard.activity
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.healthguard.home.MedicationPhase
+import com.healthguard.home.phase
+import com.healthguard.home.phaseChipText
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.extraction.Frequency
 import kotlin.time.Duration.Companion.minutes
@@ -25,19 +28,25 @@ import kotlinx.datetime.toLocalDateTime
 enum class ActivityFilter { ALL, DAYS_30, DAYS_7 }
 
 /**
- * One "By medicine" row: schedule-based adherence over the current window.
- * [percent] is null for medications without an expected-dose schedule —
- * interval ("every N hours") medications are as-needed and tracked by
- * count, never by percent.
+ * One "Adherence by medicine" row: every medication gets one, typed by its
+ * treatment [phase] — nothing is silently omitted. [percent] measures the
+ * medicine against its *own* schedule over the window (never a share of
+ * total doses); it is null for medications without an expected-dose schedule
+ * — interval ("every N hours") medications are as-needed and tracked by
+ * count, never by percent. For stopped medications the expectation is
+ * clipped to the active stretch, so [percent] reads "while taking".
  */
 data class MedicationAdherence(
     val name: String,
+    val phase: MedicationPhase,
+    val asNeeded: Boolean,
     val percent: Int?,
     val taken: Int,
     val skipped: Int,
-    val asNeeded: Boolean,
     /** Whether [percent] reaches the 80% PDC target; null without a percent. */
-    val meetsTarget: Boolean? = null,
+    val meetsTarget: Boolean?,
+    /** "Stopped 3 Jul" while [phase] is STOPPED, else null. */
+    val stoppedText: String?,
 )
 
 private val EMPTY_STATS = ActivityStats(0, 0, 0, 0, null, null)
@@ -140,32 +149,50 @@ class ActivityViewModel(
     }
 
     /**
-     * One row per medication, measured against its schedule over the window
-     * — silent days count, so a visible heat-map gap can never coexist with
-     * a 100% figure. Scheduled rows sort best percent first (ties by name);
-     * as-needed and other percent-less rows follow alphabetically. Rows with
-     * neither an expectation nor a take in the window are omitted.
+     * One row per medication — every medication, typed by phase; silently
+     * dropping rows made the list read as broken. Adherence is measured
+     * against each schedule over the window: silent days count, so a
+     * visible heat-map gap can never coexist with a 100% figure (expected
+     * doses clip themselves to the active stretch, so stopped rows score
+     * their while-taking window). Actively-taken percent rows sort best
+     * first; percent-less taking rows, stopped, then never-started rows
+     * follow, each group alphabetical.
      */
     private suspend fun breakdown(from: Instant, now: Instant): List<MedicationAdherence> =
         repository.medications().first()
-            .mapNotNull { row ->
+            .map { row ->
                 // Padded past `now` like the queries above; expected doses
                 // are computed against `now` so future slots never count.
                 val logs = repository.dosesInRange(row.schedule.id, from, now + 1.minutes)
                 val result = adherenceResult(row.schedule, logs, from, now, zone)
-                if (result.percent == null && result.taken == 0) return@mapNotNull null
+                val phase = row.schedule.phase
                 MedicationAdherence(
                     name = row.medication.drugName,
+                    phase = phase,
+                    asNeeded = row.schedule.frequency is Frequency.EveryHours,
                     percent = result.percent,
                     taken = result.taken,
                     skipped = result.skipped,
-                    asNeeded = row.schedule.frequency is Frequency.EveryHours,
                     meetsTarget = result.meetsTarget,
+                    stoppedText = if (phase == MedicationPhase.STOPPED) {
+                        phaseChipText(row.schedule, now, zone)
+                    } else {
+                        null
+                    },
                 )
             }
             .sortedWith(
-                compareBy<MedicationAdherence> { it.percent == null }
+                compareBy<MedicationAdherence> { it.rank }
                     .thenByDescending { it.percent ?: 0 }
                     .thenBy { it.name },
             )
+
+    /** Group order of the breakdown list; see [breakdown]. */
+    private val MedicationAdherence.rank: Int
+        get() = when {
+            phase == MedicationPhase.NOT_STARTED -> 3
+            phase == MedicationPhase.STOPPED -> 2
+            percent == null -> 1
+            else -> 0
+        }
 }
