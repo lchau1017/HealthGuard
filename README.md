@@ -176,6 +176,13 @@ after a few days, re-check the IP and update `local.properties`.
 No backend running? The app degrades gracefully to
 *"Service unavailable — check connection"* with a Retry button.
 
+**How adherence is measured:** percentages compare doses you took against
+what the schedule expected — so days with no records count as gaps rather
+than disappearing from the maths. Doses you deliberately skip are left out
+of the target and shown separately. "Every N hours" medicines have no fixed
+daily target (labels state a maximum, not an obligation), so they are shown
+as *as-needed* counts instead of a percentage.
+
 ## Running the tests
 
 ```bash

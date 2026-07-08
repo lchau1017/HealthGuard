@@ -121,6 +121,13 @@ object DemoDataSeeder {
                 val skipDay = daysFromToday > 4 && random.nextDouble() < SKIP_DAY_CHANCE
                 if (!skipDay) {
                     demo.slots.forEach { slot ->
+                        // One deliberate gap two days ago (Cetirizine's evening
+                        // dose is never logged): the week circles show a
+                        // non-full day and the detail history shows a
+                        // "Not recorded" row, whatever the RNG does.
+                        if (demo.medId == "demo-med-2" && daysFromToday == 2L && slot.hour == 21) {
+                            return@forEach
+                        }
                         val jitter = random.nextInt(0, 20)
                         val planned = day
                             .atTime(LocalTime(slot.hour, slot.minute))
