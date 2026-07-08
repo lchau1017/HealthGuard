@@ -53,25 +53,24 @@ fun weekStarts(from: LocalDate, today: LocalDate): List<LocalDate> =
 /**
  * GitHub-style month labels for a run of [weekStarts] columns: the month's
  * short name at each column whose Monday enters a new month, null elsewhere.
- * The first column is labeled too, unless its month ends within the next two
- * columns — a too-narrow leading month would collide with the next label.
+ * A label needs about three columns of room to draw, so months that begin
+ * within the last two columns stay unlabeled (the text would clip at the
+ * grid's edge), and the first column is labeled only when its month
+ * survives the next two columns (a too-narrow leading month would collide
+ * with the next label).
  */
-fun monthLabels(weekStarts: List<LocalDate>): List<String?> {
-    val changes = weekStarts.mapIndexed { index, monday ->
-        if (index > 0 && monday.month != weekStarts[index - 1].month) {
+fun monthLabels(weekStarts: List<LocalDate>): List<String?> =
+    weekStarts.mapIndexed { index, monday ->
+        val entersNewMonth = index > 0 && monday.month != weekStarts[index - 1].month
+        val leadingWithRoom = index == 0 &&
+            weekStarts.drop(1).take(2).all { it.month == monday.month }
+        val trailingRoom = index <= weekStarts.size - 3
+        if ((entersNewMonth || leadingWithRoom) && trailingRoom) {
             monday.shortMonthName()
         } else {
             null
         }
     }
-    if (weekStarts.isEmpty()) return changes
-    val firstMonthRoom = changes.drop(1).take(2).all { it == null }
-    return if (firstMonthRoom) {
-        listOf(weekStarts.first().shortMonthName()) + changes.drop(1)
-    } else {
-        changes
-    }
-}
 
 /** Single-letter weekday mark under the 7-day row: M T W T F S S. */
 fun weekdayInitial(date: LocalDate): String = date.dayOfWeek.name.take(1)

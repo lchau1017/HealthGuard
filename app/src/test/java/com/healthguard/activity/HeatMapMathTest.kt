@@ -2,6 +2,7 @@ package com.healthguard.activity
 
 import kotlinx.datetime.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class HeatMapMathTest {
@@ -83,9 +84,10 @@ class HeatMapMathTest {
                 LocalDate(2024, 6, 24),
                 LocalDate(2024, 7, 1),
                 LocalDate(2024, 7, 8),
+                LocalDate(2024, 7, 15),
             ),
         )
-        assertEquals(listOf("Jun", null, null, "Jul", null), labels)
+        assertEquals(listOf("Jun", null, null, "Jul", null, null), labels)
     }
 
     @Test
@@ -95,18 +97,35 @@ class HeatMapMathTest {
                 LocalDate(2024, 6, 24),
                 LocalDate(2024, 7, 1),
                 LocalDate(2024, 7, 8),
+                LocalDate(2024, 7, 15),
             ),
         )
-        assertEquals(listOf(null, "Jul", null), labels)
+        assertEquals(listOf(null, "Jul", null, null), labels)
     }
 
     @Test
-    fun `a full year of columns carries thirteen month labels`() {
+    fun `a month entering within the last two columns stays unlabeled`() {
+        // The label would clip at the grid's right edge mid-word.
+        val labels = monthLabels(
+            listOf(
+                LocalDate(2024, 6, 10),
+                LocalDate(2024, 6, 17),
+                LocalDate(2024, 6, 24),
+                LocalDate(2024, 7, 1),
+            ),
+        )
+        assertEquals(listOf("Jun", null, null, null), labels)
+    }
+
+    @Test
+    fun `a full year of columns carries twelve month labels`() {
         val labels = monthLabels(weekStarts(LocalDate(2023, 7, 3), LocalDate(2024, 7, 3)))
         assertEquals(53, labels.size)
-        assertEquals(13, labels.count { it != null })
+        // Every month once; the year-old leading July included, the brand-new
+        // July at the right edge suppressed for room.
+        assertEquals(12, labels.count { it != null })
         assertEquals("Jul", labels.first())
-        assertEquals("Jul", labels.last())
+        assertNull(labels.last())
     }
 
     @Test
