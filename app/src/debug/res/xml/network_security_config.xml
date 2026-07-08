@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds talk to a local dev proxy over plain HTTP: the emulator via
+     10.0.2.2, a USB device via adb-reverse on 127.0.0.1, or a LAN address.
+     Those can't be enumerated ahead of time, so debug permits cleartext
+     globally. Release keeps the platform default: cleartext blocked. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
