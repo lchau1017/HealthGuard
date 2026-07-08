@@ -1,31 +1,30 @@
 # HealthGuard
 
-**Photograph a medication box → a vision LLM reads the label → a dosing
-schedule, reminders-ready dose log, and honest adherence analytics.**
+Take a photo of a medication box, and the app reads the label, builds a dosing
+schedule and tracks whether you actually take the stuff — with a GitHub-style
+activity graph for your health.
 
-HealthGuard is a personal health-behaviour tracker for Android (Kotlin
-Multiplatform). Its first module is medication tracking with a full
-*recognize → structure → verify → act* pipeline — deliberately designed so
-the AI only ever transcribes what is printed, and a human confirms every
-uncertain field before anything is saved. Further modules — activity/running,
-food and sleep tracking — are designed to feed the same activity history.
+I'm building this as a personal health tracker. Medication is the first
+module; I want to add running, food and sleep later, all feeding the same
+history. It's an Android app written in Kotlin Multiplatform, with a small
+Ktor backend that talks to a vision LLM.
 
 > **HealthGuard is an informational and reminder tool, not medical advice.**
 > It never makes medical judgements. Always consult your doctor or pharmacist.
 
 ## Screenshots
 
-| Home — today at a glance | Activity — 12-month record | Day detail |
+| Scan a real box | Home | Activity |
 |---|---|---|
-| ![Home](docs/screenshots/home.png) | ![Activity 12 months](docs/screenshots/activity-12-months.png) | ![Day detail sheet](docs/screenshots/day-detail-sheet.png) |
-| Due alert only when a dose is due; week circles with an honest "5 of 6 days on track"; per-row status (*Take* / *Taken ✓* / *Next in 2h 30m*); treatment-phase chips (*Not started*, *Stopped 24 Jun*) | GitHub-style contribution grid with month labels; stat tiles; per-medicine adherence with the clinical 80% target tick, *as-needed* and *stopped* rows | Tap any day square: which medicines, how many doses, at what times — including *expected but not recorded* |
+| <img src="docs/screenshots/scan-review.png" width="250"> | <img src="docs/screenshots/home.png" width="250"> | <img src="docs/screenshots/activity-12-months.png" width="250"> |
+| The model read this ibuprofen box I photographed. It wasn't sure about "take with food", so that field is locked until I check it myself. | Only shows an alert when something is actually due. The week circles don't lie — "5 of 6 days on track" because I really did miss a dose. | 12-month record like a GitHub contribution graph, plus each medicine's adherence with the 80% line clinicians use. |
 
-| Activity — 7-day view | Medication detail | Dose history |
+| Tap a day | Medication detail | Dose history |
 |---|---|---|
-| ![Activity 7 days](docs/screenshots/activity-7-days.png) | ![Medication detail](docs/screenshots/medication-detail.png) | ![Dose history](docs/screenshots/dose-history.png) |
-| The range chips re-render the whole tab — grid, tiles and adherence all describe one window | Per-second countdown, last-taken time, meal-aligned dose times, five-state completeness map (*All taken · Some · Not taken · Skipped · Not tracking*) | Every dose annotated: *on time*, *N min late*, *Skipped*, *Missed*, *Not recorded* |
+| <img src="docs/screenshots/day-detail-sheet.png" width="250"> | <img src="docs/screenshots/medication-detail.png" width="250"> | <img src="docs/screenshots/dose-history.png" width="250"> |
+| Any square tells you what happened that day — which medicines, what times, and what was expected but never recorded. | Live countdown to the next dose, last-taken time, and a five-state history map (taken / some / not taken / skipped / not tracking). | Every dose is annotated: on time, 12 min late, skipped, missed, or not recorded. |
 
-## The pipeline
+## How it works
 
 ```
 ┌──────────────┐  photo (base64)  ┌────────────────┐  forced JSON schema  ┌────────────┐
@@ -34,71 +33,59 @@ food and sleep tracking — are designed to feed the same activity history.
 └──────────────┘  extraction JSON │   the API key) │                      └────────────┘
 ```
 
-1. **Capture** — camera or gallery; the image is downscaled and compressed
-   on-device before upload.
-2. **Extract** — the backend forwards the photo to a vision LLM
-   (`qwen/qwen2.5-vl-72b-instruct` via OpenRouter, swappable by config) with a
-   **forced JSON schema** (structured outputs): drug name, dosage, form,
-   active ingredients, frequency, with-food — each wrapped with a
-   self-reported confidence score.
-3. **Verify** — the app validates the response against the schema through a
-   boundary-safe parser that *never throws on malformed model output*, then
-   applies **confidence gating**: every field below the threshold is flagged
-   and must be confirmed or corrected by the user before Accept unlocks.
-4. **Act** — accepted medications get meal-aligned dose schedules (nothing
-   between 22:00 and 08:00), one-tap dose logging with undo and a
-   double-dose guard, and adherence analytics measured against the schedule.
+The photo gets downscaled on the phone, sent to my Ktor server, and forwarded
+to a vision model (`qwen/qwen2.5-vl-72b-instruct` via OpenRouter — it's just a
+config value, any vision model works). I force the model to answer in a fixed
+JSON schema: drug name, dosage, form, ingredients, frequency, with-food, each
+with a confidence score.
 
-### Why the LLM never makes medical decisions
+The important design decision: **the model only transcribes, it never
+decides anything.** The app treats its output as untrusted input — there's a
+parser that survives garbage JSON, NaN confidence values and hallucinated
+frequencies like "3,000,000 times a day" (all of that degrades to "please
+check this field" instead of crashing or saving bad data). Any field the
+model wasn't confident about is locked until you confirm or correct it.
+Everything safety-related — dose timing, the double-dose warning, the
+adherence maths — is plain deterministic Kotlin with tests.
 
-The model's only job is transcription. It cannot invent dosing advice
-(the extraction prompt forbids inference), it cannot silently save uncertain
-data (confidence gating), and it cannot crash or corrupt the app with
-malformed output (the parser treats the model as an untrusted input source —
-NaN confidence values, absurd frequencies like "3,000,000 times a day", and
-garbage JSON all degrade to *needs review* instead of propagating).
-Safety-relevant behaviour — dose timing, double-dose warnings, adherence
-maths — is deterministic, unit-tested Kotlin.
-
-## Architecture
+## Modules
 
 | Module | What it is |
 |---|---|
-| `app/` | Android app — Jetpack Compose (Material 3, custom brand theme), Koin DI, MVVM with unidirectional state |
-| `shared/` | Kotlin Multiplatform library — extraction parsing, dose-schedule domain logic, SQLDelight persistence. Android + JVM targets today, structured to add iOS |
-| `backend/server/` | Ktor server — `POST /extract` forwards a label photo to the vision model with a strict JSON schema; the API key lives only here |
+| `app/` | The Android app — Jetpack Compose, Material 3, Koin |
+| `shared/` | Kotlin Multiplatform library — label parsing, dose scheduling, SQLDelight persistence. Android + JVM now, room for iOS later |
+| `backend/server/` | Small Ktor server with one endpoint. It exists so the API key never ships inside the app |
 
-Clean-architecture layering inside the shared module: pure domain functions
-(`nextDose`, `expectedDoseTimes`, adherence maths — all clock-injected and
-timezone-explicit, with DST transition tests), a repository over SQLDelight,
-and Ktor networking behind a swappable `VisionExtractor` interface.
+The domain logic in `shared` is pure functions — the clock and timezone are
+always passed in, which is why I could test things like DST transitions and
+half-hour timezones properly.
 
-### Adherence, done the way clinicians measure it
+## How adherence is counted
 
-Percentages are computed against the **schedule**, not the log book — days
-with no records count as gaps instead of silently vanishing. The model
-follows the clinical **ABC taxonomy** (initiation / implementation /
-persistence): medicines that were never started are labelled *Not started*
-rather than polluting adherence stats, stopped treatments report *"% while
-taking"*, deliberate skips are excluded from the target and shown separately,
-and the **80% threshold** used in adherence research is marked directly on
-every medicine's bar. "Every N hours" labels state a maximum, not an
-obligation — those medicines are tracked *as-needed* instead of being
-penalised for phantom around-the-clock doses.
+This took a few iterations to get honest. Percentages are measured against
+the **schedule**, not against whatever happens to be logged — if you ignore
+the app for three days, those days count as gaps instead of silently
+disappearing from the maths.
 
-## Engineering practices
+It follows the same taxonomy clinicians use (initiation / implementation /
+persistence): a medicine you never started is labelled "Not started" instead
+of dragging the stats around, a stopped one reports "% while taking", and a
+dose you deliberately skipped is not the same thing as one you forgot. Labels
+like "every 6 hours" state a maximum, not an obligation, so those medicines
+are tracked as-needed rather than being punished for not taking pills at 3am.
+The 80% line on the bars is the threshold most adherence research uses.
 
-- **300+ tests** across all three modules, written test-first: parser
-  boundary tests (malformed JSON, hostile confidence values), dose-time
-  maths across DST transitions and exotic timezones, ViewModels tested
-  against a real in-memory database rather than mocks, deterministic
-  seeded demo data with pinned expected values.
-- **CI** (GitHub Actions): every push runs all test suites, Android Lint and
-  an APK assembly.
-- **Privacy by design**: health data never leaves the device; label photos
-  pass through the backend to the model provider for extraction only and are
-  never stored or logged; deleting a medication erases its entire history
-  (right to erasure); release builds block all cleartext traffic.
+## Testing
+
+300+ tests across the three modules, written test-first. The ones I care
+most about: parser boundary tests (the LLM is an adversary as far as the
+parser is concerned), dose-time maths across DST changes, and ViewModel tests
+that run against a real in-memory database instead of mocks. CI runs all of
+it plus lint on every push.
+
+Health data stays on the device. Photos go to the model provider for
+extraction and nowhere else — the backend never stores or logs them. Deleting
+a medication wipes its whole history.
 
 ## Prerequisites
 
