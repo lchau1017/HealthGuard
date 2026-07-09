@@ -2,6 +2,7 @@
 
 package com.healthguard.home
 
+import com.healthguard.common.format.shortName
 import com.healthguard.shared.data.StoredSchedule
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -35,11 +36,7 @@ fun stoppedLabel(stoppedAt: Instant, now: Instant, zone: TimeZone): String {
     val day = when (date) {
         today -> "today"
         today.minus(1, DateTimeUnit.DAY) -> "yesterday"
-        else -> {
-            val month = date.month.name.lowercase()
-                .replaceFirstChar { it.uppercase() }.take(3)
-            "${date.day} $month"
-        }
+        else -> "${date.day} ${date.month.shortName()}"
     }
     return "Stopped $day"
 }

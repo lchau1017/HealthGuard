@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.healthguard.common.format.shortName
 import com.healthguard.common.theme.heatRamp
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
@@ -60,7 +61,7 @@ internal fun monthLabels(weekStarts: List<LocalDate>): List<String?> =
             weekStarts.drop(1).take(2).all { it.month == monday.month }
         val trailingRoom = index <= weekStarts.size - 3
         if ((entersNewMonth || leadingWithRoom) && trailingRoom) {
-            monday.shortMonthName()
+            monday.month.shortName()
         } else {
             null
         }
@@ -68,9 +69,6 @@ internal fun monthLabels(weekStarts: List<LocalDate>): List<String?> =
 
 /** Single-letter weekday mark under the 7-day row: M T W T F S S. */
 internal fun weekdayInitial(date: LocalDate): String = date.dayOfWeek.name.take(1)
-
-private fun LocalDate.shortMonthName(): String =
-    month.name.lowercase().replaceFirstChar { it.uppercase() }.take(3)
 
 private const val HEAT_LEVELS = 4
 private const val DAYS_PER_WEEK = 7

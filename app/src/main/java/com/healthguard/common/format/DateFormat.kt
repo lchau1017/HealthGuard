@@ -2,6 +2,7 @@ package com.healthguard.common.format
 
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.Month
 
 /** Locale-simple 12-hour clock text: "9:00 PM", "8:02 AM", "12:05 AM". */
 fun timeLabel(time: LocalTime): String {
@@ -19,6 +20,9 @@ fun todayLabel(date: LocalDate): String =
     "${date.dayOfWeek.titleCase()}, ${date.day} ${date.month.titleCase()}"
 
 internal fun LocalDate.shortDayName(): String = dayOfWeek.titleCase().take(3)
+
+/** Three-letter month name — "Jul" — shared by every short date label. */
+internal fun Month.shortName(): String = titleCase().take(3)
 
 internal fun Enum<*>.titleCase(): String =
     name.lowercase().replaceFirstChar { it.uppercase() }

@@ -3,8 +3,8 @@
 package com.healthguard.detail
 
 import com.healthguard.common.format.shortDayName
+import com.healthguard.common.format.shortName
 import com.healthguard.common.format.timeLabel
-import com.healthguard.common.format.titleCase
 import com.healthguard.shared.data.DoseStatus
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -19,7 +19,7 @@ import kotlinx.datetime.toLocalDateTime
 
 /** Compact full date for schedule metadata: "27 Jun 2026". */
 fun mediumDateLabel(date: LocalDate): String =
-    "${date.day} ${date.month.titleCase().take(3)} ${date.year}"
+    "${date.day} ${date.month.shortName()} ${date.year}"
 
 /** Dose timestamp with a relative day: "Today, 8:02 AM" / "Mon 6 Jul, 8:00 AM". */
 fun dayTimeLabel(at: Instant, now: Instant, zone: TimeZone): String {
@@ -28,7 +28,7 @@ fun dayTimeLabel(at: Instant, now: Instant, zone: TimeZone): String {
     val day = when (local.date) {
         today -> "Today"
         today.minus(1, DateTimeUnit.DAY) -> "Yesterday"
-        else -> "${local.date.shortDayName()} ${local.date.day} ${local.date.month.titleCase().take(3)}"
+        else -> "${local.date.shortDayName()} ${local.date.day} ${local.date.month.shortName()}"
     }
     return "$day, ${timeLabel(local.time)}"
 }
