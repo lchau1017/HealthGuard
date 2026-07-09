@@ -397,7 +397,7 @@ class ConfirmViewModelTest {
         )
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
-        vm.onIntent(ConfirmIntent.Accept(null))
+        vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.runCurrent()
         assertTrue(vm.state.value is ConfirmUiState.Review)
 
@@ -425,7 +425,8 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onIntent(ConfirmIntent.Accept("Heart"))
+        vm.onIntent(ConfirmIntent.LabelChanged("Heart"))
+        vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(ConfirmEffect.Saved, vm.effects.first())
@@ -456,7 +457,7 @@ class ConfirmViewModelTest {
         val vm = viewModelWith(extractor)
         vm.onIntent(ConfirmIntent.ImagePicked("img-1"))
         dispatcher.scheduler.advanceUntilIdle()
-        vm.onIntent(ConfirmIntent.Accept(null))
+        vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
         assertEquals(ConfirmUiState.Idle, vm.state.value)
 
@@ -478,7 +479,7 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onIntent(ConfirmIntent.Accept(null))
+        vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(Frequency.EveryHours(6), storedMedications().single().schedule.frequency)
@@ -492,7 +493,7 @@ class ConfirmViewModelTest {
 
         vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DRUG_NAME, "Paracetamol"))
         vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, "500 mg"))
-        vm.onIntent(ConfirmIntent.Accept(null))
+        vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
 
         val stored = storedMedications().single()
@@ -506,10 +507,24 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onIntent(ConfirmIntent.Accept("   "))
+        vm.onIntent(ConfirmIntent.LabelChanged("   "))
+        vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(storedMedications().single().medication.label)
+    }
+
+    @Test
+    fun `label edits live in the review state`() = runTest(dispatcher) {
+        val vm = viewModel(ExtractionResult.Success(extraction()))
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals("", (vm.state.value as ConfirmUiState.Review).label)
+
+        // The label is business data: it belongs to the ViewState, not to
+        // composition state that dies with the dialog.
+        vm.onIntent(ConfirmIntent.LabelChanged("Heart"))
+        assertEquals("Heart", (vm.state.value as ConfirmUiState.Review).label)
     }
 
     @Test
@@ -519,7 +534,7 @@ class ConfirmViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_FREQUENCY, "every 8 hours"))
-        vm.onIntent(ConfirmIntent.Accept(null))
+        vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(Frequency.EveryHours(8), storedMedications().single().schedule.frequency)
@@ -532,7 +547,7 @@ class ConfirmViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_FREQUENCY, "whenever it hurts"))
-        vm.onIntent(ConfirmIntent.Accept(null))
+        vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(storedMedications().single().schedule.frequency)
@@ -545,7 +560,7 @@ class ConfirmViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_WITH_FOOD, "No"))
-        vm.onIntent(ConfirmIntent.Accept(null))
+        vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(false, storedMedications().single().schedule.withFood)
@@ -559,7 +574,7 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onIntent(ConfirmIntent.Accept(null))
+        vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(vm.state.value is ConfirmUiState.Review)
@@ -583,7 +598,7 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onIntent(ConfirmIntent.Accept(null))
+        vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
 
         val error = vm.state.value as ConfirmUiState.Error
@@ -599,7 +614,7 @@ class ConfirmViewModelTest {
         )
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
-        vm.onIntent(ConfirmIntent.Accept(null))
+        vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value is ConfirmUiState.Error)
 
@@ -632,18 +647,20 @@ class ConfirmViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, "500 mg"))
-        vm.onIntent(ConfirmIntent.Accept("Heart"))
+        vm.onIntent(ConfirmIntent.LabelChanged("Heart"))
+        vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value is ConfirmUiState.Error)
 
         vm.onIntent(ConfirmIntent.Retry)
-        // The review comes back exactly as the user left it — the edit
-        // survives; nothing was re-extracted.
+        // The review comes back exactly as the user left it — the edit and
+        // the category label survive; nothing was re-extracted.
         val review = vm.state.value as ConfirmUiState.Review
         assertEquals(
             "500 mg",
             review.fields.first { it.key == ConfirmViewModel.KEY_DOSAGE }.value,
         )
+        assertEquals("Heart", review.label)
         assertEquals(1, extractor.calls.size)
 
         // And the save was attempted again, succeeding this time.

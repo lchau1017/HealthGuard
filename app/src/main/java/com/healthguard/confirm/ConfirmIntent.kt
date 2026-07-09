@@ -14,8 +14,11 @@ sealed interface ConfirmIntent {
     /** The user tapped "Looks right" on a flagged field. */
     data class FieldConfirmed(val key: String) : ConfirmIntent
 
-    /** Persist the reviewed medication under the optional category [label]. */
-    data class Accept(val label: String?) : ConfirmIntent
+    /** The user edited the optional category label. */
+    data class LabelChanged(val value: String) : ConfirmIntent
+
+    /** Persist the reviewed medication (with the label held in the review state). */
+    data object Accept : ConfirmIntent
 
     /** Dismiss the flow and return to Idle. */
     data object Reset : ConfirmIntent

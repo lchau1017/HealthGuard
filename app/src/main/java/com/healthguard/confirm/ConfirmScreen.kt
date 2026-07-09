@@ -19,10 +19,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -68,10 +64,12 @@ fun ConfirmDialog(
                 is ConfirmUiState.Idle, is ConfirmUiState.Extracting -> ExtractingContent()
                 is ConfirmUiState.Review -> ReviewContent(
                     fields = current.fields,
+                    label = current.label,
                     canAccept = current.canAccept,
                     onFieldEdited = { key, value -> onIntent(ConfirmIntent.FieldEdited(key, value)) },
                     onFieldConfirmed = { key -> onIntent(ConfirmIntent.FieldConfirmed(key)) },
-                    onAccept = { label -> onIntent(ConfirmIntent.Accept(label)) },
+                    onLabelChange = { onIntent(ConfirmIntent.LabelChanged(it)) },
+                    onAccept = { onIntent(ConfirmIntent.Accept) },
                     onCancel = { onIntent(ConfirmIntent.Reset) },
                 )
                 is ConfirmUiState.Error -> ErrorContent(
@@ -103,15 +101,15 @@ private fun ExtractingContent(modifier: Modifier = Modifier) {
 @Composable
 private fun ReviewContent(
     fields: List<ReviewField>,
+    label: String,
     canAccept: Boolean,
     onFieldEdited: (String, String) -> Unit,
     onFieldConfirmed: (String) -> Unit,
-    onAccept: (String?) -> Unit,
+    onLabelChange: (String) -> Unit,
+    onAccept: () -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var label by rememberSaveable { mutableStateOf("") }
-
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -136,14 +134,17 @@ private fun ReviewContent(
             Spacer(Modifier.height(12.dp))
         }
 
+        // The label is business data and lives in the Review state (like the
+        // detail form's LabelChanged), so it survives the composition dying —
+        // an Error → Retry round-trip included — instead of resetting.
         CategoryLabelInput(
             label = label,
-            onLabelChange = { label = it },
+            onLabelChange = onLabelChange,
         )
 
         Spacer(Modifier.height(20.dp))
         Button(
-            onClick = { onAccept(label) },
+            onClick = onAccept,
             enabled = canAccept,
             modifier = Modifier.fillMaxWidth(),
         ) {
