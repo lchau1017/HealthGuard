@@ -71,7 +71,6 @@ internal fun monthLabels(weekStarts: List<LocalDate>): List<String?> =
 internal fun weekdayInitial(date: LocalDate): String = date.dayOfWeek.name.take(1)
 
 private const val HEAT_LEVELS = 4
-private const val DAYS_PER_WEEK = 7
 
 /**
  * GitHub-style count heat map: the brand's sequential sage ramp over the

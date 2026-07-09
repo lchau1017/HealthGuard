@@ -2,6 +2,7 @@
 
 package com.healthguard.home.domain
 
+import com.healthguard.activity.DAYS_PER_WEEK
 import com.healthguard.home.WeekDay
 import com.healthguard.home.isActive
 import com.healthguard.home.todayHasPendingSlots
@@ -53,9 +54,6 @@ data class HomeContent(
     val now: Instant,
 )
 
-/** Days covered by the home "This week" card, today included. */
-private const val WEEK_WINDOW_DAYS = 7
-
 /**
  * Computes [HomeContent] from the current medication [rows] and the wall clock.
  * Ports the ViewModel's `buildState` calculation without its presentation
@@ -97,7 +95,7 @@ class ComputeHomeStateUseCase(
         // Week card window: the last seven days ending today. Query upper bound
         // is exclusive, so pad past `now` to include a take at this exact instant.
         val weekLogs = repository.doseLogsInRange(
-            from = today.minus(WEEK_WINDOW_DAYS - 1, DateTimeUnit.DAY).atStartOfDayIn(zone),
+            from = today.minus(DAYS_PER_WEEK - 1, DateTimeUnit.DAY).atStartOfDayIn(zone),
             to = now + 1.minutes,
         )
         // Every schedule goes in: expected doses clip themselves to each
