@@ -40,10 +40,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -75,6 +73,7 @@ import com.healthguard.shared.data.MedicationWithSchedule
 import com.healthguard.common.ui.CategoryChip
 import com.healthguard.common.ui.DoubleDoseDialog
 import com.healthguard.common.ui.StatusChip
+import com.healthguard.common.ui.showUndoTakeSnackbar
 import com.healthguard.common.theme.heatRamp
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -120,16 +119,10 @@ fun HomeScreen(
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             effects.collect { effect ->
                 when (effect) {
-                    is HomeEffect.ShowUndoSnackbar -> {
-                        val result = snackbarHostState.showSnackbar(
-                            message = "${effect.take.drugName} recorded",
-                            actionLabel = "Undo",
-                            duration = SnackbarDuration.Short,
-                        )
-                        if (result == SnackbarResult.ActionPerformed) {
+                    is HomeEffect.ShowUndoSnackbar ->
+                        if (snackbarHostState.showUndoTakeSnackbar(effect.take)) {
                             onIntent(HomeIntent.UndoTake(effect.take.doseId))
                         }
-                    }
                 }
             }
         }
