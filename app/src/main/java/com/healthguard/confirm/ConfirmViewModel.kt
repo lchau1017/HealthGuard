@@ -44,6 +44,16 @@ class ConfirmViewModel(
     private var saving = false
 
     /**
+     * The review (and its accept label) as it stood when a save failed, so
+     * Retry can restore it and attempt the save again. Re-extracting instead
+     * would rebuild the review from scratch and throw away every edit and
+     * confirmation the user made. Null unless the current Error came from a
+     * failed save.
+     */
+    private var reviewAwaitingSaveRetry: ConfirmUiState.Review? = null
+    private var lastAcceptLabel: String? = null
+
+    /**
      * The single in-flight extraction/save job. [reset] cancels it: a
      * dismissed dialog must stay dismissed, not pop back open when a
      * long-running network call finally returns.
@@ -54,11 +64,26 @@ class ConfirmViewModel(
     fun onIntent(intent: ConfirmIntent) {
         when (intent) {
             is ConfirmIntent.ImagePicked -> encodeAndExtract(intent.uri)
-            ConfirmIntent.Retry -> lastImageBase64?.let { extract(it) }
+            ConfirmIntent.Retry -> retry()
             is ConfirmIntent.FieldEdited -> fieldEdited(intent.key, intent.value)
             is ConfirmIntent.FieldConfirmed -> updateField(intent.key) { it.copy(userConfirmed = true) }
             is ConfirmIntent.Accept -> accept(intent.label)
             ConfirmIntent.Reset -> reset()
+        }
+    }
+
+    /**
+     * A save failure retries the save with the user's reviewed fields intact;
+     * only extraction errors re-run extraction on the last image.
+     */
+    private fun retry() {
+        val review = reviewAwaitingSaveRetry
+        if (review != null) {
+            reviewAwaitingSaveRetry = null
+            _state.value = review
+            accept(lastAcceptLabel)
+        } else {
+            lastImageBase64?.let { extract(it) }
         }
     }
 
@@ -120,8 +145,13 @@ class ConfirmViewModel(
                 throw cancellation
             } catch (_: Exception) {
                 // Only surface the failure while the review is still showing;
-                // a dialog dismissed mid-save must stay dismissed.
-                if (_state.value is ConfirmUiState.Review) {
+                // a dialog dismissed mid-save must stay dismissed. Keep the
+                // reviewed fields (with any mid-save edits) so Retry can
+                // restore them instead of re-extracting.
+                val current = _state.value as? ConfirmUiState.Review
+                if (current != null) {
+                    reviewAwaitingSaveRetry = current
+                    lastAcceptLabel = label
                     _state.value = ConfirmUiState.Error(MESSAGE_SAVE_FAILED, retriable = true)
                 }
             } finally {
@@ -134,6 +164,8 @@ class ConfirmViewModel(
         workJob?.cancel()
         workJob = null
         lastImageBase64 = null
+        reviewAwaitingSaveRetry = null
+        lastAcceptLabel = null
         saving = false
         _state.value = ConfirmUiState.Idle
     }
@@ -146,6 +178,9 @@ class ConfirmViewModel(
      * there is no image to retry against.
      */
     private fun encodeAndExtract(uri: String) {
+        // A fresh image starts a fresh flow; no stale save retry may linger.
+        reviewAwaitingSaveRetry = null
+        lastAcceptLabel = null
         _state.value = ConfirmUiState.Extracting
         workJob?.cancel()
         workJob = viewModelScope.launch {

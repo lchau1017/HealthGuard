@@ -568,12 +568,7 @@ class ConfirmViewModelTest {
     @Test
     fun `accept can be attempted again after a failed save`() = runTest(dispatcher) {
         val vm = viewModelWith(
-            FakeExtractor(
-                mutableListOf(
-                    ExtractionResult.Success(extraction()),
-                    ExtractionResult.Success(extraction()),
-                ),
-            ),
+            FakeExtractor(mutableListOf(ExtractionResult.Success(extraction()))),
             failingRepository(),
         )
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
@@ -582,15 +577,54 @@ class ConfirmViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value is ConfirmUiState.Error)
 
-        // Retry re-extracts; a second Accept must attempt the insert again
-        // (failing again here) rather than being swallowed by a stuck saving
-        // flag, which would leave the state silently stuck in Review.
+        // Retry restores the review; the retried save must attempt the insert
+        // again (failing again here) rather than being swallowed by a stuck
+        // saving flag, which would leave the state silently stuck in Review.
         vm.onIntent(ConfirmIntent.Retry)
         dispatcher.scheduler.advanceUntilIdle()
-        assertTrue(vm.state.value is ConfirmUiState.Review)
+        assertTrue(vm.state.value is ConfirmUiState.Error)
+    }
 
-        vm.onIntent(ConfirmIntent.Accept(null))
+    private class FailOnceRepository(
+        private val delegate: MedicationRepository,
+    ) : MedicationRepository by delegate {
+        var failuresRemaining = 1
+        override suspend fun insertMedication(medication: StoredMedication, schedule: StoredSchedule) {
+            if (failuresRemaining > 0) {
+                failuresRemaining--
+                throw RuntimeException("save failed")
+            }
+            delegate.insertMedication(medication, schedule)
+        }
+    }
+
+    @Test
+    fun `retry after a failed save restores the edited review and saves it again`() = runTest(dispatcher) {
+        val extractor = FakeExtractor(mutableListOf(ExtractionResult.Success(extraction())))
+        val vm = viewModelWith(extractor, FailOnceRepository(repository))
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, "500 mg"))
+        vm.onIntent(ConfirmIntent.Accept("Heart"))
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value is ConfirmUiState.Error)
+
+        vm.onIntent(ConfirmIntent.Retry)
+        // The review comes back exactly as the user left it — the edit
+        // survives; nothing was re-extracted.
+        val review = vm.state.value as ConfirmUiState.Review
+        assertEquals(
+            "500 mg",
+            review.fields.first { it.key == ConfirmViewModel.KEY_DOSAGE }.value,
+        )
+        assertEquals(1, extractor.calls.size)
+
+        // And the save was attempted again, succeeding this time.
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(ConfirmEffect.Saved, vm.effects.first())
+        val stored = storedMedications().single()
+        assertEquals("500 mg", stored.medication.dosage)
+        assertEquals("Heart", stored.medication.label)
     }
 }
