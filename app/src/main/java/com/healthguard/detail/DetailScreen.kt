@@ -59,6 +59,7 @@ import com.healthguard.activity.DayCount
 import com.healthguard.activity.DayDetailSheet
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.activity.HeatMapGrid
+import com.healthguard.common.format.targetCaption
 import com.healthguard.common.format.timeLabel
 import com.healthguard.common.format.toHumanText
 import com.healthguard.home.MedicationPhase
@@ -528,7 +529,7 @@ private fun HistorySection(
         if (!isAsNeeded) {
             adherence.meetsTarget?.let { meets ->
                 Text(
-                    text = if (meets) "Meets 80% target" else "Below 80% target",
+                    text = targetCaption(meets),
                     style = MaterialTheme.typography.labelSmall,
                     color = if (meets) {
                         MaterialTheme.colorScheme.primary

@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.healthguard.common.format.hourLabel
+import com.healthguard.common.format.targetCaption
 import com.healthguard.home.MedicationPhase
 import kotlin.time.ExperimentalTime
 import kotlinx.datetime.LocalDate
@@ -400,7 +401,7 @@ private fun TargetCaption(meets: Boolean, modifier: Modifier = Modifier) {
             Spacer(Modifier.width(4.dp))
         }
         Text(
-            text = if (meets) "Meets 80% target" else "Below 80% target",
+            text = targetCaption(meets),
             style = MaterialTheme.typography.labelSmall,
             color = if (meets) {
                 MaterialTheme.colorScheme.primary
