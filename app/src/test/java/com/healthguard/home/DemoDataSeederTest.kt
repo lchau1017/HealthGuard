@@ -1,11 +1,10 @@
 @file:OptIn(ExperimentalCoroutinesApi::class, ExperimentalTime::class)
 
-package com.healthguard.demo
+package com.healthguard.home
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.activity.adherenceResult
-import com.healthguard.home.weekDayStates
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.SqlDelightMedicationRepository

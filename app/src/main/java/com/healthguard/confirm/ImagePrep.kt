@@ -1,4 +1,4 @@
-package com.healthguard.capture
+package com.healthguard.confirm
 
 import android.content.Context
 import android.graphics.Bitmap

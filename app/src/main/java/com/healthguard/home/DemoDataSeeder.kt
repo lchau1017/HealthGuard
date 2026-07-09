@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalTime::class)
 
-package com.healthguard.demo
+package com.healthguard.home
 
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository

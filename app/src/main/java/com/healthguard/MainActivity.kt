@@ -27,13 +27,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import com.healthguard.activity.ActivityScreen
 import com.healthguard.activity.ActivityViewModel
-import com.healthguard.capture.loadDownsampledBitmap
-import com.healthguard.capture.toUploadJpegBase64
 import com.healthguard.confirm.ConfirmDialog
 import com.healthguard.confirm.ConfirmEffect
 import com.healthguard.confirm.ConfirmIntent
 import com.healthguard.confirm.ConfirmUiState
 import com.healthguard.confirm.ConfirmViewModel
+import com.healthguard.confirm.loadDownsampledBitmap
+import com.healthguard.confirm.toUploadJpegBase64
 import com.healthguard.detail.DetailFinished
 import com.healthguard.detail.DetailIntent
 import com.healthguard.detail.DetailScreen
