@@ -61,10 +61,10 @@ class ComputeHomeStateUseCase(
     private val clock: () -> Instant,
     private val zone: TimeZone,
 ) {
-    suspend operator fun invoke(
-        rows: List<MedicationWithSchedule>,
-        now: Instant,
-    ): HomeContent {
+    suspend operator fun invoke(rows: List<MedicationWithSchedule>): HomeContent {
+        // One wall-clock reading per computation keeps every derived instant
+        // (next dose, due window, week strip) on the same "now".
+        val now = clock()
         val today = now.toLocalDateTime(zone).date
         val taking = rows.filter { it.isActive }
             .map { row ->

@@ -7,6 +7,12 @@ import com.healthguard.activity.ActivityViewModel
 import com.healthguard.confirm.ConfirmViewModel
 import com.healthguard.detail.DetailViewModel
 import com.healthguard.home.HomeViewModel
+import com.healthguard.home.domain.ActivateMedicationUseCase
+import com.healthguard.home.domain.ComputeHomeStateUseCase
+import com.healthguard.home.domain.DeleteMedicationUseCase
+import com.healthguard.home.domain.RecordDoseUseCase
+import com.healthguard.home.domain.StopMedicationUseCase
+import com.healthguard.home.domain.UndoDoseUseCase
 import com.healthguard.shared.data.DriverFactory
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.SqlDelightMedicationRepository
@@ -20,6 +26,7 @@ import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.Dispatchers
+import kotlinx.datetime.TimeZone
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -44,8 +51,15 @@ val appModule = module {
 
     single<() -> Instant> { { Clock.System.now() } }
 
+    factory { ComputeHomeStateUseCase(get(), get(), TimeZone.currentSystemDefault()) }
+    factory { RecordDoseUseCase(get(), get()) }
+    factory { UndoDoseUseCase(get()) }
+    factory { ActivateMedicationUseCase(get(), get()) }
+    factory { StopMedicationUseCase(get(), get()) }
+    factory { DeleteMedicationUseCase(get()) }
+
     viewModel { ConfirmViewModel(get(), get(), Dispatchers.IO, get()) }
-    viewModel { HomeViewModel(get(), get()) }
+    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { ActivityViewModel(get(), get()) }
     viewModel { (medicationId: String) ->
         DetailViewModel(repository = get(), clock = get(), medicationId = medicationId)

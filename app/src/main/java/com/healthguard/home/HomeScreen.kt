@@ -67,7 +67,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.healthguard.BuildConfig
 import com.healthguard.activity.DoseDayStatus
-import com.healthguard.dose.RecordedTake
 import com.healthguard.format.DoseRowStatus
 import com.healthguard.format.takeByText
 import com.healthguard.format.todayLabel
@@ -79,6 +78,7 @@ import com.healthguard.ui.theme.heatRamp
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
+import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
@@ -91,22 +91,14 @@ import kotlinx.datetime.toLocalDateTime
 @Composable
 fun HomeScreen(
     state: HomeUiState,
-    takeConfirm: TakeConfirmation?,
-    recentTake: RecordedTake?,
-    onTakeNow: (DoseCard) -> Unit,
-    onConfirmTakeAnyway: () -> Unit,
-    onDismissTakeConfirm: () -> Unit,
-    onUndoTake: (String) -> Unit,
-    onRecentTakeHandled: () -> Unit,
-    onPlay: (String) -> Unit,
+    onIntent: (HomeIntent) -> Unit,
+    effects: Flow<HomeEffect>,
     onOpenDetail: (String) -> Unit,
     onOpenActivity: () -> Unit,
     onTakePhoto: () -> Unit,
     onPickFromGallery: () -> Unit,
     modifier: Modifier = Modifier,
     bottomBar: @Composable () -> Unit = {},
-    onLoadDemoData: () -> Unit = {},
-    onRemoveDemoData: () -> Unit = {},
 ) {
     var showSourceSheet by remember { mutableStateOf(false) }
     var showDisclaimer by remember { mutableStateOf(false) }
@@ -120,17 +112,20 @@ fun HomeScreen(
 
     // One undo snackbar per recorded take; timing out or dismissing keeps
     // the dose, only the explicit Undo action removes it.
-    LaunchedEffect(recentTake) {
-        val take = recentTake ?: return@LaunchedEffect
-        val result = snackbarHostState.showSnackbar(
-            message = "${take.drugName} recorded",
-            actionLabel = "Undo",
-            duration = SnackbarDuration.Short,
-        )
-        if (result == SnackbarResult.ActionPerformed) {
-            onUndoTake(take.doseId)
-        } else {
-            onRecentTakeHandled()
+    LaunchedEffect(Unit) {
+        effects.collect { effect ->
+            when (effect) {
+                is HomeEffect.ShowUndoSnackbar -> {
+                    val result = snackbarHostState.showSnackbar(
+                        message = "${effect.take.drugName} recorded",
+                        actionLabel = "Undo",
+                        duration = SnackbarDuration.Short,
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        onIntent(HomeIntent.UndoTake(effect.take.doseId))
+                    }
+                }
+            }
         }
     }
 
@@ -166,14 +161,14 @@ fun HomeScreen(
                                 text = { Text("Load demo data") },
                                 onClick = {
                                     demoMenuOpen = false
-                                    onLoadDemoData()
+                                    onIntent(HomeIntent.LoadDemoData)
                                 },
                             )
                             DropdownMenuItem(
                                 text = { Text("Remove demo data") },
                                 onClick = {
                                     demoMenuOpen = false
-                                    onRemoveDemoData()
+                                    onIntent(HomeIntent.RemoveDemoData)
                                 },
                             )
                         }
@@ -225,7 +220,7 @@ fun HomeScreen(
                         alert = alert,
                         now = now,
                         zone = zone,
-                        onTakeNow = { onTakeNow(alert.card) },
+                        onTakeNow = { onIntent(HomeIntent.TakeNow(alert.card)) },
                         onClick = { onOpenDetail(alert.card.item.medication.id) },
                     )
                 }
@@ -253,7 +248,7 @@ fun HomeScreen(
                     items(state.taking, key = { "taking-${it.item.medication.id}" }) { card ->
                         TakingRow(
                             card = card,
-                            onTakeNow = { onTakeNow(card) },
+                            onTakeNow = { onIntent(HomeIntent.TakeNow(card)) },
                             onClick = { onOpenDetail(card.item.medication.id) },
                         )
                     }
@@ -270,7 +265,7 @@ fun HomeScreen(
                             row = row,
                             now = now,
                             zone = zone,
-                            onPlay = { onPlay(row.medication.id) },
+                            onPlay = { onIntent(HomeIntent.Play(row.medication.id)) },
                             onClick = { onOpenDetail(row.medication.id) },
                         )
                     }
@@ -280,12 +275,12 @@ fun HomeScreen(
         }
     }
 
-    takeConfirm?.let { confirm ->
+    state.takeConfirm?.let { confirm ->
         DoubleDoseDialog(
             drugName = confirm.card.item.medication.drugName,
             minutesAgo = confirm.minutesAgo,
-            onConfirm = onConfirmTakeAnyway,
-            onDismiss = onDismissTakeConfirm,
+            onConfirm = { onIntent(HomeIntent.ConfirmTakeAnyway) },
+            onDismiss = { onIntent(HomeIntent.DismissTakeConfirm) },
         )
     }
 

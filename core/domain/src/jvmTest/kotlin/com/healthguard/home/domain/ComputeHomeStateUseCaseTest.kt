@@ -40,7 +40,7 @@ class ComputeHomeStateUseCaseTest {
         repo.seedDose("sched-fut", takenAt = now - 2.hours) // next dose in 4h
         repo.seedMedication("nofreq", frequency = null, startedAt = now - 1.hours)
 
-        val content = useCase(repo)(repo.rows(), now)
+        val content = useCase(repo)(repo.rows())
 
         assertEquals(listOf("od2", "od1", "fut", "nofreq"), content.taking.map { it.item.medication.id })
         assertEquals(now - 3.hours, content.taking[0].nextDoseAt)
@@ -58,7 +58,7 @@ class ComputeHomeStateUseCaseTest {
         repo.seedDose("sched-later", takenAt = now - 2.hours) // next dose in 4h
         repo.seedMedication("nofreq", frequency = null, startedAt = now - 1.hours)
 
-        val content = useCase(repo)(repo.rows(), now)
+        val content = useCase(repo)(repo.rows())
 
         assertEquals(2, content.dueCount)
         val byId = content.taking.associateBy { it.item.medication.id }
@@ -80,7 +80,7 @@ class ComputeHomeStateUseCaseTest {
         repo.seedDose("sched-a", takenAt = Instant.parse("2024-07-02T09:00:00Z")) // 21:00 silent
         repo.seedDose("sched-a", takenAt = Instant.parse("2024-07-03T09:02:00Z"))
 
-        val content = useCase(repo)(repo.rows(), now)
+        val content = useCase(repo)(repo.rows())
 
         assertEquals(7, content.weekDays.size)
         assertEquals(
@@ -103,7 +103,7 @@ class ComputeHomeStateUseCaseTest {
         repo.seedMedication("a", frequency = Frequency.TimesPerDay(1), startedAt = now - 72.hours)
         repo.seedDose("sched-a", takenAt = now - 55.minutes) // today 09:05
 
-        val content = useCase(repo)(repo.rows(), now)
+        val content = useCase(repo)(repo.rows())
 
         assertFalse(content.todayPending)
     }
@@ -125,7 +125,7 @@ class ComputeHomeStateUseCaseTest {
             startedAt = now - 1.hours,
         )
 
-        val content = useCase(repo)(repo.rows(), now)
+        val content = useCase(repo)(repo.rows())
 
         assertEquals(
             listOf("stopped", "newer-dormant", "older-dormant"),
