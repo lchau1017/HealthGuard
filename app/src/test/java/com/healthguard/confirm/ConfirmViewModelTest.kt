@@ -8,6 +8,8 @@ import com.healthguard.confirm.domain.SaveNewMedicationUseCase
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.MedicationWithSchedule
 import com.healthguard.shared.data.SqlDelightMedicationRepository
+import com.healthguard.shared.data.StoredMedication
+import com.healthguard.shared.data.StoredSchedule
 import com.healthguard.shared.db.HealthGuardDb
 import com.healthguard.shared.extraction.ExtractedField
 import com.healthguard.shared.extraction.ExtractionResult
@@ -357,6 +359,55 @@ class ConfirmViewModelTest {
         assertEquals("Couldn't load that image", error.message)
         assertFalse(error.retriable)
         assertTrue(extractor.calls.isEmpty())
+    }
+
+    @Test
+    fun `dismiss during extraction is final - a late result must not reopen the dialog`() = runTest(dispatcher) {
+        val extractor = SuspendingExtractor()
+        val vm = viewModelWith(extractor)
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
+        dispatcher.scheduler.runCurrent()
+        assertEquals(ConfirmUiState.Extracting, vm.state.value)
+
+        vm.onIntent(ConfirmIntent.Reset)
+        assertEquals(ConfirmUiState.Idle, vm.state.value)
+
+        // The (up to 60s slow) network call finally returns: still dismissed.
+        extractor.gate.complete(ExtractionResult.Success(extraction()))
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(ConfirmUiState.Idle, vm.state.value)
+    }
+
+    private class SuspendingSaveRepository(
+        private val delegate: MedicationRepository,
+    ) : MedicationRepository by delegate {
+        val gate = CompletableDeferred<Unit>()
+        override suspend fun insertMedication(medication: StoredMedication, schedule: StoredSchedule) {
+            gate.await()
+            delegate.insertMedication(medication, schedule)
+        }
+    }
+
+    @Test
+    fun `dismiss during save is final - a late save completion must not resurrect the dialog`() = runTest(dispatcher) {
+        val repo = SuspendingSaveRepository(repository)
+        val vm = viewModelWith(
+            FakeExtractor(mutableListOf(ExtractionResult.Success(extraction()))),
+            repo,
+        )
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
+        dispatcher.scheduler.advanceUntilIdle()
+        vm.onIntent(ConfirmIntent.Accept(null))
+        dispatcher.scheduler.runCurrent()
+        assertTrue(vm.state.value is ConfirmUiState.Review)
+
+        vm.onIntent(ConfirmIntent.Reset)
+        repo.gate.complete(Unit)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(ConfirmUiState.Idle, vm.state.value)
+        // The cancelled save never reached the database.
+        assertTrue(storedMedications().isEmpty())
     }
 
     @Test

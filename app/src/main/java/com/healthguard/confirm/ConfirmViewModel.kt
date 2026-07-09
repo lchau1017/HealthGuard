@@ -11,6 +11,7 @@ import com.healthguard.shared.extraction.ExtractedField
 import com.healthguard.shared.extraction.ExtractionResult
 import com.healthguard.shared.extraction.MedicationExtraction
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +42,13 @@ class ConfirmViewModel(
 
     private var lastImageBase64: String? = null
     private var saving = false
+
+    /**
+     * The single in-flight extraction/save job. [reset] cancels it: a
+     * dismissed dialog must stay dismissed, not pop back open when a
+     * long-running network call finally returns.
+     */
+    private var workJob: Job? = null
 
     /** The single MVI entry point: each branch delegates to a use case or a state edit. */
     fun onIntent(intent: ConfirmIntent) {
@@ -103,14 +111,19 @@ class ConfirmViewModel(
             frequency = review.frequency,
             withFood = review.withFood,
         )
-        viewModelScope.launch {
+        workJob?.cancel()
+        workJob = viewModelScope.launch {
             try {
                 saveNewMedication(medication)
                 _effects.send(ConfirmEffect.Saved)
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (_: Exception) {
-                _state.value = ConfirmUiState.Error(MESSAGE_SAVE_FAILED, retriable = true)
+                // Only surface the failure while the review is still showing;
+                // a dialog dismissed mid-save must stay dismissed.
+                if (_state.value is ConfirmUiState.Review) {
+                    _state.value = ConfirmUiState.Error(MESSAGE_SAVE_FAILED, retriable = true)
+                }
             } finally {
                 saving = false
             }
@@ -118,6 +131,8 @@ class ConfirmViewModel(
     }
 
     private fun reset() {
+        workJob?.cancel()
+        workJob = null
         lastImageBase64 = null
         saving = false
         _state.value = ConfirmUiState.Idle
@@ -132,22 +147,34 @@ class ConfirmViewModel(
      */
     private fun encodeAndExtract(uri: String) {
         _state.value = ConfirmUiState.Extracting
-        viewModelScope.launch {
+        workJob?.cancel()
+        workJob = viewModelScope.launch {
             val base64 = imageEncoder.encode(uri)
             if (base64 == null) {
-                _state.value = ConfirmUiState.Error(MESSAGE_IMAGE_LOAD_FAILED, retriable = false)
+                applyIfExtracting(ConfirmUiState.Error(MESSAGE_IMAGE_LOAD_FAILED, retriable = false))
             } else {
                 lastImageBase64 = base64
-                _state.value = extractMedication(base64).toUiState()
+                applyIfExtracting(extractMedication(base64).toUiState())
             }
         }
     }
 
     private fun extract(imageJpegBase64: String) {
         _state.value = ConfirmUiState.Extracting
-        viewModelScope.launch {
-            _state.value = extractMedication(imageJpegBase64).toUiState()
+        workJob?.cancel()
+        workJob = viewModelScope.launch {
+            applyIfExtracting(extractMedication(imageJpegBase64).toUiState())
         }
+    }
+
+    /**
+     * Applies an extraction outcome only while the flow is still Extracting.
+     * Cancellation in [reset] already stops in-flight work; this guards the
+     * remaining race where the result was computed before the dismissal
+     * landed — a dismissed dialog must never resurrect itself.
+     */
+    private fun applyIfExtracting(result: ConfirmUiState) {
+        if (_state.value is ConfirmUiState.Extracting) _state.value = result
     }
 
     private fun updateField(key: String, transform: (ReviewField) -> ReviewField) {
