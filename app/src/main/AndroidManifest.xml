@@ -4,6 +4,14 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Android 11+ package-visibility: lets the app resolve camera apps for
+         the IMAGE_CAPTURE intent so the capture Uri can be granted to them. -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
+
     <application
         android:name=".HealthGuardApplication"
         android:allowBackup="true"
