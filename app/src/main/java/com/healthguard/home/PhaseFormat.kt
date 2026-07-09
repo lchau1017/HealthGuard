@@ -20,18 +20,26 @@ fun phaseChipText(schedule: StoredSchedule, now: Instant, zone: TimeZone): Strin
     when (schedule.phase) {
         MedicationPhase.TAKING -> null
         MedicationPhase.NOT_STARTED -> "Not started"
-        MedicationPhase.STOPPED -> {
-            val date = schedule.stoppedAt!!.toLocalDateTime(zone).date
-            val today = now.toLocalDateTime(zone).date
-            val day = when (date) {
-                today -> "today"
-                today.minus(1, DateTimeUnit.DAY) -> "yesterday"
-                else -> {
-                    val month = date.month.name.lowercase()
-                        .replaceFirstChar { it.uppercase() }.take(3)
-                    "${date.day} $month"
-                }
-            }
-            "Stopped $day"
+        MedicationPhase.STOPPED -> stoppedLabel(schedule.stoppedAt!!, now, zone)
+    }
+
+/**
+ * "Stopped 3 Jul" for a stop at [stoppedAt] ("Stopped today"/"Stopped
+ * yesterday" while fresh, matching the app's other relative timestamps). The
+ * schedule-free half of [phaseChipText]: the Activity breakdown folds it over a
+ * domain row that carries only the raw stop instant.
+ */
+fun stoppedLabel(stoppedAt: Instant, now: Instant, zone: TimeZone): String {
+    val date = stoppedAt.toLocalDateTime(zone).date
+    val today = now.toLocalDateTime(zone).date
+    val day = when (date) {
+        today -> "today"
+        today.minus(1, DateTimeUnit.DAY) -> "yesterday"
+        else -> {
+            val month = date.month.name.lowercase()
+                .replaceFirstChar { it.uppercase() }.take(3)
+            "${date.day} $month"
         }
     }
+    return "Stopped $day"
+}

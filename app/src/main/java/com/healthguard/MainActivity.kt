@@ -189,9 +189,11 @@ private fun HealthGuardApp(modifier: Modifier = Modifier) {
         )
     } else if (selectedTab == AppTab.ACTIVITY) {
         val activityViewModel: ActivityViewModel = koinViewModel()
+        val activityState by activityViewModel.state.collectAsState()
         BackHandler { selectedTab = AppTab.HOME }
         ActivityScreen(
-            viewModel = activityViewModel,
+            state = activityState,
+            onIntent = activityViewModel::onIntent,
             bottomBar = { AppNavBar(selected = selectedTab, onSelect = { selectedTab = it }) },
             modifier = modifier,
         )

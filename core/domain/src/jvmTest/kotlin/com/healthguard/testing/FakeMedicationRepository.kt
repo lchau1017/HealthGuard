@@ -23,9 +23,10 @@ import kotlinx.coroutines.flow.flowOf
  * test source set cannot depend on `:core:data` (that would close a project
  * dependency cycle), so the real SQLDelight repository is unavailable here.
  *
- * Only the methods the Home and Detail use cases actually touch are implemented against
- * simple collections; every other interface member throws so an accidental
- * reliance surfaces loudly rather than silently returning empty data.
+ * Only the methods the Home, Detail and Activity use cases actually touch are
+ * implemented against simple collections; every other interface member throws
+ * so an accidental reliance surfaces loudly rather than silently returning
+ * empty data.
  */
 class FakeMedicationRepository : MedicationRepository {
 
@@ -236,8 +237,31 @@ class FakeMedicationRepository : MedicationRepository {
     override suspend fun updateDoseStatus(id: String, status: DoseStatus, takenAt: Instant?): Unit =
         throw NotImplementedError()
 
+    // --- Implemented for the Activity use cases -------------------------------
+
+    /**
+     * Mirrors the SQL `takenDosesInRange`: every TAKEN dose (with a takenAt)
+     * across all schedules whose takenAt falls in [from, to) (half-open),
+     * oldest first, resolved through its schedule to the owning medication.
+     */
     override suspend fun takenDosesInRange(from: Instant, to: Instant): List<TakenDose> =
-        throw NotImplementedError()
+        doseLogs
+            .filter { it.status == DoseStatus.TAKEN && it.takenAt != null }
+            // INNER JOIN: logs without a matching schedule drop out.
+            .mapNotNull { log ->
+                val owner = medications.firstOrNull { it.schedule.id == log.scheduleId }
+                    ?: return@mapNotNull null
+                log to owner
+            }
+            .filter { (log, _) -> log.takenAt!! in from..<to }
+            .sortedBy { (log, _) -> log.takenAt }
+            .map { (log, owner) ->
+                TakenDose(
+                    medicationId = owner.medication.id,
+                    drugName = owner.medication.drugName,
+                    takenAt = log.takenAt!!,
+                )
+            }
 
     private fun replaceSchedule(
         medicationId: String,

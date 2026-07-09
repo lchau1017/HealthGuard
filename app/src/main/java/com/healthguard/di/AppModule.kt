@@ -4,6 +4,8 @@ package com.healthguard.di
 
 import com.healthguard.BuildConfig
 import com.healthguard.activity.ActivityViewModel
+import com.healthguard.activity.domain.ComputeActivityStateUseCase
+import com.healthguard.activity.domain.LoadActivityDayDetailUseCase
 import com.healthguard.confirm.ConfirmViewModel
 import com.healthguard.confirm.domain.ExtractMedicationUseCase
 import com.healthguard.confirm.domain.SaveNewMedicationUseCase
@@ -67,12 +69,15 @@ val appModule = module {
     factory { LoadDayDetailUseCase(get(), get(), TimeZone.currentSystemDefault()) }
     factory { SaveMedicationUseCase(get()) }
 
+    factory { ComputeActivityStateUseCase(get(), get(), TimeZone.currentSystemDefault()) }
+    factory { LoadActivityDayDetailUseCase(get(), get(), TimeZone.currentSystemDefault()) }
+
     factory { ExtractMedicationUseCase(get(), Dispatchers.IO) }
     factory { SaveNewMedicationUseCase(get(), get()) }
 
     viewModel { ConfirmViewModel(get(), get()) }
     viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
-    viewModel { ActivityViewModel(get(), get()) }
+    viewModel { ActivityViewModel(get(), get(), get()) }
     viewModel { (medicationId: String) ->
         DetailViewModel(
             computeDetailState = get(),
