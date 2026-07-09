@@ -8,10 +8,10 @@ import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DayCount
 import com.healthguard.activity.DayDetail
 import com.healthguard.activity.DoseDayStatus
-import com.healthguard.activity.dayDetail
-import com.healthguard.activity.doseDayStatusByDay
-import com.healthguard.activity.dayCounts
-import com.healthguard.activity.mondayOf
+import com.healthguard.detail.domain.ComputeDetailStateUseCase
+import com.healthguard.detail.domain.LoadDayDetailUseCase
+import com.healthguard.detail.domain.SaveMedicationUseCase
+import com.healthguard.detail.domain.ToggleTakingUseCase
 import com.healthguard.dose.RecordedTake
 import com.healthguard.dose.isDoubleDose
 import com.healthguard.dose.recordTakenDose
@@ -20,16 +20,9 @@ import com.healthguard.format.toHumanText
 import com.healthguard.home.MedicationPhase
 import com.healthguard.home.isActive
 import com.healthguard.home.phase
-import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.MedicationWithSchedule
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.data.StoredSchedule
-import com.healthguard.shared.domain.expectedDoseTimes
-import com.healthguard.shared.domain.nextDose
 import com.healthguard.shared.extraction.Frequency
-import kotlin.time.Duration.Companion.days
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,25 +32,11 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.atStartOfDayIn
-import kotlinx.datetime.minus
-import kotlinx.datetime.plus
-import kotlinx.datetime.toLocalDateTime
 
 /** One-shot navigation results: the host pops back to Home on either. */
 enum class DetailFinished { SAVED, DELETED }
-
-/** History rows shown on the detail page. */
-private const val HISTORY_LIMIT = 30
-
-/** Heat-map columns on the detail page (current week included). */
-private const val HEAT_MAP_WEEKS = 16
-
-/** How far back derived "Not recorded" rows reach. */
-private val GAP_LOOKBACK = 14.days
 
 /**
  * Editable detail form plus the live persisted [item]. Field values are
@@ -124,6 +103,11 @@ class DetailViewModel(
     private val zone: TimeZone = TimeZone.currentSystemDefault(),
 ) : ViewModel() {
 
+    private val computeDetailState = ComputeDetailStateUseCase(repository, clock, zone)
+    private val loadDayDetail = LoadDayDetailUseCase(repository, clock, zone)
+    private val saveMedication = SaveMedicationUseCase(repository)
+    private val toggleTakingUseCase = ToggleTakingUseCase(repository, clock)
+
     private val _state = MutableStateFlow(DetailUiState())
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
 
@@ -151,40 +135,17 @@ class DetailViewModel(
             ) { rows, _, _ -> rows }.collect { rows ->
                 val item = rows.firstOrNull { it.medication.id == medicationId }
                     ?: return@collect // deleted (or bad id): keep last state
-                val latest = repository.latestDose(item.schedule.id)
-                val lastTaken = latest?.let { it.takenAt ?: it.plannedAt }
-                val now = clock()
-                val today = now.toLocalDateTime(zone).date
-                val historyFrom = mondayOf(today).minus(HEAT_MAP_WEEKS - 1, DateTimeUnit.WEEK)
-                val windowFrom = historyFrom.atStartOfDayIn(zone)
-                // Range query is on plannedAt (exclusive upper bound, hence
-                // the pad); statuses are then bucketed by their effective day.
-                val windowLogs = repository.dosesInRange(
-                    scheduleId = item.schedule.id,
-                    from = windowFrom,
-                    to = now + 1.minutes,
-                )
-                // What the schedule owed over the window; `to = now` so
-                // today's future slots are never counted against the user.
-                val expected = expectedDoseTimes(item.schedule, windowFrom, now, zone)
+                val content = computeDetailState(item)
                 _state.update { current ->
                     val tracked = current.copy(
-                        item = item,
-                        nextDoseAt = nextDose(item.schedule, lastTaken, now, zone),
-                        lastTakenAt = lastTaken,
-                        history = historyEntries(item.schedule, windowLogs, now),
-                        dayStatuses = doseDayStatusByDay(expected, windowLogs, zone),
-                        dayTakeCounts = dayCounts(
-                            windowLogs.filter { it.status == DoseStatus.TAKEN }
-                                .map { it.takenAt ?: it.plannedAt },
-                            zone,
-                        ),
-                        adherence = AdherenceResult(
-                            taken = windowLogs.count { it.status == DoseStatus.TAKEN },
-                            expected = expected.size,
-                            skipped = windowLogs.count { it.status == DoseStatus.SKIPPED },
-                        ),
-                        historyFrom = historyFrom,
+                        item = content.item,
+                        nextDoseAt = content.nextDoseAt,
+                        lastTakenAt = content.lastTakenAt,
+                        history = content.history,
+                        dayStatuses = content.dayStatuses,
+                        dayTakeCounts = content.dayTakeCounts,
+                        adherence = content.adherence,
+                        historyFrom = content.historyFrom,
                     )
                     if (fieldsSeeded) {
                         tracked
@@ -206,26 +167,6 @@ class DetailViewModel(
     }
 
     /**
-     * The recent-list rows, newest first, capped at [HISTORY_LIMIT]: the
-     * last 14 days' logs interleaved with derived "Not recorded" slots
-     * (matched against the complete window logs, so a capped recent query
-     * can never fake a gap), then older logs from the capped recent query.
-     */
-    private suspend fun historyEntries(
-        schedule: StoredSchedule,
-        windowLogs: List<StoredDoseLog>,
-        now: Instant,
-    ): List<HistoryEntry> {
-        val cutoff = now - GAP_LOOKBACK
-        val recentLogs = windowLogs.filter { (it.takenAt ?: it.plannedAt) >= cutoff }
-        val gapSlots = expectedDoseTimes(schedule, cutoff, now - SLOT_MATCH_WINDOW, zone)
-        val older = repository.recentDoses(schedule.id, HISTORY_LIMIT)
-            .filter { (it.takenAt ?: it.plannedAt) < cutoff }
-            .map { HistoryEntry.Logged(it) }
-        return (historyWithGaps(recentLogs, gapSlots) + older).take(HISTORY_LIMIT)
-    }
-
-    /**
      * Loads the tapped heat-map day's detail sheet, scoped to this
      * medication only — the per-med grid answers for one schedule. Slots
      * still inside the 90-minute answer window are not "not recorded" yet.
@@ -233,25 +174,7 @@ class DetailViewModel(
     fun selectDay(date: LocalDate) {
         val item = _state.value.item ?: return
         viewModelScope.launch {
-            val now = clock()
-            val dayStart = date.atStartOfDayIn(zone)
-            val dayEnd = date.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone)
-            val logs = repository.doseLogsWithMedicationInRange(dayStart, dayEnd)
-                .filter { it.medicationId == item.medication.id }
-            val expected = expectedDoseTimes(
-                item.schedule,
-                dayStart,
-                minOf(dayEnd, now - SLOT_MATCH_WINDOW),
-                zone,
-            )
-            val expectedByMedication = if (expected.isEmpty()) {
-                emptyMap()
-            } else {
-                mapOf(item.medication.id to expected)
-            }
-            _state.update {
-                it.copy(dayDetail = dayDetail(date, logs, expectedByMedication, zone))
-            }
+            _state.update { it.copy(dayDetail = loadDayDetail(item, date)) }
         }
     }
 
@@ -339,7 +262,7 @@ class DetailViewModel(
         val item = current.item ?: return
         if (!current.canSave) return
         viewModelScope.launch {
-            repository.updateMedication(
+            saveMedication(
                 item.medication.copy(
                     drugName = current.name.trim(),
                     label = current.label.trim().takeUnless { it.isEmpty() },
@@ -349,8 +272,6 @@ class DetailViewModel(
                     dosage = current.dosage.trim().takeUnless { it.isEmpty() },
                     form = current.form.trim().takeUnless { it.isEmpty() },
                 ),
-            )
-            repository.updateSchedule(
                 item.schedule.copy(
                     frequency = parseFrequency(current.frequencyText),
                     withFood = current.withFood,
@@ -363,13 +284,7 @@ class DetailViewModel(
     /** Starts a dormant/stopped schedule, stops an active one. */
     fun toggleTaking() {
         val active = _state.value.isActive
-        viewModelScope.launch {
-            if (active) {
-                repository.stop(medicationId, clock())
-            } else {
-                repository.activate(medicationId, clock())
-            }
-        }
+        viewModelScope.launch { toggleTakingUseCase(medicationId, active) }
     }
 
     fun delete() {

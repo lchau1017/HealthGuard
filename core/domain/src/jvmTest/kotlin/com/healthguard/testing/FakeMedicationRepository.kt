@@ -38,6 +38,8 @@ class FakeMedicationRepository : MedicationRepository {
     val deletedMedicationIds = mutableListOf<String>()
     val activations = mutableListOf<Pair<String, Instant>>()
     val stops = mutableListOf<Pair<String, Instant>>()
+    val updatedMedications = mutableListOf<StoredMedication>()
+    val updatedSchedules = mutableListOf<StoredSchedule>()
 
     private val _dataChanges = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
     override val dataChanges: SharedFlow<Unit> = _dataChanges
@@ -141,6 +143,89 @@ class FakeMedicationRepository : MedicationRepository {
             .filter { (it.takenAt ?: it.plannedAt) in from..<to }
             .sortedBy { it.plannedAt }
 
+    override suspend fun getMedication(id: String): MedicationWithSchedule? =
+        medications.firstOrNull { it.medication.id == id }
+
+    /**
+     * Mirrors the SQL: only the editable columns change (drugName, label,
+     * activeIngredients, dosage, form); createdAt/extractionConfidence and the
+     * schedule are untouched, and a missing id is a no-op.
+     */
+    override suspend fun updateMedication(medication: StoredMedication) {
+        val index = medications.indexOfFirst { it.medication.id == medication.id }
+        if (index < 0) return
+        updatedMedications += medication
+        val current = medications[index].medication
+        medications[index] = medications[index].copy(
+            medication = current.copy(
+                drugName = medication.drugName,
+                label = medication.label,
+                activeIngredients = medication.activeIngredients,
+                dosage = medication.dosage,
+                form = medication.form,
+            ),
+        )
+        _dataChanges.emit(Unit)
+    }
+
+    /**
+     * Mirrors the SQL: only frequency and withFood change; startedAt/stoppedAt
+     * on the passed value are deliberately ignored (activation goes through
+     * activate/stop), and a missing id is a no-op.
+     */
+    override suspend fun updateSchedule(schedule: StoredSchedule) {
+        val index = medications.indexOfFirst { it.schedule.id == schedule.id }
+        if (index < 0) return
+        updatedSchedules += schedule
+        val current = medications[index].schedule
+        medications[index] = medications[index].copy(
+            schedule = current.copy(
+                frequency = schedule.frequency,
+                withFood = schedule.withFood,
+            ),
+        )
+        _dataChanges.emit(Unit)
+    }
+
+    override suspend fun dosesInRange(
+        scheduleId: String,
+        from: Instant,
+        to: Instant,
+    ): List<StoredDoseLog> =
+        doseLogs
+            .filter { it.scheduleId == scheduleId && it.plannedAt in from..<to }
+            .sortedBy { it.plannedAt }
+
+    override suspend fun recentDoses(scheduleId: String, limit: Int): List<StoredDoseLog> =
+        doseLogs
+            .filter { it.scheduleId == scheduleId }
+            .sortedByDescending { it.plannedAt }
+            .take(limit)
+
+    override suspend fun doseLogsWithMedicationInRange(
+        from: Instant,
+        to: Instant,
+    ): List<DoseLogWithMedication> =
+        doseLogs
+            // INNER JOIN: logs without a matching schedule drop out.
+            .mapNotNull { log ->
+                val owner = medications.firstOrNull { it.schedule.id == log.scheduleId }
+                    ?: return@mapNotNull null
+                log to owner
+            }
+            .filter { (log, _) -> (log.takenAt ?: log.plannedAt) in from..<to }
+            .sortedBy { (log, _) -> log.takenAt ?: log.plannedAt }
+            .map { (log, owner) ->
+                DoseLogWithMedication(
+                    medicationId = owner.medication.id,
+                    drugName = owner.medication.drugName,
+                    dosage = owner.medication.dosage,
+                    plannedAt = log.plannedAt,
+                    takenAt = log.takenAt,
+                    status = log.status,
+                )
+            }
+
     // --- Unused surface -------------------------------------------------------
 
     override suspend fun batch(block: MedicationRepository.BatchWriter.() -> Unit): Unit =
@@ -148,31 +233,11 @@ class FakeMedicationRepository : MedicationRepository {
 
     override fun activeMedications(): Flow<List<MedicationWithSchedule>> = throw NotImplementedError()
 
-    override suspend fun getMedication(id: String): MedicationWithSchedule? = throw NotImplementedError()
-
-    override suspend fun updateMedication(medication: StoredMedication): Unit = throw NotImplementedError()
-
-    override suspend fun updateSchedule(schedule: StoredSchedule): Unit = throw NotImplementedError()
-
     override suspend fun updateDoseStatus(id: String, status: DoseStatus, takenAt: Instant?): Unit =
         throw NotImplementedError()
 
-    override suspend fun dosesInRange(
-        scheduleId: String,
-        from: Instant,
-        to: Instant,
-    ): List<StoredDoseLog> = throw NotImplementedError()
-
     override suspend fun takenDosesInRange(from: Instant, to: Instant): List<TakenDose> =
         throw NotImplementedError()
-
-    override suspend fun recentDoses(scheduleId: String, limit: Int): List<StoredDoseLog> =
-        throw NotImplementedError()
-
-    override suspend fun doseLogsWithMedicationInRange(
-        from: Instant,
-        to: Instant,
-    ): List<DoseLogWithMedication> = throw NotImplementedError()
 
     private fun replaceSchedule(
         medicationId: String,
