@@ -1,6 +1,5 @@
 package com.healthguard.common.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -28,7 +27,7 @@ private val PeachDark = CategoryTint(Color(0xFF573A22), Color(0xFFF2DFD1))
  */
 @Composable
 fun categoryTint(label: String?): CategoryTint {
-    val dark = isSystemInDarkTheme()
+    val dark = LocalAppDarkTheme.current
     val normalized = label.orEmpty().trim().lowercase()
     return when {
         normalized == "allergy" -> CategoryTint(

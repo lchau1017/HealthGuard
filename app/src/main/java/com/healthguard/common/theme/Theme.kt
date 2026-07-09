@@ -5,6 +5,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 
 private val LightColorScheme = lightColorScheme(
     primary = PrimaryLight,
@@ -77,6 +79,17 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 /**
+ * Whether [HealthGuardTheme] resolved to its dark palette. Theme colors that
+ * live outside the Material color scheme (the heat ramp, category tints)
+ * read this instead of `isSystemInDarkTheme()`, so a forced-theme host
+ * (a light/dark preview, a test) gets a matching palette. In the running
+ * app the value still follows the system, because [HealthGuardTheme]'s
+ * default does. Defaults to false: content composed outside the theme
+ * renders the light variants.
+ */
+val LocalAppDarkTheme = staticCompositionLocalOf { false }
+
+/**
  * HealthGuard's brand theme: a fixed sage/teal Material3 palette in both
  * light and dark. Deliberately not dynamic-color — the brand palette wins
  * over wallpaper-derived schemes.
@@ -86,9 +99,11 @@ fun HealthGuardTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
-        typography = Typography,
-        content = content,
-    )
+    CompositionLocalProvider(LocalAppDarkTheme provides darkTheme) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
+            typography = Typography,
+            content = content,
+        )
+    }
 }

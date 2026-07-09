@@ -1,6 +1,5 @@
 package com.healthguard.common.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
@@ -26,6 +25,6 @@ private val HeatRampDark = listOf(
     Color(0xFF7FD3C2),
 )
 
-/** The 5-step sequential ramp for the current theme (index 0 = empty). */
+/** The 5-step sequential ramp for the applied theme (index 0 = empty). */
 @Composable
-fun heatRamp(): List<Color> = if (isSystemInDarkTheme()) HeatRampDark else HeatRampLight
+fun heatRamp(): List<Color> = if (LocalAppDarkTheme.current) HeatRampDark else HeatRampLight
