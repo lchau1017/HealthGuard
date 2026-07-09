@@ -10,7 +10,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-class MedicationPhaseTest {
+class PhaseFormatTest {
 
     /** Wednesday 2026-07-08 mid-morning. */
     private val now = Instant.parse("2026-07-08T10:00:00Z")
@@ -27,32 +27,6 @@ class MedicationPhaseTest {
         startedAt = startedAt,
         stoppedAt = stoppedAt,
     )
-
-    // --- phase derivation ---
-
-    @Test
-    fun `a never-activated schedule is not started`() {
-        assertEquals(MedicationPhase.NOT_STARTED, schedule().phase)
-    }
-
-    @Test
-    fun `an active schedule is taking`() {
-        assertEquals(
-            MedicationPhase.TAKING,
-            schedule(startedAt = Instant.parse("2026-06-01T00:00:00Z")).phase,
-        )
-    }
-
-    @Test
-    fun `a stopped schedule is stopped even though it once started`() {
-        assertEquals(
-            MedicationPhase.STOPPED,
-            schedule(
-                startedAt = Instant.parse("2026-06-01T00:00:00Z"),
-                stoppedAt = Instant.parse("2026-07-03T12:00:00Z"),
-            ).phase,
-        )
-    }
 
     // --- chip text ---
 
