@@ -20,6 +20,7 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -32,6 +33,7 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -62,7 +64,7 @@ class ActivityViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(): ActivityViewModel {
+    private fun viewModel(repository: MedicationRepository = this.repository): ActivityViewModel {
         val clock: () -> Instant = { fixedNow }
         return ActivityViewModel(
             computeActivityState = ComputeActivityStateUseCase(repository, clock, TimeZone.UTC),
@@ -434,5 +436,66 @@ class ActivityViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(1, vm.state.value.stats.totalEvents)
+    }
+
+    @Test
+    fun `a background reload keeps the open day sheet`() = runTest(dispatcher) {
+        insert("a", "Cetirizine", Frequency.TimesPerDay(2), Instant.parse("2024-07-01T00:00:00Z"))
+        logTaken("a", Instant.parse("2024-07-02T09:04:00Z"))
+        val vm = viewModel()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.onIntent(ActivityIntent.SelectDay(LocalDate(2024, 7, 2)))
+        dispatcher.scheduler.advanceUntilIdle()
+        val openSheet = vm.state.value.dayDetail
+        assertNotNull(openSheet)
+
+        // A write anywhere re-queries the window in the background; the sheet
+        // the user is reading must survive that, while the tiles refresh.
+        logTaken("a", fixedNow - 1.hours)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(openSheet, vm.state.value.dayDetail)
+        assertEquals(2, vm.state.value.stats.totalEvents)
+    }
+
+    /** Suspends every window query on its own gate, in call order. */
+    private class GatedWindowRepository(
+        private val delegate: MedicationRepository,
+    ) : MedicationRepository by delegate {
+        val gates = mutableListOf<CompletableDeferred<Unit>>()
+        override suspend fun takenDosesInRange(from: Instant, to: Instant) =
+            CompletableDeferred<Unit>()
+                .also { gates += it }
+                .await()
+                .let { delegate.takenDosesInRange(from, to) }
+    }
+
+    @Test
+    fun `a superseded filter load is cancelled and cannot clobber the later one`() = runTest(dispatcher) {
+        insert("a", "Ibuprofen")
+        logTaken("a", fixedNow - 300.days) // only the 12-month window sees this
+        logTaken("a", fixedNow - 1.hours)
+        val gated = GatedWindowRepository(repository)
+        val vm = viewModel(gated)
+        dispatcher.scheduler.runCurrent()
+        gated.gates[0].complete(Unit) // let the initial 30-day load land
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(1, vm.state.value.stats.totalEvents)
+
+        // Two rapid filter taps: the 7-day query stalls, the 12-month one
+        // completes first, and the stale 7-day query returns last.
+        vm.onIntent(ActivityIntent.SetFilter(ActivityFilter.DAYS_7))
+        dispatcher.scheduler.runCurrent()
+        vm.onIntent(ActivityIntent.SetFilter(ActivityFilter.MONTHS_12))
+        dispatcher.scheduler.runCurrent()
+        gated.gates[2].complete(Unit)
+        dispatcher.scheduler.advanceUntilIdle()
+        gated.gates[1].complete(Unit)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        // The last TAP wins, not the last query to finish.
+        assertEquals(ActivityFilter.MONTHS_12, vm.state.value.filter)
+        assertEquals(2, vm.state.value.stats.totalEvents)
     }
 }

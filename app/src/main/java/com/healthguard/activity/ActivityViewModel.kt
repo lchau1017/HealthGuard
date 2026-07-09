@@ -9,6 +9,7 @@ import com.healthguard.activity.domain.ComputeActivityStateUseCase
 import com.healthguard.activity.domain.LoadActivityDayDetailUseCase
 import com.healthguard.shared.domain.ObserveDataChangesUseCase
 import kotlin.time.ExperimentalTime
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,6 +41,13 @@ class ActivityViewModel(
     private val _state = MutableStateFlow(ActivityUiState())
     val state: StateFlow<ActivityUiState> = _state.asStateFlow()
 
+    /**
+     * The single in-flight window load. [load] cancels it before launching:
+     * without this, two rapid filter taps race and the last query to FINISH
+     * wins the state, which need not be the last filter the user tapped.
+     */
+    private var loadJob: Job? = null
+
     init {
         reload()
         viewModelScope.launch {
@@ -59,6 +67,10 @@ class ActivityViewModel(
 
     private fun setFilter(filter: ActivityFilter) {
         if (filter == _state.value.filter) return
+        // Fold the chosen filter in eagerly (the chip selects immediately),
+        // and so a background [reload] racing this load re-queries the user's
+        // latest choice rather than the last window that finished loading.
+        _state.update { it.copy(filter = filter) }
         load(filter)
     }
 
@@ -66,8 +78,12 @@ class ActivityViewModel(
     private fun reload() = load(_state.value.filter)
 
     private fun load(filter: ActivityFilter) {
-        viewModelScope.launch {
-            _state.value = computeActivityState(filter).toUiState(zone)
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            val content = computeActivityState(filter)
+            // Fold over the current state: the open day-detail sheet must
+            // survive a background re-query, not get dismissed by it.
+            _state.update { content.toUiState(it, zone) }
         }
     }
 
