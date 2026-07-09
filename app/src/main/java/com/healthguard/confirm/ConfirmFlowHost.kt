@@ -12,8 +12,8 @@ import org.koin.androidx.compose.koinViewModel
  * Hosts the import/confirm flow above whichever screen is showing: the
  * dialog's visibility derives from [ConfirmViewModel]'s state (Idle =
  * hidden), so it survives rotation without extra plumbing. Sole consumer of
- * the flow's one-shot effects (like Home/Detail): a successful save toasts
- * and resets the flow back to Idle.
+ * the flow's one-shot effects (like Home/Detail): a successful save toasts —
+ * the view model itself returns the flow to Idle.
  */
 @Composable
 fun ConfirmFlowHost(viewModel: ConfirmViewModel = koinViewModel()) {
@@ -23,10 +23,8 @@ fun ConfirmFlowHost(viewModel: ConfirmViewModel = koinViewModel()) {
     LaunchedEffect(Unit) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                is ConfirmEffect.Saved -> {
+                is ConfirmEffect.Saved ->
                     Toast.makeText(context, "Added to your medications", Toast.LENGTH_SHORT).show()
-                    viewModel.onIntent(ConfirmIntent.Reset)
-                }
             }
         }
     }

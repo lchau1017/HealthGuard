@@ -429,6 +429,9 @@ class ConfirmViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(ConfirmEffect.Saved, vm.effects.first())
+        // The view model owns its state machine: a successful save returns
+        // the flow to Idle by itself, no Reset intent from the host needed.
+        assertEquals(ConfirmUiState.Idle, vm.state.value)
         val stored = storedMedications().single()
         assertEquals("Ibuprofen", stored.medication.drugName)
         assertEquals("200 mg", stored.medication.dosage)
@@ -440,6 +443,29 @@ class ConfirmViewModelTest {
         assertEquals(true, stored.schedule.withFood)
         assertNull(stored.schedule.startedAt)
         assertNull(stored.schedule.stoppedAt)
+    }
+
+    @Test
+    fun `a new image after a successful save starts a fresh extraction`() = runTest(dispatcher) {
+        val extractor = FakeExtractor(
+            mutableListOf(
+                ExtractionResult.Success(extraction()),
+                ExtractionResult.Success(extraction()),
+            ),
+        )
+        val vm = viewModelWith(extractor)
+        vm.onIntent(ConfirmIntent.ImagePicked("img-1"))
+        dispatcher.scheduler.advanceUntilIdle()
+        vm.onIntent(ConfirmIntent.Accept(null))
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(ConfirmUiState.Idle, vm.state.value)
+
+        // The self-reset left no stale image or retry state behind: the next
+        // picked image goes through a full encode + extract.
+        vm.onIntent(ConfirmIntent.ImagePicked("img-2"))
+        dispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.state.value is ConfirmUiState.Review)
+        assertEquals(listOf("base64-img-1", "base64-img-2"), extractor.calls)
     }
 
     @Test

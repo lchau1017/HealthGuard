@@ -137,6 +137,10 @@ class ConfirmViewModel(
             try {
                 saveNewMedication(medication)
                 _effects.send(ConfirmEffect.Saved)
+                // The flow is complete: the view model owns its state machine,
+                // so it returns itself to Idle rather than relying on the host
+                // to answer the Saved effect with a Reset intent.
+                clearToIdle()
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (_: Exception) {
@@ -159,6 +163,15 @@ class ConfirmViewModel(
     private fun reset() {
         workJob?.cancel()
         workJob = null
+        clearToIdle()
+    }
+
+    /**
+     * Drops every remnant of the current flow and returns to Idle. Unlike
+     * [reset] it leaves [workJob] alone, so the successful-save path can call
+     * it from inside that very job.
+     */
+    private fun clearToIdle() {
         lastImageBase64 = null
         reviewAwaitingSaveRetry = null
         lastAcceptLabel = null
