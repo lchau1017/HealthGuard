@@ -33,6 +33,7 @@ import com.healthguard.confirm.ConfirmDialog
 import com.healthguard.confirm.ConfirmUiState
 import com.healthguard.confirm.ConfirmViewModel
 import com.healthguard.detail.DetailFinished
+import com.healthguard.detail.DetailIntent
 import com.healthguard.detail.DetailScreen
 import com.healthguard.detail.DetailViewModel
 import com.healthguard.home.HomeScreen
@@ -152,24 +153,25 @@ private fun HealthGuardApp(modifier: Modifier = Modifier) {
         )
         val detailState by detailViewModel.state.collectAsState()
         BackHandler { detailMedicationId = null }
+        // Dose logs alone don't retrigger the medications query; refresh on
+        // entry so a retained view model catches up on takes from elsewhere.
+        LaunchedEffect(Unit) { detailViewModel.onIntent(DetailIntent.Refresh) }
         DetailScreen(
-            viewModel = detailViewModel,
+            state = detailState,
+            onIntent = detailViewModel::onIntent,
+            effects = detailViewModel.effects,
             onBack = { detailMedicationId = null },
+            onFinished = { result ->
+                when (result) {
+                    DetailFinished.SAVED ->
+                        Toast.makeText(context, "Changes saved", Toast.LENGTH_SHORT).show()
+                    DetailFinished.DELETED ->
+                        Toast.makeText(context, "Medication deleted", Toast.LENGTH_SHORT).show()
+                }
+                detailMedicationId = null
+            },
             modifier = modifier,
         )
-        LaunchedEffect(detailState.finished) {
-            when (detailState.finished) {
-                DetailFinished.SAVED -> {
-                    Toast.makeText(context, "Changes saved", Toast.LENGTH_SHORT).show()
-                    detailMedicationId = null
-                }
-                DetailFinished.DELETED -> {
-                    Toast.makeText(context, "Medication deleted", Toast.LENGTH_SHORT).show()
-                    detailMedicationId = null
-                }
-                null -> Unit
-            }
-        }
     } else if (selectedTab == AppTab.ACTIVITY) {
         val activityViewModel: ActivityViewModel = koinViewModel()
         BackHandler { selectedTab = AppTab.HOME }

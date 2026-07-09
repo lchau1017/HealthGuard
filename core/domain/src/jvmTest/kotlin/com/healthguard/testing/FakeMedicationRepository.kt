@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.flowOf
  * test source set cannot depend on `:core:data` (that would close a project
  * dependency cycle), so the real SQLDelight repository is unavailable here.
  *
- * Only the methods the Phase-3 use cases actually touch are implemented against
+ * Only the methods the Home and Detail use cases actually touch are implemented against
  * simple collections; every other interface member throws so an accidental
  * reliance surfaces loudly rather than silently returning empty data.
  */

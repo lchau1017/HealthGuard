@@ -6,6 +6,9 @@ import com.healthguard.BuildConfig
 import com.healthguard.activity.ActivityViewModel
 import com.healthguard.confirm.ConfirmViewModel
 import com.healthguard.detail.DetailViewModel
+import com.healthguard.detail.domain.ComputeDetailStateUseCase
+import com.healthguard.detail.domain.LoadDayDetailUseCase
+import com.healthguard.detail.domain.SaveMedicationUseCase
 import com.healthguard.home.HomeViewModel
 import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.ComputeHomeStateUseCase
@@ -58,10 +61,26 @@ val appModule = module {
     factory { StopMedicationUseCase(get(), get()) }
     factory { DeleteMedicationUseCase(get()) }
 
+    factory { ComputeDetailStateUseCase(get(), get(), TimeZone.currentSystemDefault()) }
+    factory { LoadDayDetailUseCase(get(), get(), TimeZone.currentSystemDefault()) }
+    factory { SaveMedicationUseCase(get()) }
+
     viewModel { ConfirmViewModel(get(), get(), Dispatchers.IO, get()) }
     viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { ActivityViewModel(get(), get()) }
     viewModel { (medicationId: String) ->
-        DetailViewModel(repository = get(), clock = get(), medicationId = medicationId)
+        DetailViewModel(
+            computeDetailState = get(),
+            loadDayDetail = get(),
+            saveMedication = get(),
+            recordDose = get(),
+            undoDose = get(),
+            activateMedication = get(),
+            stopMedication = get(),
+            deleteMedication = get(),
+            repository = get(),
+            clock = get(),
+            medicationId = medicationId,
+        )
     }
 }

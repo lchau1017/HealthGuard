@@ -46,7 +46,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,6 +76,7 @@ import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -85,24 +85,22 @@ import kotlinx.datetime.toLocalDateTime
  * Full-screen medication detail: identity header, live status card with the
  * guarded take-now action, the schedule summary, the editable "Details" form,
  * the completeness history, and the start/stop control at the bottom. Delete
- * lives in the top bar behind the shared confirmation dialog. The host
- * observes [DetailUiState.finished] to navigate back.
+ * lives in the top bar behind the shared confirmation dialog. This screen is
+ * the sole consumer of [effects]: the undo snackbar is shown here, and a
+ * [DetailEffect.Finished] is handed to the host via [onFinished] (toast +
+ * navigate back); [onBack] is the plain back-button/BackHandler path.
  */
 @Composable
 fun DetailScreen(
-    viewModel: DetailViewModel,
+    state: DetailUiState,
+    onIntent: (DetailIntent) -> Unit,
+    effects: Flow<DetailEffect>,
     onBack: () -> Unit,
+    onFinished: (DetailFinished) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val state by viewModel.state.collectAsState()
-    val takeConfirmMinutes by viewModel.takeConfirm.collectAsState()
-    val recentTake by viewModel.recentTake.collectAsState()
     var confirmingDelete by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
-
-    // Catch takes recorded elsewhere (or a seeding pass) since this view
-    // model was last active — dose writes don't retrigger its queries.
-    LaunchedEffect(Unit) { viewModel.refresh() }
 
     // Per-second countdown: the detail page is where precision matters.
     var now by remember { mutableStateOf(Clock.System.now()) }
@@ -115,17 +113,22 @@ fun DetailScreen(
     val zone = remember { TimeZone.currentSystemDefault() }
 
     // Same undo contract as home: only the explicit action removes the dose.
-    LaunchedEffect(recentTake) {
-        val take = recentTake ?: return@LaunchedEffect
-        val result = snackbarHostState.showSnackbar(
-            message = "${take.drugName} recorded",
-            actionLabel = "Undo",
-            duration = SnackbarDuration.Short,
-        )
-        if (result == SnackbarResult.ActionPerformed) {
-            viewModel.undoTake(take.doseId)
-        } else {
-            viewModel.clearRecentTake()
+    // Finished hands off to the host (toast + navigate back).
+    LaunchedEffect(Unit) {
+        effects.collect { effect ->
+            when (effect) {
+                is DetailEffect.ShowUndoSnackbar -> {
+                    val result = snackbarHostState.showSnackbar(
+                        message = "${effect.take.drugName} recorded",
+                        actionLabel = "Undo",
+                        duration = SnackbarDuration.Short,
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        onIntent(DetailIntent.UndoTake(effect.take.doseId))
+                    }
+                }
+                is DetailEffect.Finished -> onFinished(effect.result)
+            }
         }
     }
 
@@ -170,7 +173,7 @@ fun DetailScreen(
                     state = state,
                     now = now,
                     zone = zone,
-                    onTakeNow = viewModel::takeNow,
+                    onTakeNow = { onIntent(DetailIntent.TakeNow) },
                 )
             }
 
@@ -179,7 +182,7 @@ fun DetailScreen(
             SectionTitle("Details")
             OutlinedTextField(
                 value = state.name,
-                onValueChange = viewModel::onNameChange,
+                onValueChange = { onIntent(DetailIntent.NameChanged(it)) },
                 label = { Text("Drug name") },
                 isError = state.nameError,
                 supportingText = if (state.nameError) {
@@ -192,32 +195,32 @@ fun DetailScreen(
             )
             OutlinedTextField(
                 value = state.dosage,
-                onValueChange = viewModel::onDosageChange,
+                onValueChange = { onIntent(DetailIntent.DosageChanged(it)) },
                 label = { Text("Dosage") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = state.form,
-                onValueChange = viewModel::onFormChange,
+                onValueChange = { onIntent(DetailIntent.FormChanged(it)) },
                 label = { Text("Form") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             CategoryLabelInput(
                 label = state.label,
-                onLabelChange = viewModel::onLabelChange,
+                onLabelChange = { onIntent(DetailIntent.LabelChanged(it)) },
             )
             OutlinedTextField(
                 value = state.ingredients,
-                onValueChange = viewModel::onIngredientsChange,
+                onValueChange = { onIntent(DetailIntent.IngredientsChanged(it)) },
                 label = { Text("Active ingredients") },
                 supportingText = { Text("Separate multiple ingredients with commas") },
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = state.frequencyText,
-                onValueChange = viewModel::onFrequencyTextChange,
+                onValueChange = { onIntent(DetailIntent.FrequencyChanged(it)) },
                 label = { Text("Frequency") },
                 isError = state.frequencyError,
                 supportingText = {
@@ -240,12 +243,12 @@ fun DetailScreen(
             )
             WithFoodSelector(
                 selected = state.withFood,
-                onSelect = viewModel::onWithFoodChange,
+                onSelect = { onIntent(DetailIntent.WithFoodChanged(it)) },
             )
 
             Spacer(Modifier.height(4.dp))
             Button(
-                onClick = viewModel::save,
+                onClick = { onIntent(DetailIntent.Save) },
                 enabled = state.canSave,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -263,13 +266,13 @@ fun DetailScreen(
                 historyFrom = state.historyFrom,
                 now = now,
                 zone = zone,
-                onDayClick = viewModel::selectDay,
+                onDayClick = { onIntent(DetailIntent.SelectDay(it)) },
             )
 
             Spacer(Modifier.height(8.dp))
             if (state.isActive) {
                 OutlinedButton(
-                    onClick = viewModel::toggleTaking,
+                    onClick = { onIntent(DetailIntent.ToggleTaking) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 48.dp),
@@ -278,7 +281,7 @@ fun DetailScreen(
                 }
             } else {
                 Button(
-                    onClick = viewModel::toggleTaking,
+                    onClick = { onIntent(DetailIntent.ToggleTaking) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = 48.dp),
@@ -296,10 +299,10 @@ fun DetailScreen(
         }
     }
 
-    takeConfirmMinutes?.let { minutesAgo ->
+    state.takeConfirm?.let { minutesAgo ->
         val ago = if (minutesAgo < 1) "moments ago" else "$minutesAgo minutes ago"
         AlertDialog(
-            onDismissRequest = viewModel::dismissTakeConfirm,
+            onDismissRequest = { onIntent(DetailIntent.DismissTakeConfirm) },
             title = { Text("Record another dose?") },
             text = {
                 Text(
@@ -308,12 +311,12 @@ fun DetailScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = viewModel::confirmTakeAnyway) {
+                TextButton(onClick = { onIntent(DetailIntent.ConfirmTakeAnyway) }) {
                     Text("Record anyway", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = viewModel::dismissTakeConfirm) {
+                TextButton(onClick = { onIntent(DetailIntent.DismissTakeConfirm) }) {
                     Text("Cancel")
                 }
             },
@@ -321,7 +324,10 @@ fun DetailScreen(
     }
 
     state.dayDetail?.let { detail ->
-        DayDetailSheet(detail = detail, onDismiss = viewModel::dismissDayDetail)
+        DayDetailSheet(
+            detail = detail,
+            onDismiss = { onIntent(DetailIntent.DismissDayDetail) },
+        )
     }
 
     if (confirmingDelete) {
@@ -330,7 +336,7 @@ fun DetailScreen(
             isActive = state.isActive,
             onConfirm = {
                 confirmingDelete = false
-                viewModel.delete()
+                onIntent(DetailIntent.Delete)
             },
             onDismiss = { confirmingDelete = false },
         )

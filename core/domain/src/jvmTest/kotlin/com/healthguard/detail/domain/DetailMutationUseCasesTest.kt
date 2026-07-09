@@ -46,28 +46,4 @@ class DetailMutationUseCasesTest {
         assertEquals(started, stored.schedule.startedAt)
         assertNull(stored.schedule.stoppedAt)
     }
-
-    @Test
-    fun `toggle stops an active medication`() = runTest {
-        val repo = FakeMedicationRepository()
-        repo.seedMedication("act", startedAt = started)
-
-        ToggleTakingUseCase(repo, clock = { now })("act", currentlyActive = true)
-
-        assertEquals(listOf("act" to now), repo.stops)
-        assertEquals(now, repo.currentMedications().single().schedule.stoppedAt)
-    }
-
-    @Test
-    fun `toggle activates a dormant medication`() = runTest {
-        val repo = FakeMedicationRepository()
-        repo.seedMedication("dorm", startedAt = null)
-
-        ToggleTakingUseCase(repo, clock = { now })("dorm", currentlyActive = false)
-
-        assertEquals(listOf("dorm" to now), repo.activations)
-        val schedule = repo.currentMedications().single().schedule
-        assertEquals(now, schedule.startedAt)
-        assertNull(schedule.stoppedAt)
-    }
 }

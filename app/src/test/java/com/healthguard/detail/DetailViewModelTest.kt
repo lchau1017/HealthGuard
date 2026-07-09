@@ -7,7 +7,15 @@ import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DayDetail
 import com.healthguard.activity.DayMedicineLine
 import com.healthguard.activity.DoseDayStatus
+import com.healthguard.detail.domain.ComputeDetailStateUseCase
+import com.healthguard.detail.domain.LoadDayDetailUseCase
+import com.healthguard.detail.domain.SaveMedicationUseCase
 import com.healthguard.home.MedicationPhase
+import com.healthguard.home.domain.ActivateMedicationUseCase
+import com.healthguard.home.domain.DeleteMedicationUseCase
+import com.healthguard.home.domain.RecordDoseUseCase
+import com.healthguard.home.domain.StopMedicationUseCase
+import com.healthguard.home.domain.UndoDoseUseCase
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.SqlDelightMedicationRepository
@@ -67,11 +75,25 @@ class DetailViewModelTest {
     }
 
     private fun viewModel(id: String = "med-1") = DetailViewModel(
+        computeDetailState = ComputeDetailStateUseCase(repository, clock = { fixedNow }, zone = TimeZone.UTC),
+        loadDayDetail = LoadDayDetailUseCase(repository, clock = { fixedNow }, zone = TimeZone.UTC),
+        saveMedication = SaveMedicationUseCase(repository),
+        recordDose = RecordDoseUseCase(repository, clock = { fixedNow }),
+        undoDose = UndoDoseUseCase(repository),
+        activateMedication = ActivateMedicationUseCase(repository, clock = { fixedNow }),
+        stopMedication = StopMedicationUseCase(repository, clock = { fixedNow }),
+        deleteMedication = DeleteMedicationUseCase(repository),
         repository = repository,
         clock = { fixedNow },
         medicationId = id,
-        zone = TimeZone.UTC,
     )
+
+    /** Records every effect the view model emits, for the snackbar/finished assertions. */
+    private fun TestScope.collectEffects(vm: DetailViewModel): List<DetailEffect> {
+        val effects = mutableListOf<DetailEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+        return effects
+    }
 
     private suspend fun insert(
         frequency: Frequency? = Frequency.TimesPerDay(2),
@@ -128,15 +150,16 @@ class DetailViewModelTest {
         insert(frequency = Frequency.TimesPerDay(2))
         val vm = viewModel()
         collectState(vm)
+        val effects = collectEffects(vm)
 
-        vm.onNameChange(" Loratadine ")
-        vm.onDosageChange("5 mg")
-        vm.onFormChange("capsule")
-        vm.onLabelChange("Hay fever")
-        vm.onIngredientsChange("loratadine, , cellulose ")
-        vm.onFrequencyTextChange("every 8 hours")
-        vm.onWithFoodChange(false)
-        vm.save()
+        vm.onIntent(DetailIntent.NameChanged(" Loratadine "))
+        vm.onIntent(DetailIntent.DosageChanged("5 mg"))
+        vm.onIntent(DetailIntent.FormChanged("capsule"))
+        vm.onIntent(DetailIntent.LabelChanged("Hay fever"))
+        vm.onIntent(DetailIntent.IngredientsChanged("loratadine, , cellulose "))
+        vm.onIntent(DetailIntent.FrequencyChanged("every 8 hours"))
+        vm.onIntent(DetailIntent.WithFoodChanged(false))
+        vm.onIntent(DetailIntent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
         val stored = repository.getMedication("med-1")!!
@@ -147,7 +170,7 @@ class DetailViewModelTest {
         assertEquals(listOf("loratadine", "cellulose"), stored.medication.activeIngredients)
         assertEquals(Frequency.EveryHours(8), stored.schedule.frequency)
         assertEquals(false, stored.schedule.withFood)
-        assertEquals(DetailFinished.SAVED, vm.state.value.finished)
+        assertTrue(effects.contains(DetailEffect.Finished(DetailFinished.SAVED)))
     }
 
     @Test
@@ -156,9 +179,9 @@ class DetailViewModelTest {
         val vm = viewModel()
         collectState(vm)
 
-        vm.onFrequencyTextChange("   ")
+        vm.onIntent(DetailIntent.FrequencyChanged("   "))
         assertFalse(vm.state.value.frequencyError)
-        vm.save()
+        vm.onIntent(DetailIntent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(repository.getMedication("med-1")!!.schedule.frequency)
@@ -170,11 +193,11 @@ class DetailViewModelTest {
         val vm = viewModel()
         collectState(vm)
 
-        vm.onLabelChange("")
-        vm.onDosageChange(" ")
-        vm.onFormChange("")
-        vm.onIngredientsChange("")
-        vm.save()
+        vm.onIntent(DetailIntent.LabelChanged(""))
+        vm.onIntent(DetailIntent.DosageChanged(" "))
+        vm.onIntent(DetailIntent.FormChanged(""))
+        vm.onIntent(DetailIntent.IngredientsChanged(""))
+        vm.onIntent(DetailIntent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
         val stored = repository.getMedication("med-1")!!.medication
@@ -189,15 +212,16 @@ class DetailViewModelTest {
         insert()
         val vm = viewModel()
         collectState(vm)
+        val effects = collectEffects(vm)
 
-        vm.onNameChange("   ")
+        vm.onIntent(DetailIntent.NameChanged("   "))
         assertTrue(vm.state.value.nameError)
         assertFalse(vm.state.value.canSave)
-        vm.save()
+        vm.onIntent(DetailIntent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals("Cetirizine", repository.getMedication("med-1")!!.medication.drugName)
-        assertNull(vm.state.value.finished)
+        assertTrue(effects.filterIsInstance<DetailEffect.Finished>().isEmpty())
     }
 
     @Test
@@ -205,18 +229,19 @@ class DetailViewModelTest {
         insert(frequency = Frequency.TimesPerDay(2))
         val vm = viewModel()
         collectState(vm)
+        val effects = collectEffects(vm)
 
-        vm.onFrequencyTextChange("whenever I remember")
+        vm.onIntent(DetailIntent.FrequencyChanged("whenever I remember"))
         assertTrue(vm.state.value.frequencyError)
         assertFalse(vm.state.value.canSave)
-        vm.save()
+        vm.onIntent(DetailIntent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
             Frequency.TimesPerDay(2),
             repository.getMedication("med-1")!!.schedule.frequency,
         )
-        assertNull(vm.state.value.finished)
+        assertTrue(effects.filterIsInstance<DetailEffect.Finished>().isEmpty())
     }
 
     @Test
@@ -225,9 +250,9 @@ class DetailViewModelTest {
         val vm = viewModel()
         collectState(vm)
 
-        vm.onNameChange("Renamed")
-        vm.onFrequencyTextChange("every 6 hours")
-        vm.save()
+        vm.onIntent(DetailIntent.NameChanged("Renamed"))
+        vm.onIntent(DetailIntent.FrequencyChanged("every 6 hours"))
+        vm.onIntent(DetailIntent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
         val schedule = repository.getMedication("med-1")!!.schedule
@@ -243,13 +268,13 @@ class DetailViewModelTest {
         assertFalse(vm.state.value.isActive)
         assertEquals(MedicationPhase.NOT_STARTED, vm.state.value.phase)
 
-        vm.toggleTaking()
+        vm.onIntent(DetailIntent.ToggleTaking)
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value.isActive)
         assertEquals(fixedNow, vm.state.value.item?.schedule?.startedAt)
         assertEquals(MedicationPhase.TAKING, vm.state.value.phase)
 
-        vm.toggleTaking()
+        vm.onIntent(DetailIntent.ToggleTaking)
         dispatcher.scheduler.advanceUntilIdle()
         assertFalse(vm.state.value.isActive)
         assertEquals(fixedNow, vm.state.value.item?.schedule?.stoppedAt)
@@ -280,12 +305,13 @@ class DetailViewModelTest {
         insert()
         val vm = viewModel()
         collectState(vm)
+        val effects = collectEffects(vm)
 
-        vm.delete()
+        vm.onIntent(DetailIntent.Delete)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(repository.getMedication("med-1"))
-        assertEquals(DetailFinished.DELETED, vm.state.value.finished)
+        assertTrue(effects.contains(DetailEffect.Finished(DetailFinished.DELETED)))
     }
 
     @Test
@@ -330,7 +356,7 @@ class DetailViewModelTest {
         val vm = viewModel()
         collectState(vm)
 
-        vm.selectDay(LocalDate(2024, 7, 2))
+        vm.onIntent(DetailIntent.SelectDay(LocalDate(2024, 7, 2)))
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
@@ -352,7 +378,7 @@ class DetailViewModelTest {
             vm.state.value.dayDetail,
         )
 
-        vm.dismissDayDetail()
+        vm.onIntent(DetailIntent.DismissDayDetail)
         assertNull(vm.state.value.dayDetail)
     }
 
@@ -512,9 +538,10 @@ class DetailViewModelTest {
         insert(frequency = Frequency.EveryHours(6), startedAt = fixedNow - 2.hours)
         val vm = viewModel()
         collectState(vm)
+        val effects = collectEffects(vm)
         assertEquals(fixedNow - 2.hours, vm.state.value.nextDoseAt)
 
-        vm.takeNow()
+        vm.onIntent(DetailIntent.TakeNow)
         dispatcher.scheduler.advanceUntilIdle()
 
         val logged = repository.latestDose("sch-1")!!
@@ -525,7 +552,10 @@ class DetailViewModelTest {
         assertEquals(fixedNow + 6.hours, vm.state.value.nextDoseAt)
         assertEquals(fixedNow, vm.state.value.lastTakenAt)
         assertEquals(listOf(logged.id), loggedIds(vm))
-        assertEquals("Cetirizine", vm.recentTake.value?.drugName)
+        assertEquals(
+            "Cetirizine",
+            effects.filterIsInstance<DetailEffect.ShowUndoSnackbar>().last().take.drugName,
+        )
     }
 
     @Test
@@ -534,13 +564,14 @@ class DetailViewModelTest {
         logDose("d-1", takenAt = fixedNow - 20.minutes, plannedAt = fixedNow - 20.minutes, status = DoseStatus.TAKEN)
         val vm = viewModel()
         collectState(vm)
+        val effects = collectEffects(vm)
 
-        vm.takeNow()
+        vm.onIntent(DetailIntent.TakeNow)
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(20L, vm.takeConfirm.value)
+        assertEquals(20L, vm.state.value.takeConfirm)
         assertEquals("d-1", repository.latestDose("sch-1")?.id)
-        assertNull(vm.recentTake.value)
+        assertTrue(effects.filterIsInstance<DetailEffect.ShowUndoSnackbar>().isEmpty())
     }
 
     @Test
@@ -550,18 +581,18 @@ class DetailViewModelTest {
         val vm = viewModel()
         collectState(vm)
 
-        vm.takeNow()
+        vm.onIntent(DetailIntent.TakeNow)
         dispatcher.scheduler.advanceUntilIdle()
-        vm.dismissTakeConfirm()
-        assertNull(vm.takeConfirm.value)
+        vm.onIntent(DetailIntent.DismissTakeConfirm)
+        assertNull(vm.state.value.takeConfirm)
         assertEquals("d-1", repository.latestDose("sch-1")?.id)
 
-        vm.takeNow()
+        vm.onIntent(DetailIntent.TakeNow)
         dispatcher.scheduler.advanceUntilIdle()
-        vm.confirmTakeAnyway()
+        vm.onIntent(DetailIntent.ConfirmTakeAnyway)
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertNull(vm.takeConfirm.value)
+        assertNull(vm.state.value.takeConfirm)
         assertEquals(fixedNow, repository.latestDose("sch-1")?.takenAt)
     }
 
@@ -570,16 +601,16 @@ class DetailViewModelTest {
         insert(frequency = Frequency.EveryHours(6), startedAt = fixedNow - 2.hours)
         val vm = viewModel()
         collectState(vm)
-        vm.takeNow()
+        val effects = collectEffects(vm)
+        vm.onIntent(DetailIntent.TakeNow)
         dispatcher.scheduler.advanceUntilIdle()
-        val doseId = vm.recentTake.value!!.doseId
+        val doseId = effects.filterIsInstance<DetailEffect.ShowUndoSnackbar>().last().take.doseId
         assertEquals(fixedNow + 6.hours, vm.state.value.nextDoseAt)
 
-        vm.undoTake(doseId)
+        vm.onIntent(DetailIntent.UndoTake(doseId))
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(repository.latestDose("sch-1"))
-        assertNull(vm.recentTake.value)
         assertEquals(fixedNow - 2.hours, vm.state.value.nextDoseAt)
     }
 
@@ -591,9 +622,9 @@ class DetailViewModelTest {
         assertTrue(vm.state.value.history.isEmpty())
 
         // Dose logs alone never retrigger the medications flow; the screen
-        // calls refresh() on entry so a retained view model catches up.
+        // calls refresh on entry so a retained view model catches up.
         logDose("d-1", takenAt = fixedNow, plannedAt = fixedNow, status = DoseStatus.TAKEN)
-        vm.refresh()
+        vm.onIntent(DetailIntent.Refresh)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(listOf("d-1"), loggedIds(vm))
@@ -635,7 +666,7 @@ class DetailViewModelTest {
         val vm = viewModel()
         collectState(vm)
 
-        vm.onNameChange("Edited name")
+        vm.onIntent(DetailIntent.NameChanged("Edited name"))
         // Any repository write re-emits the medications flow.
         repository.activate("med-1", fixedNow)
         dispatcher.scheduler.advanceUntilIdle()
