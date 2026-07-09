@@ -19,7 +19,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -32,8 +31,6 @@ import com.healthguard.confirm.ConfirmEffect
 import com.healthguard.confirm.ConfirmIntent
 import com.healthguard.confirm.ConfirmUiState
 import com.healthguard.confirm.ConfirmViewModel
-import com.healthguard.confirm.loadDownsampledBitmap
-import com.healthguard.confirm.toUploadJpegBase64
 import com.healthguard.detail.DetailFinished
 import com.healthguard.detail.DetailIntent
 import com.healthguard.detail.DetailScreen
@@ -44,9 +41,6 @@ import com.healthguard.common.ui.AppNavBar
 import com.healthguard.common.ui.AppTab
 import com.healthguard.common.theme.HealthGuardTheme
 import java.io.File
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -75,7 +69,6 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun HealthGuardApp(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     var detailMedicationId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.HOME) }
     // Saveable so rotation (or process death while the camera app is in the
@@ -101,17 +94,11 @@ private fun HealthGuardApp(modifier: Modifier = Modifier) {
         }
     }
 
+    // Decode and error handling live in the confirm feature: the view model
+    // survives rotation (a composition-scoped decode would not) and renders
+    // progress/failure through its own dialog states.
     fun processPickedImage(uri: Uri) {
-        scope.launch {
-            val base64 = withContext(Dispatchers.IO) {
-                loadDownsampledBitmap(context, uri)?.toUploadJpegBase64()
-            }
-            if (base64 == null) {
-                Toast.makeText(context, "Couldn't load that image", Toast.LENGTH_LONG).show()
-            } else {
-                confirmViewModel.onIntent(ConfirmIntent.ImagePicked(base64))
-            }
-        }
+        confirmViewModel.onIntent(ConfirmIntent.ImagePicked(uri.toString()))
     }
 
     val takePictureLauncher = rememberLauncherForActivityResult(

@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 class ConfirmViewModel(
     private val extractMedication: ExtractMedicationUseCase,
     private val saveNewMedication: SaveNewMedicationUseCase,
+    private val imageEncoder: ImageEncoder,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ConfirmUiState>(ConfirmUiState.Idle)
@@ -44,10 +45,7 @@ class ConfirmViewModel(
     /** The single MVI entry point: each branch delegates to a use case or a state edit. */
     fun onIntent(intent: ConfirmIntent) {
         when (intent) {
-            is ConfirmIntent.ImagePicked -> {
-                lastImageBase64 = intent.base64
-                extract(intent.base64)
-            }
+            is ConfirmIntent.ImagePicked -> encodeAndExtract(intent.uri)
             ConfirmIntent.Retry -> lastImageBase64?.let { extract(it) }
             is ConfirmIntent.FieldEdited -> fieldEdited(intent.key, intent.value)
             is ConfirmIntent.FieldConfirmed -> updateField(intent.key) { it.copy(userConfirmed = true) }
@@ -125,6 +123,26 @@ class ConfirmViewModel(
         _state.value = ConfirmUiState.Idle
     }
 
+    /**
+     * Decodes the picked image and feeds it into extraction, all inside the
+     * view-model scope so a rotation mid-decode can't discard the capture.
+     * Extracting shows immediately — the dialog is visible for the whole
+     * decode+extract stretch. An undecodable image is a terminal error:
+     * there is no image to retry against.
+     */
+    private fun encodeAndExtract(uri: String) {
+        _state.value = ConfirmUiState.Extracting
+        viewModelScope.launch {
+            val base64 = imageEncoder.encode(uri)
+            if (base64 == null) {
+                _state.value = ConfirmUiState.Error(MESSAGE_IMAGE_LOAD_FAILED, retriable = false)
+            } else {
+                lastImageBase64 = base64
+                _state.value = extractMedication(base64).toUiState()
+            }
+        }
+    }
+
     private fun extract(imageJpegBase64: String) {
         _state.value = ConfirmUiState.Extracting
         viewModelScope.launch {
@@ -149,6 +167,7 @@ class ConfirmViewModel(
         const val KEY_WITH_FOOD = "withFood"
         const val KEY_INGREDIENTS = "ingredients"
 
+        const val MESSAGE_IMAGE_LOAD_FAILED = "Couldn't load that image"
         const val MESSAGE_MALFORMED = "Couldn't read the label — try another photo"
         const val MESSAGE_UNAVAILABLE = "Service unavailable — check connection"
         const val MESSAGE_SAVE_FAILED = "Couldn't save — try again"

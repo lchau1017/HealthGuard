@@ -6,7 +6,9 @@ import com.healthguard.BuildConfig
 import com.healthguard.activity.ActivityViewModel
 import com.healthguard.activity.domain.ComputeActivityStateUseCase
 import com.healthguard.activity.domain.LoadActivityDayDetailUseCase
+import com.healthguard.confirm.AndroidImageEncoder
 import com.healthguard.confirm.ConfirmViewModel
+import com.healthguard.confirm.ImageEncoder
 import com.healthguard.confirm.domain.ExtractMedicationUseCase
 import com.healthguard.confirm.domain.SaveNewMedicationUseCase
 import com.healthguard.detail.DetailViewModel
@@ -83,8 +85,9 @@ val appModule = module {
 
     factory { ExtractMedicationUseCase(get(), Dispatchers.IO) }
     factory { SaveNewMedicationUseCase(get(), get()) }
+    single<ImageEncoder> { AndroidImageEncoder(androidContext(), Dispatchers.IO) }
 
-    viewModel { ConfirmViewModel(get(), get()) }
+    viewModel { ConfirmViewModel(get(), get(), get()) }
     viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { ActivityViewModel(get(), get(), get()) }
     viewModel { (medicationId: String) ->

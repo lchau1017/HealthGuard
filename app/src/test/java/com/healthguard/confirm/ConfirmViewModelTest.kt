@@ -87,9 +87,11 @@ class ConfirmViewModelTest {
     private fun viewModelWith(
         extractor: VisionExtractor,
         repository: MedicationRepository = this.repository,
+        encoder: ImageEncoder = ImageEncoder { "base64-$it" },
     ) = ConfirmViewModel(
         ExtractMedicationUseCase(extractor, dispatcher),
         SaveNewMedicationUseCase(repository) { fixedNow },
+        encoder,
     )
 
     private fun viewModel(vararg results: ExtractionResult) =
@@ -323,7 +325,38 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.Retry)
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value is ConfirmUiState.Review)
-        assertEquals(listOf("img", "img"), extractor.calls)
+        assertEquals(listOf("base64-img", "base64-img"), extractor.calls)
+    }
+
+    @Test
+    fun `image is encoded before extraction and Extracting shows during the encode`() = runTest(dispatcher) {
+        val extractor = FakeExtractor(mutableListOf(ExtractionResult.Success(extraction())))
+        val gate = CompletableDeferred<String>()
+        val vm = viewModelWith(extractor, encoder = { gate.await() })
+
+        vm.onIntent(ConfirmIntent.ImagePicked("content://photo"))
+        dispatcher.scheduler.runCurrent()
+        // The dialog must be visible for the whole decode, not only extraction.
+        assertEquals(ConfirmUiState.Extracting, vm.state.value)
+
+        gate.complete("jpeg-bytes")
+        dispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.state.value is ConfirmUiState.Review)
+        assertEquals(listOf("jpeg-bytes"), extractor.calls)
+    }
+
+    @Test
+    fun `undecodable image surfaces a non-retriable error and never extracts`() = runTest(dispatcher) {
+        val extractor = FakeExtractor(mutableListOf())
+        val vm = viewModelWith(extractor, encoder = { null })
+
+        vm.onIntent(ConfirmIntent.ImagePicked("content://broken"))
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val error = vm.state.value as ConfirmUiState.Error
+        assertEquals("Couldn't load that image", error.message)
+        assertFalse(error.retriable)
+        assertTrue(extractor.calls.isEmpty())
     }
 
     @Test

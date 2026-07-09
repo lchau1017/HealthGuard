@@ -2,8 +2,8 @@ package com.healthguard.confirm
 
 /** Every user action the confirm screen can raise, sent through [ConfirmViewModel.onIntent]. */
 sealed interface ConfirmIntent {
-    /** A label photo was picked/captured (JPEG bytes as base64). */
-    data class ImagePicked(val base64: String) : ConfirmIntent
+    /** A label photo was picked/captured (its content/file Uri as a string). */
+    data class ImagePicked(val uri: String) : ConfirmIntent
 
     /** Re-run extraction on the last picked image after an error. */
     data object Retry : ConfirmIntent
