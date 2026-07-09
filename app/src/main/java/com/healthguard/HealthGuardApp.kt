@@ -3,14 +3,20 @@ package com.healthguard
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.healthguard.activity.ActivityScreen
 import com.healthguard.activity.ActivityViewModel
 import com.healthguard.common.ui.AppNavBar
@@ -55,31 +61,48 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
 
     val openDetailId = detailMedicationId
     if (openDetailId != null) {
-        val detailViewModel: DetailViewModel = koinViewModel(
-            key = "detail-$openDetailId",
-            parameters = { parametersOf(openDetailId) },
-        )
-        val detailState by detailViewModel.state.collectAsState()
-        BackHandler { detailMedicationId = null }
-        // Dose logs alone don't retrigger the medications query; refresh on
-        // entry so a retained view model catches up on takes from elsewhere.
-        LaunchedEffect(Unit) { detailViewModel.onIntent(DetailIntent.Refresh) }
-        DetailScreen(
-            state = detailState,
-            onIntent = detailViewModel::onIntent,
-            effects = detailViewModel.effects,
-            onBack = { detailMedicationId = null },
-            onFinished = { result ->
-                when (result) {
-                    DetailFinished.SAVED ->
-                        Toast.makeText(context, "Changes saved", Toast.LENGTH_SHORT).show()
-                    DetailFinished.DELETED ->
-                        Toast.makeText(context, "Medication deleted", Toast.LENGTH_SHORT).show()
-                }
-                detailMedicationId = null
-            },
-            modifier = modifier,
-        )
+        // Scope the detail view model to the detail "destination" instead of
+        // the Activity: resolving it against the Activity's ViewModelStore
+        // with a per-id key would retain one DetailViewModel for every
+        // medication ever visited until the Activity dies. This child owner
+        // lives exactly as long as the detail is open for this id — the
+        // DisposableEffect clears its store when the detail closes (or the id
+        // changes), releasing the view model. Opening A → back → opening B →
+        // back therefore leaves no retained detail view models.
+        val detailStoreOwner = remember(openDetailId) {
+            object : ViewModelStoreOwner {
+                override val viewModelStore = ViewModelStore()
+            }
+        }
+        DisposableEffect(detailStoreOwner) {
+            onDispose { detailStoreOwner.viewModelStore.clear() }
+        }
+        CompositionLocalProvider(LocalViewModelStoreOwner provides detailStoreOwner) {
+            val detailViewModel: DetailViewModel = koinViewModel(
+                parameters = { parametersOf(openDetailId) },
+            )
+            val detailState by detailViewModel.state.collectAsState()
+            BackHandler { detailMedicationId = null }
+            // Dose logs alone don't retrigger the medications query; refresh on
+            // entry so a retained view model catches up on takes from elsewhere.
+            LaunchedEffect(Unit) { detailViewModel.onIntent(DetailIntent.Refresh) }
+            DetailScreen(
+                state = detailState,
+                onIntent = detailViewModel::onIntent,
+                effects = detailViewModel.effects,
+                onBack = { detailMedicationId = null },
+                onFinished = { result ->
+                    when (result) {
+                        DetailFinished.SAVED ->
+                            Toast.makeText(context, "Changes saved", Toast.LENGTH_SHORT).show()
+                        DetailFinished.DELETED ->
+                            Toast.makeText(context, "Medication deleted", Toast.LENGTH_SHORT).show()
+                    }
+                    detailMedicationId = null
+                },
+                modifier = modifier,
+            )
+        }
     } else if (selectedTab == AppTab.ACTIVITY) {
         val activityViewModel: ActivityViewModel = koinViewModel()
         val activityState by activityViewModel.state.collectAsState()
