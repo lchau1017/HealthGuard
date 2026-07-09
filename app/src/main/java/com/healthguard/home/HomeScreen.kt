@@ -72,7 +72,6 @@ import com.healthguard.shared.data.MedicationWithSchedule
 import com.healthguard.common.ui.CategoryChip
 import com.healthguard.common.ui.StatusChip
 import com.healthguard.common.theme.heatRamp
-import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
@@ -101,9 +100,10 @@ fun HomeScreen(
     var showDisclaimer by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Fresh wall-clock reading per state emission: the view model re-emits at
-    // least every minute, which is exactly the countdown's resolution.
-    val now = remember(state) { Clock.System.now() }
+    // The wall clock the state was computed against: the view model re-emits
+    // at least every minute with a fresh `now`, so clock-derived text can
+    // never drift from (or outlive) the computed facts beside it.
+    val now = state.now
     val zone = remember { TimeZone.currentSystemDefault() }
     val today = now.toLocalDateTime(zone).date
 

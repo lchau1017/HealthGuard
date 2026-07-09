@@ -478,6 +478,29 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `every tick propagates a fresh now even when nothing else changed`() = runTest(dispatcher) {
+        // An overdue dose whose computed facts are identical between ticks:
+        // without `now` in the state the recomputation produced an EQUAL
+        // HomeUiState that MutableStateFlow conflated away, freezing every
+        // clock-derived string on screen (the "overdue Xm" countdown).
+        insert("a", frequency = Frequency.EveryHours(6), startedAt = fixedNow - 2.hours)
+        val vm = viewModel()
+        collectState(vm)
+        assertEquals(fixedNow, vm.state.value.now)
+        val before = vm.state.value
+
+        now = fixedNow + 5.minutes
+        ticker.emit(Unit)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val after = vm.state.value
+        assertEquals(fixedNow + 5.minutes, after.now)
+        // The only difference is the clock — proving equal-content states
+        // relied on `now` to get past the StateFlow's equality conflation.
+        assertEquals(before.copy(now = fixedNow + 5.minutes), after)
+    }
+
+    @Test
     fun `dormant and stopped items are in the cabinet newest first and never in taking`() = runTest(dispatcher) {
         insert("older-dormant", createdAtMillis = 1_000)
         insert("newer-dormant", createdAtMillis = 2_000)

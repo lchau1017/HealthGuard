@@ -411,6 +411,18 @@ class ActivityViewModelTest {
     }
 
     @Test
+    fun `state carries the wall clock the content was computed against`() = runTest(dispatcher) {
+        // The screen derives "today" from state.now; a reload after midnight
+        // must therefore always roll the today-outline over, even when the
+        // recomputed content is otherwise unchanged.
+        insert("a", "Ibuprofen")
+        val vm = viewModel()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(fixedNow, vm.state.value.now)
+    }
+
+    @Test
     fun `reload picks up takes recorded since the last load`() = runTest(dispatcher) {
         insert("a", "Ibuprofen")
         val vm = viewModel()

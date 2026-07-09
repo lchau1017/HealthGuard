@@ -37,7 +37,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.healthguard.home.MedicationPhase
-import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -59,7 +58,9 @@ fun ActivityScreen(
     LaunchedEffect(Unit) { onIntent(ActivityIntent.Reload) }
 
     val zone = remember { TimeZone.currentSystemDefault() }
-    val today = remember(state) { Clock.System.now().toLocalDateTime(zone).date }
+    // "Today" comes from the clock the state was computed against, so the
+    // today-outline in the grid rolls over with the content after midnight.
+    val today = state.now.toLocalDateTime(zone).date
 
     Scaffold(
         modifier = modifier,

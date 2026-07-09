@@ -58,7 +58,9 @@ class HomeViewModel(
     ticker: Flow<Unit> = minuteTicker(),
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(HomeUiState())
+    // Seeded with the current clock so the header date is right on the very
+    // first frame, before the first computed state lands.
+    private val _state = MutableStateFlow(HomeUiState(now = clock()))
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
 
     private val _effects = Channel<HomeEffect>(Channel.BUFFERED)

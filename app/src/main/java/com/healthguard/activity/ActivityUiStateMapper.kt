@@ -11,6 +11,7 @@ import kotlinx.datetime.TimeZone
 
 /** Folds the tracked [ActivityContent] into the ViewState, applying the stopped-row label. */
 internal fun ActivityContent.toUiState(zone: TimeZone): ActivityUiState = ActivityUiState(
+    now = now,
     filter = filter,
     from = from,
     stats = stats,

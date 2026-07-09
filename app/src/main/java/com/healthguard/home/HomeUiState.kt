@@ -1,9 +1,22 @@
+@file:OptIn(ExperimentalTime::class)
+
 package com.healthguard.home
 
 import com.healthguard.shared.data.MedicationWithSchedule
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 /** Everything the home screen renders — the single immutable ViewState. */
 data class HomeUiState(
+    /**
+     * The wall-clock instant the state was computed against (from
+     * `HomeContent.now`). Carried in the state so the screen never reads the
+     * clock itself, and so every minute tick produces an unequal state —
+     * a `MutableStateFlow` drops equal re-emissions, which used to freeze
+     * clock-derived text (the overdue countdown, "Stopped today" chips)
+     * whenever nothing else changed.
+     */
+    val now: Instant = Instant.DISTANT_PAST,
     /** Non-null only while at least one taking entry is due now or overdue. */
     val dueAlert: DueAlert? = null,
     /** Active schedules: overdue first, then soonest next dose, no-frequency last. */

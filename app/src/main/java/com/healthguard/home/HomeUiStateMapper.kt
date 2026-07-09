@@ -23,6 +23,7 @@ internal fun HomeContent.toUiState(current: HomeUiState, zone: TimeZone): HomeUi
         )
     }
     return current.copy(
+        now = now,
         taking = cards,
         cabinet = cabinet,
         dueCount = dueCount,
