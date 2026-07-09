@@ -76,23 +76,23 @@ class HomeViewModel(
             // doesn't observe the doseLog table.
             repository.dataChanges.onStart { emit(Unit) },
         ) { rows, _, _, _ -> rows }
-            .onEach { rows ->
-                val now = clock()
-                val content = computeHomeState(rows)
-                _state.update { it.applyContent(content, now) }
-            }
+            .onEach { rows -> _state.update { it.applyContent(computeHomeState(rows)) } }
+            // Eager for the ViewModel's lifetime (not stateIn/WhileSubscribed):
+            // the single mutable state is reduced by hand, and the host always
+            // collects `state` while composed, so there is no idle window to gate.
             .launchIn(viewModelScope)
     }
 
     /** Folds the pure [HomeContent] into the ViewState, applying presentation formatters. */
-    private fun HomeUiState.applyContent(c: HomeContent, now: Instant): HomeUiState {
+    private fun HomeUiState.applyContent(c: HomeContent): HomeUiState {
         val cards = c.taking.map { dc ->
             DoseCard(
                 item = dc.item,
                 nextDoseAt = dc.nextDoseAt,
                 lastTaken = dc.lastTaken,
                 isDue = dc.isDue,
-                status = doseRowStatus(dc.nextDoseAt, dc.lastTaken, now, zone, dc.isDue),
+                // Same `now` the content was computed against — no formatting drift.
+                status = doseRowStatus(dc.nextDoseAt, dc.lastTaken, c.now, zone, dc.isDue),
             )
         }
         return copy(

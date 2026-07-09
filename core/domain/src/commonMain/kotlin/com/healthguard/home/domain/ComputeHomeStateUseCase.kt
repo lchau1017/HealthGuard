@@ -44,6 +44,13 @@ data class HomeContent(
     val weekDays: List<WeekDay>,
     /** Whether any schedule still owes a slot later today (feeds the week caption). */
     val todayPending: Boolean,
+    /**
+     * The single wall-clock instant this content was computed against. The
+     * presentation layer formats row status from this same [now], so the
+     * displayed countdowns can't drift from the [DoseCardContent.isDue] and
+     * week-strip facts computed here.
+     */
+    val now: Instant,
 )
 
 /** Days covered by the home "This week" card, today included. */
@@ -105,6 +112,7 @@ class ComputeHomeStateUseCase(
             dueCount = dueCount,
             weekDays = weekDays,
             todayPending = todayHasPendingSlots(schedules, now, zone),
+            now = now,
         )
     }
 }
