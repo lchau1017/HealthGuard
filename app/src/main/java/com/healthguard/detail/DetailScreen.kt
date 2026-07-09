@@ -24,7 +24,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,7 +41,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -73,6 +71,7 @@ import com.healthguard.shared.domain.doseSlots
 import com.healthguard.shared.extraction.Frequency
 import com.healthguard.common.ui.CategoryChip
 import com.healthguard.common.ui.CategoryLabelInput
+import com.healthguard.common.ui.DoubleDoseDialog
 import com.healthguard.common.ui.StatusChip
 import com.healthguard.common.theme.heatRamp
 import kotlin.time.Clock
@@ -303,26 +302,11 @@ fun DetailScreen(
     }
 
     state.takeConfirm?.let { minutesAgo ->
-        val ago = if (minutesAgo < 1) "moments ago" else "$minutesAgo minutes ago"
-        AlertDialog(
-            onDismissRequest = { onIntent(DetailIntent.DismissTakeConfirm) },
-            title = { Text("Record another dose?") },
-            text = {
-                Text(
-                    "You recorded ${state.item?.medication?.drugName ?: "this medication"} " +
-                        "$ago. Taking it again this soon may be a double dose.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { onIntent(DetailIntent.ConfirmTakeAnyway) }) {
-                    Text("Record anyway", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { onIntent(DetailIntent.DismissTakeConfirm) }) {
-                    Text("Cancel")
-                }
-            },
+        DoubleDoseDialog(
+            drugName = state.item?.medication?.drugName ?: "this medication",
+            minutesAgo = minutesAgo,
+            onConfirm = { onIntent(DetailIntent.ConfirmTakeAnyway) },
+            onDismiss = { onIntent(DetailIntent.DismissTakeConfirm) },
         )
     }
 

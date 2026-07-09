@@ -73,6 +73,7 @@ import com.healthguard.activity.DoseDayStatus
 import com.healthguard.common.format.todayLabel
 import com.healthguard.shared.data.MedicationWithSchedule
 import com.healthguard.common.ui.CategoryChip
+import com.healthguard.common.ui.DoubleDoseDialog
 import com.healthguard.common.ui.StatusChip
 import com.healthguard.common.theme.heatRamp
 import kotlin.time.ExperimentalTime
@@ -618,36 +619,6 @@ private fun TakingRow(
             }
         }
     }
-}
-
-@Composable
-private fun DoubleDoseDialog(
-    drugName: String,
-    minutesAgo: Long,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val ago = if (minutesAgo < 1) "moments ago" else "$minutesAgo minutes ago"
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Record another dose?") },
-        text = {
-            Text(
-                "You recorded $drugName $ago. Taking it again this soon " +
-                    "may be a double dose.",
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text("Record anyway", color = MaterialTheme.colorScheme.error)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
-    )
 }
 
 /**
