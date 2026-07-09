@@ -2,8 +2,6 @@ package com.healthguard.home
 
 import com.healthguard.activity.DoseDayStatus
 
-private const val WEEK_DAYS = 7
-
 /**
  * The line under the week circles. Days that never owed anything
  * ([DoseDayStatus.OUT_OF_TREATMENT]) and fully skipped days (a deliberate
@@ -24,8 +22,11 @@ fun weekCaption(days: List<WeekDay>, todayPending: Boolean): String {
     val onTrack = counted.count { it.state == DoseDayStatus.MET }
     return when {
         counted.isEmpty() && !todayExcluded -> "No scheduled doses this week."
-        counted.size == WEEK_DAYS && onTrack == WEEK_DAYS ->
-            "7 of 7 days on track — nice work."
+        // Every day in the window counted and every one on track — the full-week
+        // celebration. Derives the total from the input, not a hard-coded 7, so
+        // it can't silently drift from the domain's window length.
+        counted.size == days.size && onTrack == days.size ->
+            "$onTrack of ${counted.size} days on track — nice work."
         todayExcluded -> "$onTrack of ${counted.size} days on track. Today still to come."
         else -> "$onTrack of ${counted.size} days on track."
     }
