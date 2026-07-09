@@ -1,97 +1,62 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.confirm
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthguard.common.format.parseFrequency
 import com.healthguard.common.format.toHumanText
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.StoredMedication
-import com.healthguard.shared.data.StoredSchedule
+import com.healthguard.confirm.domain.ExtractMedicationUseCase
+import com.healthguard.confirm.domain.NewMedication
+import com.healthguard.confirm.domain.SaveNewMedicationUseCase
 import com.healthguard.shared.extraction.ExtractedField
 import com.healthguard.shared.extraction.ExtractionResult
-import com.healthguard.shared.extraction.Frequency
 import com.healthguard.shared.extraction.MedicationExtraction
-import com.healthguard.shared.extraction.VisionExtractor
-import java.util.UUID
-import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-
-/** One display row on the confirmation screen. */
-data class ReviewField(
-    val key: String,
-    val label: String,
-    val value: String,
-    val confidence: Double,
-    val needsReview: Boolean,
-    val userConfirmed: Boolean = false,
-)
-
-sealed interface ConfirmUiState {
-    data object Idle : ConfirmUiState
-    data object Extracting : ConfirmUiState
-
-    /**
-     * Editable review of the extraction. [frequency] and [withFood] carry the
-     * typed values behind their display rows so Accept never has to re-parse
-     * human-readable text the user did not touch.
-     */
-    data class Review(
-        val fields: List<ReviewField>,
-        val frequency: Frequency?,
-        val withFood: Boolean?,
-    ) : ConfirmUiState
-
-    data class Error(val message: String, val retriable: Boolean) : ConfirmUiState
-
-    /** One-shot: the medication was persisted; the UI should close and reset. */
-    data object Saved : ConfirmUiState
-}
 
 /**
- * Drives the capture -> extract -> review -> save flow. All extraction work
- * runs on [ioDispatcher]; the extractor itself never throws (see
- * [VisionExtractor]). [clock] is injected so tests control timestamps.
+ * The confirm screen's MVI holder. It owns no business logic: extraction runs
+ * through [extractMedication] and persistence through [saveNewMedication].
+ * Every user [ConfirmIntent] delegates to a use case or a state edit; the
+ * rendered [ConfirmUiState] folds the extraction result over this layer's
+ * presentation mapping (field rows, frequency/with-food parsing).
  */
 class ConfirmViewModel(
-    private val extractor: VisionExtractor,
-    private val repository: MedicationRepository,
-    private val ioDispatcher: CoroutineDispatcher,
-    private val clock: () -> Instant,
+    private val extractMedication: ExtractMedicationUseCase,
+    private val saveNewMedication: SaveNewMedicationUseCase,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ConfirmUiState>(ConfirmUiState.Idle)
     val state: StateFlow<ConfirmUiState> = _state.asStateFlow()
 
+    private val _effects = Channel<ConfirmEffect>(Channel.BUFFERED)
+    val effects: Flow<ConfirmEffect> = _effects.receiveAsFlow()
+
     private var lastImageBase64: String? = null
+    private var saving = false
 
-    /** True when every field flagged for review has been confirmed or edited. */
-    val canAccept: Boolean
-        get() = (_state.value as? ConfirmUiState.Review)
-            ?.fields
-            ?.none { it.needsReview && !it.userConfirmed }
-            ?: false
-
-    fun onImagePicked(imageJpegBase64: String) {
-        lastImageBase64 = imageJpegBase64
-        extract(imageJpegBase64)
+    /** The single MVI entry point: each branch delegates to a use case or a state edit. */
+    fun onIntent(intent: ConfirmIntent) {
+        when (intent) {
+            is ConfirmIntent.ImagePicked -> {
+                lastImageBase64 = intent.base64
+                extract(intent.base64)
+            }
+            ConfirmIntent.Retry -> lastImageBase64?.let { extract(it) }
+            is ConfirmIntent.FieldEdited -> fieldEdited(intent.key, intent.value)
+            is ConfirmIntent.FieldConfirmed -> updateField(intent.key) { it.copy(userConfirmed = true) }
+            is ConfirmIntent.Accept -> accept(intent.label)
+            ConfirmIntent.Reset -> reset()
+        }
     }
 
-    fun onRetry() {
-        val image = lastImageBase64 ?: return
-        extract(image)
-    }
-
-    fun onFieldEdited(key: String, newValue: String) {
+    private fun fieldEdited(key: String, newValue: String) {
         updateField(key) { field ->
             if (newValue.isBlank()) {
                 // A blank value can never stand in for a reviewed one: typing
@@ -113,26 +78,20 @@ class ConfirmViewModel(
         }
     }
 
-    fun onFieldConfirmed(key: String) {
-        updateField(key) { it.copy(userConfirmed = true) }
-    }
-
     /**
      * Persists the reviewed medication with a dormant schedule (started later
      * from the home list). No-op unless every flagged field is confirmed.
      */
-    fun onAccept(label: String?) {
+    private fun accept(label: String?) {
         val review = _state.value as? ConfirmUiState.Review ?: return
-        if (!canAccept || saving) return
+        if (!review.canAccept || saving) return
         saving = true
 
         val byKey = review.fields.associateBy { it.key }
         fun value(key: String): String? =
             byKey[key]?.value?.trim()?.takeUnless { it.isEmpty() }
 
-        val medicationId = UUID.randomUUID().toString()
-        val medication = StoredMedication(
-            id = medicationId,
+        val medication = NewMedication(
             drugName = value(KEY_DRUG_NAME).orEmpty(),
             label = label?.trim()?.takeUnless { it.isEmpty() },
             activeIngredients = value(KEY_INGREDIENTS)
@@ -143,20 +102,13 @@ class ConfirmViewModel(
             dosage = value(KEY_DOSAGE),
             form = value(KEY_FORM),
             extractionConfidence = review.fields.minOfOrNull { it.confidence } ?: 0.0,
-            createdAt = clock(),
-        )
-        val schedule = StoredSchedule(
-            id = UUID.randomUUID().toString(),
-            medicationId = medicationId,
             frequency = review.frequency,
             withFood = review.withFood,
-            startedAt = null,
-            stoppedAt = null,
         )
         viewModelScope.launch {
             try {
-                repository.insertMedication(medication, schedule)
-                _state.value = ConfirmUiState.Saved
+                saveNewMedication(medication)
+                _effects.send(ConfirmEffect.Saved)
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (_: Exception) {
@@ -167,19 +119,16 @@ class ConfirmViewModel(
         }
     }
 
-    fun reset() {
+    private fun reset() {
         lastImageBase64 = null
         saving = false
         _state.value = ConfirmUiState.Idle
     }
 
-    private var saving = false
-
     private fun extract(imageJpegBase64: String) {
         _state.value = ConfirmUiState.Extracting
         viewModelScope.launch {
-            val result = withContext(ioDispatcher) { extractor.extract(imageJpegBase64) }
-            _state.value = when (result) {
+            _state.value = when (val result = extractMedication(imageJpegBase64)) {
                 is ExtractionResult.Success ->
                     ConfirmUiState.Review(
                         fields = result.extraction.toReviewFields(),

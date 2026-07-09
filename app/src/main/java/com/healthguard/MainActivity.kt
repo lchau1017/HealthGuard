@@ -30,6 +30,8 @@ import com.healthguard.activity.ActivityViewModel
 import com.healthguard.capture.loadDownsampledBitmap
 import com.healthguard.capture.toUploadJpegBase64
 import com.healthguard.confirm.ConfirmDialog
+import com.healthguard.confirm.ConfirmEffect
+import com.healthguard.confirm.ConfirmIntent
 import com.healthguard.confirm.ConfirmUiState
 import com.healthguard.confirm.ConfirmViewModel
 import com.healthguard.detail.DetailFinished
@@ -86,6 +88,19 @@ private fun HealthGuardApp(modifier: Modifier = Modifier) {
     val confirmState by confirmViewModel.state.collectAsState()
     val homeState by homeViewModel.state.collectAsState()
 
+    // Sole consumer of the confirm flow's one-shot effects (like Home/Detail):
+    // a successful save toasts and resets the flow back to Idle.
+    LaunchedEffect(Unit) {
+        confirmViewModel.effects.collect { effect ->
+            when (effect) {
+                is ConfirmEffect.Saved -> {
+                    Toast.makeText(context, "Added to your medications", Toast.LENGTH_SHORT).show()
+                    confirmViewModel.onIntent(ConfirmIntent.Reset)
+                }
+            }
+        }
+    }
+
     fun processPickedImage(uri: Uri) {
         scope.launch {
             val base64 = withContext(Dispatchers.IO) {
@@ -94,7 +109,7 @@ private fun HealthGuardApp(modifier: Modifier = Modifier) {
             if (base64 == null) {
                 Toast.makeText(context, "Couldn't load that image", Toast.LENGTH_LONG).show()
             } else {
-                confirmViewModel.onImagePicked(base64)
+                confirmViewModel.onIntent(ConfirmIntent.ImagePicked(base64))
             }
         }
     }
@@ -200,13 +215,9 @@ private fun HealthGuardApp(modifier: Modifier = Modifier) {
 
     when (confirmState) {
         is ConfirmUiState.Idle -> Unit
-        is ConfirmUiState.Saved -> LaunchedEffect(Unit) {
-            Toast.makeText(context, "Added to your medications", Toast.LENGTH_SHORT).show()
-            confirmViewModel.reset()
-        }
         else -> ConfirmDialog(
-            viewModel = confirmViewModel,
-            onCancel = confirmViewModel::reset,
+            state = confirmState,
+            onIntent = confirmViewModel::onIntent,
         )
     }
 }
