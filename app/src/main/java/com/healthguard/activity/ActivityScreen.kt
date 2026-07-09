@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.healthguard.common.format.hourLabel
 import com.healthguard.home.MedicationPhase
 import kotlin.time.ExperimentalTime
 import kotlinx.datetime.LocalDate

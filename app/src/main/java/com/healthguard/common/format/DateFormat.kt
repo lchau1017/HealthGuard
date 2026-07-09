@@ -15,6 +15,18 @@ fun timeLabel(time: LocalTime): String {
     return "$hour12:${time.minute.toString().padStart(2, '0')} $amPm"
 }
 
+/**
+ * Locale-simple 12-hour label for a 0-23 [hour]: "12 AM", "11 AM", "2 PM".
+ * Deliberately minute-less — [timeLabel] renders "9:00 AM" — because it
+ * names an hour-of-day bucket, not a clock reading.
+ */
+fun hourLabel(hour: Int): String = when {
+    hour == 0 -> "12 AM"
+    hour < 12 -> "$hour AM"
+    hour == 12 -> "12 PM"
+    else -> "${hour - 12} PM"
+}
+
 /** The home header's date line: "Tuesday, 8 July". */
 fun todayLabel(date: LocalDate): String =
     "${date.dayOfWeek.titleCase()}, ${date.day} ${date.month.titleCase()}"
