@@ -90,16 +90,7 @@ class DetailViewModel(
      * afterwards — a background re-emission must not clobber typing.
      */
     private fun DetailUiState.applyContent(c: DetailContent): DetailUiState {
-        val tracked = copy(
-            item = c.item,
-            nextDoseAt = c.nextDoseAt,
-            lastTakenAt = c.lastTakenAt,
-            history = c.history,
-            dayStatuses = c.dayStatuses,
-            dayTakeCounts = c.dayTakeCounts,
-            adherence = c.adherence,
-            historyFrom = c.historyFrom,
-        )
+        val tracked = c.toTrackedState(this)
         return if (fieldsSeeded) {
             tracked
         } else {

@@ -16,7 +16,7 @@ import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 
-class ThisWeekTest {
+class WeekDayStatesTest {
 
     private val zone = TimeZone.UTC
 

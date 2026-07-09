@@ -7,11 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.healthguard.activity.domain.ActivityContent
 import com.healthguard.activity.domain.ComputeActivityStateUseCase
 import com.healthguard.activity.domain.LoadActivityDayDetailUseCase
-import com.healthguard.activity.domain.MedicationAdherenceContent
-import com.healthguard.home.stoppedLabel
 import com.healthguard.shared.domain.ObserveDataChangesUseCase
 import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -70,7 +67,7 @@ class ActivityViewModel(
 
     private fun load(filter: ActivityFilter) {
         viewModelScope.launch {
-            _state.value = computeActivityState(filter).toUiState()
+            _state.value = computeActivityState(filter).toUiState(zone)
         }
     }
 
@@ -84,24 +81,4 @@ class ActivityViewModel(
         }
     }
 
-    /** Folds the tracked [ActivityContent] into the ViewState, applying the stopped-row label. */
-    private fun ActivityContent.toUiState() = ActivityUiState(
-        filter = filter,
-        from = from,
-        stats = stats,
-        dayCounts = dayCounts,
-        breakdown = breakdown.map { it.toUi(now) },
-    )
-
-    private fun MedicationAdherenceContent.toUi(now: Instant) = MedicationAdherence(
-        name = name,
-        phase = phase,
-        asNeeded = asNeeded,
-        percent = percent,
-        taken = taken,
-        skipped = skipped,
-        meetsTarget = meetsTarget,
-        // Same `now` the content was computed against — no formatting drift.
-        stoppedText = stoppedAt?.let { stoppedLabel(it, now, zone) },
-    )
 }

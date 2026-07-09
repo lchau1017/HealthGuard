@@ -128,18 +128,7 @@ class ConfirmViewModel(
     private fun extract(imageJpegBase64: String) {
         _state.value = ConfirmUiState.Extracting
         viewModelScope.launch {
-            _state.value = when (val result = extractMedication(imageJpegBase64)) {
-                is ExtractionResult.Success ->
-                    ConfirmUiState.Review(
-                        fields = result.extraction.toReviewFields(),
-                        frequency = result.extraction.frequency.value,
-                        withFood = result.extraction.withFood.value,
-                    )
-                is ExtractionResult.Malformed ->
-                    ConfirmUiState.Error(MESSAGE_MALFORMED, retriable = true)
-                is ExtractionResult.Unavailable ->
-                    ConfirmUiState.Error(MESSAGE_UNAVAILABLE, retriable = true)
-            }
+            _state.value = extractMedication(imageJpegBase64).toUiState()
         }
     }
 
@@ -151,37 +140,6 @@ class ConfirmViewModel(
             )
         }
     }
-
-    private fun MedicationExtraction.toReviewFields(): List<ReviewField> = buildList {
-        add(drugName.toReviewField(KEY_DRUG_NAME, "Drug name") { it })
-        add(dosage.toReviewField(KEY_DOSAGE, "Dosage") { it })
-        add(form.toReviewField(KEY_FORM, "Form") { it })
-        add(frequency.toReviewField(KEY_FREQUENCY, "Frequency") { it.toHumanText() })
-        add(withFood.toReviewField(KEY_WITH_FOOD, "Take with food") { if (it) "Yes" else "No" })
-        if (activeIngredients.isNotEmpty()) {
-            add(
-                ReviewField(
-                    key = KEY_INGREDIENTS,
-                    label = "Active ingredients",
-                    value = activeIngredients.mapNotNull { it.value }.joinToString(", "),
-                    confidence = activeIngredients.minOf { it.confidence },
-                    needsReview = activeIngredients.any { it.needsReview },
-                ),
-            )
-        }
-    }
-
-    private fun <T> ExtractedField<T>.toReviewField(
-        key: String,
-        label: String,
-        render: (T) -> String,
-    ) = ReviewField(
-        key = key,
-        label = label,
-        value = value?.let(render) ?: "",
-        confidence = confidence,
-        needsReview = needsReview,
-    )
 
     companion object {
         const val KEY_DRUG_NAME = "drugName"

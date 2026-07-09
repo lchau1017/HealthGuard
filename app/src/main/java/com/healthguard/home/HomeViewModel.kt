@@ -77,34 +77,11 @@ class HomeViewModel(
             ticker,
             refresh,
         ) { rows, _, _ -> rows }
-            .onEach { rows -> _state.update { it.applyContent(computeHomeState(rows)) } }
+            .onEach { rows -> _state.update { computeHomeState(rows).toUiState(it, zone) } }
             // Eager for the ViewModel's lifetime (not stateIn/WhileSubscribed):
             // the single mutable state is reduced by hand, and the host always
             // collects `state` while composed, so there is no idle window to gate.
             .launchIn(viewModelScope)
-    }
-
-    /** Folds the pure [HomeContent] into the ViewState, applying presentation formatters. */
-    private fun HomeUiState.applyContent(c: HomeContent): HomeUiState {
-        val cards = c.taking.map { dc ->
-            DoseCard(
-                item = dc.item,
-                nextDoseAt = dc.nextDoseAt,
-                lastTaken = dc.lastTaken,
-                isDue = dc.isDue,
-                // Same `now` the content was computed against — no formatting drift.
-                status = doseRowStatus(dc.nextDoseAt, dc.lastTaken, c.now, zone, dc.isDue),
-            )
-        }
-        return copy(
-            taking = cards,
-            cabinet = c.cabinet,
-            dueCount = c.dueCount,
-            weekDays = c.weekDays,
-            weekCaption = weekCaption(c.weekDays, c.todayPending),
-            dueAlert = cards.firstOrNull { it.isDue }?.let { DueAlert(it, c.dueCount - 1) },
-            // takeConfirm is preserved by copy().
-        )
     }
 
     /** The single MVI entry point: each branch delegates to a use case or a state edit. */

@@ -15,6 +15,3 @@ val DOUBLE_DOSE_WINDOW = 30.minutes
 /** True when recording now would repeat a dose within the safety window. */
 fun isDoubleDose(lastTaken: Instant?, now: Instant): Boolean =
     lastTaken != null && now - lastTaken < DOUBLE_DOSE_WINDOW
-
-/** A just-recorded take the UI can offer to undo. */
-data class RecordedTake(val doseId: String, val drugName: String)

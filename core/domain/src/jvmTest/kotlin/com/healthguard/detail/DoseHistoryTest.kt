@@ -9,7 +9,7 @@ import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class NotRecordedTest {
+class DoseHistoryTest {
 
     private var doseCounter = 0
 
