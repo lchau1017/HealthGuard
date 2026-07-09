@@ -16,16 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-
-/** Preset category chips offered wherever a label can be assigned. */
-private val CATEGORY_PRESETS = listOf(
-    "Supplement",
-    "Cold & Flu",
-    "Allergy",
-    "Pain relief",
-    "Chronic",
-    "Other",
-)
+import com.healthguard.common.theme.CATEGORY_PRESETS
 
 /**
  * Label picker: preset category chips plus a free-text override, all writing
