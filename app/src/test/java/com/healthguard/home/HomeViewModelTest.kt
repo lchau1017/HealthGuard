@@ -8,11 +8,14 @@ import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.ComputeHomeStateUseCase
 import com.healthguard.home.domain.DeleteMedicationUseCase
 import com.healthguard.home.domain.RecordDoseUseCase
+import com.healthguard.home.domain.RemoveDemoDataUseCase
+import com.healthguard.home.domain.SeedDemoDataUseCase
 import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.SqlDelightMedicationRepository
+import com.healthguard.shared.domain.ObserveMedicationsUseCase
 import com.healthguard.shared.data.StoredDoseLog
 import com.healthguard.shared.data.StoredMedication
 import com.healthguard.shared.data.StoredSchedule
@@ -82,7 +85,9 @@ class HomeViewModelTest {
         activateMedication = ActivateMedicationUseCase(repository, clock = { now }),
         stopMedication = StopMedicationUseCase(repository, clock = { now }),
         deleteMedication = DeleteMedicationUseCase(repository),
-        repository = repository,
+        observeMedications = ObserveMedicationsUseCase(repository),
+        seedDemoData = SeedDemoDataUseCase(repository, clock = { now }, zone = TimeZone.UTC),
+        removeDemoData = RemoveDemoDataUseCase(repository),
         clock = { now },
         zone = TimeZone.UTC,
         ticker = ticker,

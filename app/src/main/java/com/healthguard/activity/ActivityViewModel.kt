@@ -9,7 +9,7 @@ import com.healthguard.activity.domain.ComputeActivityStateUseCase
 import com.healthguard.activity.domain.LoadActivityDayDetailUseCase
 import com.healthguard.activity.domain.MedicationAdherenceContent
 import com.healthguard.home.stoppedLabel
-import com.healthguard.shared.data.MedicationRepository
+import com.healthguard.shared.domain.ObserveDataChangesUseCase
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,13 +30,13 @@ import kotlinx.datetime.TimeZone
  * [ActivityIntent.Reload]s (the host raises one on (re)entry, catching takes
  * recorded elsewhere since the last load); the filter itself lives in the
  * retained view-model state, so it survives tab switches. Any write anywhere
- * ([MedicationRepository.dataChanges]) re-queries the current window, so a
- * retained Activity tab never shows stale tiles or grids.
+ * ([observeDataChanges]) re-queries the current window, so a retained Activity
+ * tab never shows stale tiles or grids.
  */
 class ActivityViewModel(
     private val computeActivityState: ComputeActivityStateUseCase,
     private val loadActivityDayDetail: LoadActivityDayDetailUseCase,
-    private val repository: MedicationRepository,
+    private val observeDataChanges: ObserveDataChangesUseCase,
     private val zone: TimeZone = TimeZone.currentSystemDefault(),
 ) : ViewModel() {
 
@@ -46,7 +46,7 @@ class ActivityViewModel(
     init {
         reload()
         viewModelScope.launch {
-            repository.dataChanges.collect { reload() }
+            observeDataChanges().collect { reload() }
         }
     }
 

@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalTime::class)
 
-package com.healthguard.home
+package com.healthguard.home.domain
 
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
@@ -21,28 +21,30 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 
+/** Ids of the demo medications the seeder writes (and [RemoveDemoDataUseCase] clears). */
+val demoMedicationIds =
+    listOf("demo-med-1", "demo-med-2", "demo-med-3", "demo-med-4", "demo-med-5")
+
+private const val HISTORY_DAYS = 70
+private const val SKIP_DAY_CHANCE = 0.15
+private const val RECENT_MISS_CHANCE = 0.08
+
 /**
  * Debug-only demo content: a few realistic medications plus ~10 weeks of dose
  * history so the activity heat map, stats, and detail history have something
  * to show on a fresh install. Deterministic (fixed [Random] seed) and
  * idempotent (known ids; seeding twice is a no-op). Never wired into release
  * UI.
+ *
+ * Seeds demo data; returns false (no-op) when it is already present.
  */
-object DemoDataSeeder {
-
-    val demoMedicationIds =
-        listOf("demo-med-1", "demo-med-2", "demo-med-3", "demo-med-4", "demo-med-5")
-
-    private const val HISTORY_DAYS = 70
-    private const val SKIP_DAY_CHANCE = 0.15
-    private const val RECENT_MISS_CHANCE = 0.08
-
-    /** Seeds demo data; returns false (no-op) when it is already present. */
-    suspend fun seed(
-        repository: MedicationRepository,
-        now: Instant,
-        zone: TimeZone = TimeZone.currentSystemDefault(),
-    ): Boolean {
+class SeedDemoDataUseCase(
+    private val repository: MedicationRepository,
+    private val clock: () -> Instant,
+    private val zone: TimeZone = TimeZone.currentSystemDefault(),
+) {
+    suspend operator fun invoke(): Boolean {
+        val now = clock()
         if (repository.getMedication(demoMedicationIds.first()) != null) return false
 
         val random = Random(42)
@@ -190,8 +192,13 @@ object DemoDataSeeder {
         }
         return true
     }
+}
 
-    suspend fun remove(repository: MedicationRepository) {
+/** Removes every demo medication (and its schedule/history) seeded by [SeedDemoDataUseCase]. */
+class RemoveDemoDataUseCase(
+    private val repository: MedicationRepository,
+) {
+    suspend operator fun invoke() {
         demoMedicationIds.forEach { repository.delete(it) }
     }
 }

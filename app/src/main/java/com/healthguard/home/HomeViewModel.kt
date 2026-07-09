@@ -10,9 +10,11 @@ import com.healthguard.home.domain.ComputeHomeStateUseCase
 import com.healthguard.home.domain.DeleteMedicationUseCase
 import com.healthguard.home.domain.HomeContent
 import com.healthguard.home.domain.RecordDoseUseCase
+import com.healthguard.home.domain.RemoveDemoDataUseCase
+import com.healthguard.home.domain.SeedDemoDataUseCase
 import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
-import com.healthguard.shared.data.MedicationRepository
+import com.healthguard.shared.domain.ObserveMedicationsUseCase
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.channels.Channel
@@ -25,7 +27,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -49,7 +50,9 @@ class HomeViewModel(
     private val activateMedication: ActivateMedicationUseCase,
     private val stopMedication: StopMedicationUseCase,
     private val deleteMedication: DeleteMedicationUseCase,
-    private val repository: MedicationRepository,
+    private val observeMedications: ObserveMedicationsUseCase,
+    private val seedDemoData: SeedDemoDataUseCase,
+    private val removeDemoData: RemoveDemoDataUseCase,
     private val clock: () -> Instant,
     private val zone: TimeZone = TimeZone.currentSystemDefault(),
     ticker: Flow<Unit> = minuteTicker(),
@@ -66,14 +69,14 @@ class HomeViewModel(
 
     init {
         combine(
-            repository.medications(),
-            ticker,
-            refresh,
             // Dose-log writes from ANY screen (detail take, undo, demo seed)
             // must recompute home state too; the medications query alone
-            // doesn't observe the doseLog table.
-            repository.dataChanges.onStart { emit(Unit) },
-        ) { rows, _, _, _ -> rows }
+            // doesn't observe the doseLog table, so the use case folds the
+            // repository's data-change signal into the medication stream.
+            observeMedications(),
+            ticker,
+            refresh,
+        ) { rows, _, _ -> rows }
             .onEach { rows -> _state.update { it.applyContent(computeHomeState(rows)) } }
             // Eager for the ViewModel's lifetime (not stateIn/WhileSubscribed):
             // the single mutable state is reduced by hand, and the host always
@@ -114,8 +117,8 @@ class HomeViewModel(
             is HomeIntent.Play -> launchRefreshing { activateMedication(intent.medicationId) }
             is HomeIntent.Stop -> launchRefreshing { stopMedication(intent.medicationId) }
             is HomeIntent.Delete -> launchRefreshing { deleteMedication(intent.medicationId) }
-            HomeIntent.LoadDemoData -> launchRefreshing { DemoDataSeeder.seed(repository, clock(), zone) }
-            HomeIntent.RemoveDemoData -> launchRefreshing { DemoDataSeeder.remove(repository) }
+            HomeIntent.LoadDemoData -> launchRefreshing { seedDemoData() }
+            HomeIntent.RemoveDemoData -> launchRefreshing { removeDemoData() }
         }
     }
 

@@ -16,7 +16,7 @@ import com.healthguard.home.domain.DeleteMedicationUseCase
 import com.healthguard.home.domain.RecordDoseUseCase
 import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
-import com.healthguard.shared.data.MedicationRepository
+import com.healthguard.shared.domain.ObserveMedicationsUseCase
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.channels.Channel
@@ -27,7 +27,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -53,7 +52,7 @@ class DetailViewModel(
     private val activateMedication: ActivateMedicationUseCase,
     private val stopMedication: StopMedicationUseCase,
     private val deleteMedication: DeleteMedicationUseCase,
-    private val repository: MedicationRepository,
+    private val observeMedications: ObserveMedicationsUseCase,
     private val clock: () -> Instant,
     private val medicationId: String,
 ) : ViewModel() {
@@ -71,12 +70,12 @@ class DetailViewModel(
 
     init {
         combine(
-            repository.medications(),
+            // Writes from other screens (a take on Home, demo reseed) must
+            // reach a retained detail too; the use case folds the repository's
+            // data-change signal into the medication stream.
+            observeMedications(),
             refresh,
-            // Writes from other screens (a take on Home, demo reseed)
-            // must reach a retained detail too.
-            repository.dataChanges.onStart { emit(Unit) },
-        ) { rows, _, _ -> rows }
+        ) { rows, _ -> rows }
             .onEach { rows ->
                 val item = rows.firstOrNull { it.medication.id == medicationId }
                     ?: return@onEach // deleted (or bad id): keep last state

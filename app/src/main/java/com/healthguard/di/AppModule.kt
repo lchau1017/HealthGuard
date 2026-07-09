@@ -18,12 +18,16 @@ import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.ComputeHomeStateUseCase
 import com.healthguard.home.domain.DeleteMedicationUseCase
 import com.healthguard.home.domain.RecordDoseUseCase
+import com.healthguard.home.domain.RemoveDemoDataUseCase
+import com.healthguard.home.domain.SeedDemoDataUseCase
 import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
 import com.healthguard.shared.data.DriverFactory
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.SqlDelightMedicationRepository
 import com.healthguard.shared.db.HealthGuardDb
+import com.healthguard.shared.domain.ObserveDataChangesUseCase
+import com.healthguard.shared.domain.ObserveMedicationsUseCase
 import com.healthguard.shared.extraction.ProxyVisionExtractor
 import com.healthguard.shared.extraction.VisionExtractor
 import io.ktor.client.HttpClient
@@ -64,6 +68,11 @@ val appModule = module {
     factory { ActivateMedicationUseCase(get(), get()) }
     factory { StopMedicationUseCase(get(), get()) }
     factory { DeleteMedicationUseCase(get()) }
+    factory { SeedDemoDataUseCase(get(), get(), TimeZone.currentSystemDefault()) }
+    factory { RemoveDemoDataUseCase(get()) }
+
+    factory { ObserveMedicationsUseCase(get()) }
+    factory { ObserveDataChangesUseCase(get()) }
 
     factory { ComputeDetailStateUseCase(get(), get(), TimeZone.currentSystemDefault()) }
     factory { LoadDayDetailUseCase(get(), get(), TimeZone.currentSystemDefault()) }
@@ -76,7 +85,7 @@ val appModule = module {
     factory { SaveNewMedicationUseCase(get(), get()) }
 
     viewModel { ConfirmViewModel(get(), get()) }
-    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { ActivityViewModel(get(), get(), get()) }
     viewModel { (medicationId: String) ->
         DetailViewModel(
@@ -88,7 +97,7 @@ val appModule = module {
             activateMedication = get(),
             stopMedication = get(),
             deleteMedication = get(),
-            repository = get(),
+            observeMedications = get(),
             clock = get(),
             medicationId = medicationId,
         )

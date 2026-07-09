@@ -13,6 +13,7 @@ import com.healthguard.shared.data.StoredDoseLog
 import com.healthguard.shared.data.StoredMedication
 import com.healthguard.shared.data.StoredSchedule
 import com.healthguard.shared.db.HealthGuardDb
+import com.healthguard.shared.domain.ObserveDataChangesUseCase
 import com.healthguard.shared.extraction.Frequency
 import java.util.Properties
 import kotlin.time.Duration.Companion.days
@@ -66,7 +67,7 @@ class ActivityViewModelTest {
         return ActivityViewModel(
             computeActivityState = ComputeActivityStateUseCase(repository, clock, TimeZone.UTC),
             loadActivityDayDetail = LoadActivityDayDetailUseCase(repository, clock, TimeZone.UTC),
-            repository = repository,
+            observeDataChanges = ObserveDataChangesUseCase(repository),
             zone = TimeZone.UTC,
         )
     }

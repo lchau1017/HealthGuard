@@ -23,6 +23,7 @@ import com.healthguard.shared.data.StoredDoseLog
 import com.healthguard.shared.data.StoredMedication
 import com.healthguard.shared.data.StoredSchedule
 import com.healthguard.shared.db.HealthGuardDb
+import com.healthguard.shared.domain.ObserveMedicationsUseCase
 import com.healthguard.shared.extraction.Frequency
 import java.util.Properties
 import kotlin.time.Duration.Companion.hours
@@ -83,7 +84,7 @@ class DetailViewModelTest {
         activateMedication = ActivateMedicationUseCase(repository, clock = { fixedNow }),
         stopMedication = StopMedicationUseCase(repository, clock = { fixedNow }),
         deleteMedication = DeleteMedicationUseCase(repository),
-        repository = repository,
+        observeMedications = ObserveMedicationsUseCase(repository),
         clock = { fixedNow },
         medicationId = id,
     )

@@ -15,8 +15,8 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.flowOf
 
 /**
  * In-memory [MedicationRepository] for domain use-case tests. `:core:domain`'s
@@ -44,6 +44,18 @@ class FakeMedicationRepository : MedicationRepository {
 
     private val _dataChanges = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
     override val dataChanges: SharedFlow<Unit> = _dataChanges
+
+    /**
+     * Backs [medications] as a reactive stream: like SQLDelight's medications
+     * query, it re-emits whenever the medication/schedule set changes (never on
+     * a bare dose-log write). A [batch] publishes a single snapshot at the end,
+     * so observers never see a partially seeded set.
+     */
+    private val _medications = MutableStateFlow<List<MedicationWithSchedule>>(emptyList())
+
+    private fun publishMedications() {
+        _medications.value = medications.toList()
+    }
 
     // --- Test seeding helpers -------------------------------------------------
 
@@ -77,6 +89,7 @@ class FakeMedicationRepository : MedicationRepository {
             ),
         )
         medications += item
+        publishMedications()
         return item
     }
 
@@ -101,26 +114,30 @@ class FakeMedicationRepository : MedicationRepository {
         schedule: StoredSchedule,
     ) {
         medications += MedicationWithSchedule(medication, schedule)
+        publishMedications()
         _dataChanges.emit(Unit)
     }
 
-    override fun medications(): Flow<List<MedicationWithSchedule>> = flowOf(medications.toList())
+    override fun medications(): Flow<List<MedicationWithSchedule>> = _medications
 
     override suspend fun delete(id: String) {
         deletedMedicationIds += id
         medications.removeAll { it.medication.id == id }
+        publishMedications()
         _dataChanges.emit(Unit)
     }
 
     override suspend fun activate(medicationId: String, at: Instant) {
         activations += medicationId to at
         replaceSchedule(medicationId) { it.copy(startedAt = at, stoppedAt = null) }
+        publishMedications()
         _dataChanges.emit(Unit)
     }
 
     override suspend fun stop(medicationId: String, at: Instant) {
         stops += medicationId to at
         replaceSchedule(medicationId) { it.copy(stoppedAt = at) }
+        publishMedications()
         _dataChanges.emit(Unit)
     }
 
@@ -166,6 +183,7 @@ class FakeMedicationRepository : MedicationRepository {
                 form = medication.form,
             ),
         )
+        publishMedications()
         _dataChanges.emit(Unit)
     }
 
@@ -185,6 +203,7 @@ class FakeMedicationRepository : MedicationRepository {
                 withFood = schedule.withFood,
             ),
         )
+        publishMedications()
         _dataChanges.emit(Unit)
     }
 
@@ -227,10 +246,41 @@ class FakeMedicationRepository : MedicationRepository {
                 )
             }
 
-    // --- Unused surface -------------------------------------------------------
+    /**
+     * Mirrors the SQL transaction: all writes apply, then a single medications
+     * snapshot and one [dataChanges] fire at the end — observers never see a
+     * partially seeded set.
+     */
+    override suspend fun batch(block: MedicationRepository.BatchWriter.() -> Unit) {
+        val writer = object : MedicationRepository.BatchWriter {
+            override fun insertMedication(
+                medication: StoredMedication,
+                schedule: StoredSchedule,
+            ) {
+                medications += MedicationWithSchedule(medication, schedule)
+            }
 
-    override suspend fun batch(block: MedicationRepository.BatchWriter.() -> Unit): Unit =
-        throw NotImplementedError()
+            override fun activate(medicationId: String, at: Instant) {
+                activations += medicationId to at
+                replaceSchedule(medicationId) { it.copy(startedAt = at, stoppedAt = null) }
+            }
+
+            override fun stop(medicationId: String, at: Instant) {
+                stops += medicationId to at
+                replaceSchedule(medicationId) { it.copy(stoppedAt = at) }
+            }
+
+            override fun logDose(log: StoredDoseLog) {
+                loggedDoses += log
+                doseLogs += log
+            }
+        }
+        writer.block()
+        publishMedications()
+        _dataChanges.emit(Unit)
+    }
+
+    // --- Unused surface -------------------------------------------------------
 
     override fun activeMedications(): Flow<List<MedicationWithSchedule>> = throw NotImplementedError()
 

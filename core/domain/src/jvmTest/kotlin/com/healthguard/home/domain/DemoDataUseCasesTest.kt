@@ -1,15 +1,16 @@
 @file:OptIn(ExperimentalCoroutinesApi::class, ExperimentalTime::class)
 
-package com.healthguard.home
+package com.healthguard.home.domain
 
-import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.activity.adherenceResult
+import com.healthguard.home.weekDayStates
 import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.SqlDelightMedicationRepository
-import com.healthguard.shared.db.HealthGuardDb
-import java.util.Properties
+import com.healthguard.testing.FakeMedicationRepository
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -25,37 +26,31 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
 
-class DemoDataSeederTest {
+class DemoDataUseCasesTest {
 
     private val now = Instant.parse("2026-07-08T14:00:00Z")
     private val zone = TimeZone.of("Europe/London")
 
-    private fun repository(): MedicationRepository {
-        val driver = JdbcSqliteDriver(
-            JdbcSqliteDriver.IN_MEMORY,
-            Properties().apply { put("foreign_keys", "true") },
-        )
-        HealthGuardDb.Schema.create(driver)
-        return SqlDelightMedicationRepository(HealthGuardDb(driver), UnconfinedTestDispatcher())
-    }
+    private fun repository(): FakeMedicationRepository = FakeMedicationRepository()
 
-    private suspend fun totalDoses(repo: MedicationRepository): Int =
+    private fun FakeMedicationRepository.seedDemoData() =
+        SeedDemoDataUseCase(this, clock = { now }, zone = zone)
+
+    private fun FakeMedicationRepository.removeDemoData() = RemoveDemoDataUseCase(this)
+
+    private suspend fun totalDoses(repo: FakeMedicationRepository): Int =
         repo.takenDosesInRange(now - 90.days, now + 1.days).size
 
     @Test
     fun `seeding is idempotent`() = runTest {
         val repo = repository()
 
-        assertTrue(DemoDataSeeder.seed(repo, now, zone))
+        assertTrue(repo.seedDemoData().invoke())
         val medsAfterFirst = repo.medications().first().size
         val dosesAfterFirst = totalDoses(repo)
 
-        assertFalse(DemoDataSeeder.seed(repo, now, zone))
+        assertFalse(repo.seedDemoData().invoke())
         assertEquals(medsAfterFirst, repo.medications().first().size)
         assertEquals(dosesAfterFirst, totalDoses(repo))
     }
@@ -64,8 +59,8 @@ class DemoDataSeederTest {
     fun `seeding is deterministic across fresh databases`() = runTest {
         val a = repository()
         val b = repository()
-        DemoDataSeeder.seed(a, now, zone)
-        DemoDataSeeder.seed(b, now, zone)
+        a.seedDemoData().invoke()
+        b.seedDemoData().invoke()
 
         assertEquals(totalDoses(a), totalDoses(b))
         assertEquals(
@@ -77,13 +72,13 @@ class DemoDataSeederTest {
     @Test
     fun `seeds five medications covering every treatment phase`() = runTest {
         val repo = repository()
-        DemoDataSeeder.seed(repo, now, zone)
+        repo.seedDemoData().invoke()
 
         val all = repo.medications().first()
         assertEquals(5, all.size)
         assertEquals(
             listOf("demo-med-1", "demo-med-2", "demo-med-3", "demo-med-4", "demo-med-5"),
-            DemoDataSeeder.demoMedicationIds,
+            demoMedicationIds,
         )
         // Three taking, one never started (Amoxicillin), one stopped (Loratadine).
         assertEquals(3, all.count { it.schedule.startedAt != null && it.schedule.stoppedAt == null })
@@ -91,7 +86,7 @@ class DemoDataSeederTest {
         assertEquals(1, all.count { it.schedule.stoppedAt != null })
 
         val taken = repo.takenDosesInRange(now - 71.days, now + 1.days)
-        assertTrue("expected substantial history, got ${taken.size}", taken.size > 100)
+        assertTrue(taken.size > 100, "expected substantial history, got ${taken.size}")
         // Nothing in the future, nothing older than the window.
         assertTrue(taken.all { it.takenAt <= now + 1.days && it.takenAt >= now - 71.days })
     }
@@ -99,7 +94,7 @@ class DemoDataSeederTest {
     @Test
     fun `stopped loratadine has history only while it was active`() = runTest {
         val repo = repository()
-        DemoDataSeeder.seed(repo, now, zone)
+        repo.seedDemoData().invoke()
 
         val schedule = repo.getMedication("demo-med-5")!!.schedule
         val startedAt = schedule.startedAt
@@ -111,14 +106,14 @@ class DemoDataSeederTest {
         assertTrue(now - stoppedAt!! >= 13.days)
 
         val logs = repo.dosesInRange("demo-sch-5", now - 90.days, now + 1.days)
-        assertTrue("expected active-stretch history", logs.isNotEmpty())
+        assertTrue(logs.isNotEmpty(), "expected active-stretch history")
         assertTrue(logs.all { it.plannedAt >= startedAt && it.plannedAt < stoppedAt })
     }
 
     @Test
     fun `cetirizine has a deliberately skipped day five days ago`() = runTest {
         val repo = repository()
-        DemoDataSeeder.seed(repo, now, zone)
+        repo.seedDemoData().invoke()
 
         val skippedDay = now.toLocalDateTime(zone).date.minus(5, DateTimeUnit.DAY)
         val dayLogs = repo.dosesInRange(
@@ -135,7 +130,7 @@ class DemoDataSeederTest {
     @Test
     fun `seeded times-per-day history sits on the meal-aligned anchors`() = runTest {
         val repo = repository()
-        DemoDataSeeder.seed(repo, now, zone)
+        repo.seedDemoData().invoke()
 
         // Cetirizine is 2x/day: every planned dose lies on the 09:00/21:00
         // anchors, so seeded history matches the computed next-dose slots.
@@ -143,8 +138,8 @@ class DemoDataSeederTest {
             .map { it.plannedAt.toLocalDateTime(zone).time }
         assertTrue(planned.isNotEmpty())
         assertTrue(
-            "unexpected times: ${planned.distinct()}",
             planned.all { it == LocalTime(9, 0) || it == LocalTime(21, 0) },
+            "unexpected times: ${planned.distinct()}",
         )
 
         // Vitamin D3 is 1x/day on the 09:00 anchor.
@@ -156,7 +151,7 @@ class DemoDataSeederTest {
     @Test
     fun `seeded cetirizine adherence is plausible not perfect`() = runTest {
         val repo = repository()
-        DemoDataSeeder.seed(repo, now, zone)
+        repo.seedDemoData().invoke()
 
         val schedule = repo.getMedication("demo-med-2")!!.schedule
         val from = schedule.startedAt!!
@@ -167,13 +162,13 @@ class DemoDataSeederTest {
         // seeder's skip-days and recent misses must pull the percent
         // visibly below 100 (honest gaps) without looking broken.
         assertEquals(86, result.percent)
-        assertTrue("expected a plausible band, got ${result.percent}", result.percent!! in 75..95)
+        assertTrue(result.percent!! in 75..95, "expected a plausible band, got ${result.percent}")
     }
 
     @Test
     fun `seeded week circles are not uniformly full`() = runTest {
         val repo = repository()
-        DemoDataSeeder.seed(repo, now, zone)
+        repo.seedDemoData().invoke()
 
         val schedules = repo.medications().first().map { it.schedule }
         val today = now.toLocalDateTime(zone).date
@@ -184,17 +179,17 @@ class DemoDataSeederTest {
         val days = weekDayStates(schedules, weekLogs, now, zone)
 
         assertTrue(
-            "expected at least one non-full day, got ${days.map { it.state }}",
             days.any { it.state != DoseDayStatus.MET },
+            "expected at least one non-full day, got ${days.map { it.state }}",
         )
     }
 
     @Test
     fun `remove deletes all demo rows`() = runTest {
         val repo = repository()
-        DemoDataSeeder.seed(repo, now, zone)
+        repo.seedDemoData().invoke()
 
-        DemoDataSeeder.remove(repo)
+        repo.removeDemoData().invoke()
 
         assertTrue(repo.medications().first().isEmpty())
         assertEquals(0, totalDoses(repo))
@@ -208,11 +203,11 @@ class DemoDataSeederTest {
             repo.medications().collect { sizes += it.size }
         }
 
-        DemoDataSeeder.seed(repo, now, zone)
+        repo.seedDemoData().invoke()
 
         // Never a partially seeded emission (medications without their
         // history used to flash a bogus due alert on the home screen).
-        assertTrue("saw partial emissions: $sizes", sizes.none { it in 1..4 })
+        assertTrue(sizes.none { it in 1..4 }, "saw partial emissions: $sizes")
         assertEquals(5, sizes.last())
         job.cancel()
     }
