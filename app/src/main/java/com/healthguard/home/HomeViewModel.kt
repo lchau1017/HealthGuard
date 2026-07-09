@@ -35,10 +35,6 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 
-/** A schedule the user has started and not stopped. */
-val MedicationWithSchedule.isActive: Boolean
-    get() = schedule.startedAt != null && schedule.stoppedAt == null
-
 /** One "Taking now" entry: the medication plus its dose timing. */
 data class DoseCard(
     val item: MedicationWithSchedule,
