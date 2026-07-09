@@ -21,13 +21,14 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /**
- * Persistence facade over [HealthGuardDb]. All calls hop to [dispatcher]; ids are
- * caller-provided (UUIDs in production) so tests stay deterministic.
+ * SQLDelight-backed [MedicationRepository] over [HealthGuardDb]. All calls hop
+ * to [dispatcher]; ids are caller-provided (UUIDs in production) so tests stay
+ * deterministic.
  */
-class MedicationRepository(
+class SqlDelightMedicationRepository(
     db: HealthGuardDb,
     private val dispatcher: CoroutineDispatcher,
-) {
+) : MedicationRepository {
     private val queries = db.healthGuardQueries
 
     private val _dataChanges = MutableSharedFlow<Unit>(
@@ -41,13 +42,13 @@ class MedicationRepository(
      * dose logs (or hold a retained view model while another screen writes)
      * fold this into their recompute triggers to never go stale.
      */
-    val dataChanges: SharedFlow<Unit> = _dataChanges.asSharedFlow()
+    override val dataChanges: SharedFlow<Unit> = _dataChanges.asSharedFlow()
 
     private fun notifyChanged() {
         _dataChanges.tryEmit(Unit)
     }
 
-    suspend fun insertMedication(medication: StoredMedication, schedule: StoredSchedule) =
+    override suspend fun insertMedication(medication: StoredMedication, schedule: StoredSchedule) =
         withContext(dispatcher) {
             queries.transaction { writeMedication(medication, schedule) }
             notifyChanged()
@@ -58,21 +59,22 @@ class MedicationRepository(
      * state change (no intermediate "medication exists but its history
      * doesn't yet" emissions) and [dataChanges] fires once.
      */
-    suspend fun batch(block: BatchWriter.() -> Unit) = withContext(dispatcher) {
-        queries.transaction { BatchWriter().block() }
-        notifyChanged()
-    }
+    override suspend fun batch(block: MedicationRepository.BatchWriter.() -> Unit) =
+        withContext(dispatcher) {
+            queries.transaction { BatchWriter().block() }
+            notifyChanged()
+        }
 
     /** The writes available inside [batch]; each is the plain-call equivalent. */
-    inner class BatchWriter internal constructor() {
-        fun insertMedication(medication: StoredMedication, schedule: StoredSchedule) =
+    inner class BatchWriter internal constructor() : MedicationRepository.BatchWriter {
+        override fun insertMedication(medication: StoredMedication, schedule: StoredSchedule) =
             writeMedication(medication, schedule)
 
-        fun activate(medicationId: String, at: Instant) = writeActivation(medicationId, at)
+        override fun activate(medicationId: String, at: Instant) = writeActivation(medicationId, at)
 
-        fun stop(medicationId: String, at: Instant) = writeStop(medicationId, at)
+        override fun stop(medicationId: String, at: Instant) = writeStop(medicationId, at)
 
-        fun logDose(log: StoredDoseLog) = writeDoseLog(log)
+        override fun logDose(log: StoredDoseLog) = writeDoseLog(log)
     }
 
     private fun writeMedication(medication: StoredMedication, schedule: StoredSchedule) {
@@ -119,19 +121,19 @@ class MedicationRepository(
         )
     }
 
-    fun medications(): Flow<List<MedicationWithSchedule>> =
+    override fun medications(): Flow<List<MedicationWithSchedule>> =
         queries.listMedications(::rowToMedicationWithSchedule).asFlow().mapToList(dispatcher)
 
-    fun activeMedications(): Flow<List<MedicationWithSchedule>> =
+    override fun activeMedications(): Flow<List<MedicationWithSchedule>> =
         queries.listActiveSchedulesWithMedication(::rowToMedicationWithSchedule)
             .asFlow().mapToList(dispatcher)
 
-    suspend fun getMedication(id: String): MedicationWithSchedule? = withContext(dispatcher) {
+    override suspend fun getMedication(id: String): MedicationWithSchedule? = withContext(dispatcher) {
         queries.getMedication(id, ::rowToMedicationWithSchedule).executeAsOneOrNull()
     }
 
     /** Updates the editable medication fields; a missing id is a no-op. */
-    suspend fun updateMedication(medication: StoredMedication) = withContext(dispatcher) {
+    override suspend fun updateMedication(medication: StoredMedication) = withContext(dispatcher) {
         queries.updateMedication(
             drugName = medication.drugName,
             label = medication.label,
@@ -149,7 +151,7 @@ class MedicationRepository(
      * activation state changes go through [activate]/[stop]. A missing id is
      * a no-op.
      */
-    suspend fun updateSchedule(schedule: StoredSchedule) = withContext(dispatcher) {
+    override suspend fun updateSchedule(schedule: StoredSchedule) = withContext(dispatcher) {
         queries.updateSchedule(
             frequencyType = schedule.frequency.typeColumn(),
             frequencyValue = schedule.frequency.valueColumn(),
@@ -159,33 +161,33 @@ class MedicationRepository(
         notifyChanged()
     }
 
-    suspend fun delete(id: String) = withContext(dispatcher) {
+    override suspend fun delete(id: String) = withContext(dispatcher) {
         queries.deleteMedication(id)
         notifyChanged()
     }
 
-    suspend fun activate(medicationId: String, at: Instant) = withContext(dispatcher) {
+    override suspend fun activate(medicationId: String, at: Instant) = withContext(dispatcher) {
         queries.transaction { writeActivation(medicationId, at) }
         notifyChanged()
     }
 
-    suspend fun stop(medicationId: String, at: Instant) = withContext(dispatcher) {
+    override suspend fun stop(medicationId: String, at: Instant) = withContext(dispatcher) {
         queries.transaction { writeStop(medicationId, at) }
         notifyChanged()
     }
 
-    suspend fun logDose(log: StoredDoseLog) = withContext(dispatcher) {
+    override suspend fun logDose(log: StoredDoseLog) = withContext(dispatcher) {
         writeDoseLog(log)
         notifyChanged()
     }
 
     /** Removes a single dose log (undo of a just-recorded take); missing id is a no-op. */
-    suspend fun deleteDoseLog(id: String) = withContext(dispatcher) {
+    override suspend fun deleteDoseLog(id: String) = withContext(dispatcher) {
         queries.deleteDoseLog(id)
         notifyChanged()
     }
 
-    suspend fun updateDoseStatus(id: String, status: DoseStatus, takenAt: Instant?) =
+    override suspend fun updateDoseStatus(id: String, status: DoseStatus, takenAt: Instant?) =
         withContext(dispatcher) {
             queries.updateDoseLogStatus(
                 status = status.name,
@@ -196,7 +198,7 @@ class MedicationRepository(
         }
 
     /** Half-open range: plannedAt in [from, to). */
-    suspend fun dosesInRange(scheduleId: String, from: Instant, to: Instant): List<StoredDoseLog> =
+    override suspend fun dosesInRange(scheduleId: String, from: Instant, to: Instant): List<StoredDoseLog> =
         withContext(dispatcher) {
             queries.doseLogsForScheduleInRange(
                 scheduleId = scheduleId,
@@ -205,7 +207,7 @@ class MedicationRepository(
             ).executeAsList().map { it.toStored() }
         }
 
-    suspend fun latestDose(scheduleId: String): StoredDoseLog? = withContext(dispatcher) {
+    override suspend fun latestDose(scheduleId: String): StoredDoseLog? = withContext(dispatcher) {
         queries.latestDoseLogForSchedule(scheduleId).executeAsOneOrNull()?.toStored()
     }
 
@@ -213,7 +215,7 @@ class MedicationRepository(
      * Every TAKEN dose across all schedules with takenAt in [from, to)
      * (half-open), oldest first, resolved to its medication.
      */
-    suspend fun takenDosesInRange(from: Instant, to: Instant): List<TakenDose> =
+    override suspend fun takenDosesInRange(from: Instant, to: Instant): List<TakenDose> =
         withContext(dispatcher) {
             queries.takenDosesInRange(
                 fromMillis = from.toEpochMilliseconds(),
@@ -229,7 +231,7 @@ class MedicationRepository(
         }
 
     /** The schedule's latest [limit] dose logs, any status, newest planned first. */
-    suspend fun recentDoses(scheduleId: String, limit: Int): List<StoredDoseLog> =
+    override suspend fun recentDoses(scheduleId: String, limit: Int): List<StoredDoseLog> =
         withContext(dispatcher) {
             queries.recentDoseLogsForSchedule(scheduleId, limit.toLong())
                 .executeAsList().map { it.toStored() }
@@ -239,7 +241,7 @@ class MedicationRepository(
      * Every dose log (any status) across all schedules whose effective time —
      * takenAt when present, plannedAt otherwise — is in [from, to) (half-open).
      */
-    suspend fun doseLogsInRange(from: Instant, to: Instant): List<StoredDoseLog> =
+    override suspend fun doseLogsInRange(from: Instant, to: Instant): List<StoredDoseLog> =
         withContext(dispatcher) {
             queries.doseLogsInRange(
                 fromMillis = from.toEpochMilliseconds(),
@@ -252,7 +254,7 @@ class MedicationRepository(
      * half-open), but each log carries its medication's identity — the
      * day-detail sheet's per-medicine grouping input.
      */
-    suspend fun doseLogsWithMedicationInRange(
+    override suspend fun doseLogsWithMedicationInRange(
         from: Instant,
         to: Instant,
     ): List<DoseLogWithMedication> = withContext(dispatcher) {

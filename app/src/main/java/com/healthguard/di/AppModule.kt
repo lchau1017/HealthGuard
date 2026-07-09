@@ -9,6 +9,7 @@ import com.healthguard.detail.DetailViewModel
 import com.healthguard.home.HomeViewModel
 import com.healthguard.shared.data.DriverFactory
 import com.healthguard.shared.data.MedicationRepository
+import com.healthguard.shared.data.SqlDelightMedicationRepository
 import com.healthguard.shared.db.HealthGuardDb
 import com.healthguard.shared.extraction.ProxyVisionExtractor
 import com.healthguard.shared.extraction.VisionExtractor
@@ -39,7 +40,7 @@ val appModule = module {
 
     single { DriverFactory(androidContext()) }
     single { HealthGuardDb(get<DriverFactory>().createDriver()) }
-    single { MedicationRepository(get(), Dispatchers.IO) }
+    single<MedicationRepository> { SqlDelightMedicationRepository(get(), Dispatchers.IO) }
 
     single<() -> Instant> { { Clock.System.now() } }
 

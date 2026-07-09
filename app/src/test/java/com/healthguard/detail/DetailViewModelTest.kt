@@ -10,6 +10,7 @@ import com.healthguard.activity.DoseDayStatus
 import com.healthguard.home.MedicationPhase
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
+import com.healthguard.shared.data.SqlDelightMedicationRepository
 import com.healthguard.shared.data.StoredDoseLog
 import com.healthguard.shared.data.StoredMedication
 import com.healthguard.shared.data.StoredSchedule
@@ -57,7 +58,7 @@ class DetailViewModelTest {
             Properties().apply { put("foreign_keys", "true") },
         )
         HealthGuardDb.Schema.create(driver)
-        repository = MedicationRepository(HealthGuardDb(driver), dispatcher)
+        repository = SqlDelightMedicationRepository(HealthGuardDb(driver), dispatcher)
     }
 
     @After

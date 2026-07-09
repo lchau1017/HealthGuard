@@ -18,7 +18,7 @@ import kotlin.time.Instant
 
 class MedicationRepositoryTest {
 
-    private fun repository() = MedicationRepository(
+    private fun repository() = SqlDelightMedicationRepository(
         db = HealthGuardDb(DriverFactory().createDriver()),
         dispatcher = UnconfinedTestDispatcher(),
     )

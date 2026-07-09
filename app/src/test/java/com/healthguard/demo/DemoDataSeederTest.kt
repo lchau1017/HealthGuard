@@ -8,6 +8,7 @@ import com.healthguard.activity.adherenceResult
 import com.healthguard.home.weekDayStates
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
+import com.healthguard.shared.data.SqlDelightMedicationRepository
 import com.healthguard.shared.db.HealthGuardDb
 import java.util.Properties
 import kotlin.time.Duration.Companion.days
@@ -41,7 +42,7 @@ class DemoDataSeederTest {
             Properties().apply { put("foreign_keys", "true") },
         )
         HealthGuardDb.Schema.create(driver)
-        return MedicationRepository(HealthGuardDb(driver), UnconfinedTestDispatcher())
+        return SqlDelightMedicationRepository(HealthGuardDb(driver), UnconfinedTestDispatcher())
     }
 
     private suspend fun totalDoses(repo: MedicationRepository): Int =

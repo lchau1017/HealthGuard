@@ -5,6 +5,7 @@ package com.healthguard.confirm
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.MedicationWithSchedule
+import com.healthguard.shared.data.SqlDelightMedicationRepository
 import com.healthguard.shared.db.HealthGuardDb
 import com.healthguard.shared.extraction.ExtractedField
 import com.healthguard.shared.extraction.ExtractionResult
@@ -47,7 +48,7 @@ class ConfirmViewModelTest {
             Properties().apply { put("foreign_keys", "true") },
         )
         HealthGuardDb.Schema.create(driver)
-        repository = MedicationRepository(HealthGuardDb(driver), dispatcher)
+        repository = SqlDelightMedicationRepository(HealthGuardDb(driver), dispatcher)
     }
 
     @After
@@ -444,7 +445,7 @@ class ConfirmViewModelTest {
     private fun failingRepository(): MedicationRepository {
         val deadDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         HealthGuardDb.Schema.create(deadDriver)
-        val repository = MedicationRepository(HealthGuardDb(deadDriver), dispatcher)
+        val repository = SqlDelightMedicationRepository(HealthGuardDb(deadDriver), dispatcher)
         deadDriver.close()
         return repository
     }
