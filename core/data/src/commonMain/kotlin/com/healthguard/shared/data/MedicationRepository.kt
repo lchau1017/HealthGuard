@@ -124,10 +124,6 @@ class SqlDelightMedicationRepository(
     override fun medications(): Flow<List<MedicationWithSchedule>> =
         queries.listMedications(::rowToMedicationWithSchedule).asFlow().mapToList(dispatcher)
 
-    override fun activeMedications(): Flow<List<MedicationWithSchedule>> =
-        queries.listActiveSchedulesWithMedication(::rowToMedicationWithSchedule)
-            .asFlow().mapToList(dispatcher)
-
     override suspend fun getMedication(id: String): MedicationWithSchedule? = withContext(dispatcher) {
         queries.getMedication(id, ::rowToMedicationWithSchedule).executeAsOneOrNull()
     }
@@ -186,16 +182,6 @@ class SqlDelightMedicationRepository(
         queries.deleteDoseLog(id)
         notifyChanged()
     }
-
-    override suspend fun updateDoseStatus(id: String, status: DoseStatus, takenAt: Instant?) =
-        withContext(dispatcher) {
-            queries.updateDoseLogStatus(
-                status = status.name,
-                takenAt = takenAt?.toEpochMilliseconds(),
-                id = id,
-            )
-            notifyChanged()
-        }
 
     /** Half-open range: plannedAt in [from, to). */
     override suspend fun dosesInRange(scheduleId: String, from: Instant, to: Instant): List<StoredDoseLog> =

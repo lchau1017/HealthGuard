@@ -280,13 +280,6 @@ class FakeMedicationRepository : MedicationRepository {
         _dataChanges.emit(Unit)
     }
 
-    // --- Unused surface -------------------------------------------------------
-
-    override fun activeMedications(): Flow<List<MedicationWithSchedule>> = throw NotImplementedError()
-
-    override suspend fun updateDoseStatus(id: String, status: DoseStatus, takenAt: Instant?): Unit =
-        throw NotImplementedError()
-
     // --- Implemented for the Activity use cases -------------------------------
 
     /**

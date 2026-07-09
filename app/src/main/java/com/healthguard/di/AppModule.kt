@@ -88,7 +88,7 @@ val appModule = module {
     single<ImageEncoder> { AndroidImageEncoder(androidContext(), Dispatchers.IO) }
 
     viewModel { ConfirmViewModel(get(), get(), get()) }
-    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { ActivityViewModel(get(), get(), get()) }
     viewModel { (medicationId: String) ->
         DetailViewModel(

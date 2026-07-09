@@ -83,24 +83,12 @@ UPDATE schedule SET stoppedAt = :stoppedAt WHERE id = :id;
 scheduleIdForMedication:
 SELECT id FROM schedule WHERE medicationId = :medicationId;
 
-listActiveSchedulesWithMedication:
-SELECT m.id AS medicationId, m.drugName, m.label, m.activeIngredients, m.dosage, m.form,
-       m.extractionConfidence, m.createdAt,
-       s.id AS scheduleId, s.frequencyType, s.frequencyValue, s.withFood, s.startedAt, s.stoppedAt
-FROM medication m
-INNER JOIN schedule s ON s.medicationId = m.id
-WHERE s.startedAt IS NOT NULL AND s.stoppedAt IS NULL
-ORDER BY m.createdAt DESC, m.id DESC;
-
 insertDoseLog:
 INSERT INTO doseLog(id, scheduleId, plannedAt, takenAt, status)
 VALUES (?, ?, ?, ?, ?);
 
 deleteDoseLog:
 DELETE FROM doseLog WHERE id = :id;
-
-updateDoseLogStatus:
-UPDATE doseLog SET status = :status, takenAt = :takenAt WHERE id = :id;
 
 -- Half-open range: plannedAt in [from, to).
 doseLogsForScheduleInRange:

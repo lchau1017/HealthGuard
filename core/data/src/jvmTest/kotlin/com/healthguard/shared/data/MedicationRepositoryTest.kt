@@ -118,15 +118,14 @@ class MedicationRepositoryTest {
     fun `activate makes medication active and stop removes it`() = runTest {
         val repo = repository()
         repo.insertMedication(medication(), schedule())
-        assertTrue(repo.activeMedications().first().isEmpty())
 
         repo.activate("med-1", Instant.fromEpochMilliseconds(2_000))
-        val active = repo.activeMedications().first().single()
-        assertEquals("med-1", active.medication.id)
-        assertEquals(Instant.fromEpochMilliseconds(2_000), active.schedule.startedAt)
+        assertEquals(
+            Instant.fromEpochMilliseconds(2_000),
+            repo.getMedication("med-1")?.schedule?.startedAt,
+        )
 
         repo.stop("med-1", Instant.fromEpochMilliseconds(3_000))
-        assertTrue(repo.activeMedications().first().isEmpty())
         assertEquals(
             Instant.fromEpochMilliseconds(3_000),
             repo.getMedication("med-1")?.schedule?.stoppedAt,
@@ -142,9 +141,9 @@ class MedicationRepositoryTest {
 
         repo.activate("med-1", Instant.fromEpochMilliseconds(4_000))
 
-        val active = repo.activeMedications().first().single()
-        assertEquals(Instant.fromEpochMilliseconds(4_000), active.schedule.startedAt)
-        assertNull(active.schedule.stoppedAt)
+        val schedule = repo.getMedication("med-1")?.schedule
+        assertEquals(Instant.fromEpochMilliseconds(4_000), schedule?.startedAt)
+        assertNull(schedule?.stoppedAt)
     }
 
     @Test
@@ -199,19 +198,6 @@ class MedicationRepositoryTest {
         repo.deleteDoseLog("d-ghost")
 
         assertEquals("d-1", repo.latestDose("sch-1")?.id)
-    }
-
-    @Test
-    fun `updateDoseStatus records status and takenAt`() = runTest {
-        val repo = repository()
-        repo.insertMedication(medication(), schedule())
-        repo.logDose(dose("d-1", plannedAtMillis = 1_000))
-
-        repo.updateDoseStatus("d-1", DoseStatus.TAKEN, Instant.fromEpochMilliseconds(1_100))
-
-        val updated = repo.latestDose("sch-1")
-        assertEquals(DoseStatus.TAKEN, updated?.status)
-        assertEquals(Instant.fromEpochMilliseconds(1_100), updated?.takenAt)
     }
 
     @Test
@@ -531,14 +517,13 @@ class MedicationRepositoryTest {
         repo.insertMedication(medication(), schedule())
         repo.activate("med-1", Instant.fromEpochMilliseconds(1_000))
         repo.logDose(dose("d-1", plannedAtMillis = 1_000))
-        repo.updateDoseStatus("d-1", DoseStatus.TAKEN, Instant.fromEpochMilliseconds(1_100))
         repo.deleteDoseLog("d-1")
         repo.stop("med-1", Instant.fromEpochMilliseconds(2_000))
         repo.updateMedication(medication())
         repo.updateSchedule(schedule())
         repo.delete("med-1")
 
-        assertEquals(9, events.size)
+        assertEquals(8, events.size)
         job.cancel()
     }
 

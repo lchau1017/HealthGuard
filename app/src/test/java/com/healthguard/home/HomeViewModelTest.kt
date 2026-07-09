@@ -6,11 +6,9 @@ import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.ComputeHomeStateUseCase
-import com.healthguard.home.domain.DeleteMedicationUseCase
 import com.healthguard.home.domain.RecordDoseUseCase
 import com.healthguard.home.domain.RemoveDemoDataUseCase
 import com.healthguard.home.domain.SeedDemoDataUseCase
-import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
@@ -83,8 +81,6 @@ class HomeViewModelTest {
         recordDose = RecordDoseUseCase(repository, clock = { now }),
         undoDose = UndoDoseUseCase(repository),
         activateMedication = ActivateMedicationUseCase(repository, clock = { now }),
-        stopMedication = StopMedicationUseCase(repository, clock = { now }),
-        deleteMedication = DeleteMedicationUseCase(repository),
         observeMedications = ObserveMedicationsUseCase(repository),
         seedDemoData = SeedDemoDataUseCase(repository, clock = { now }, zone = TimeZone.UTC),
         removeDemoData = RemoveDemoDataUseCase(repository),
@@ -530,33 +526,6 @@ class HomeViewModelTest {
         val card = vm.state.value.taking.single()
         assertEquals(fixedNow, card.item.schedule.startedAt)
         assertTrue(vm.state.value.cabinet.isEmpty())
-    }
-
-    @Test
-    fun `onStop moves the medication back to the cabinet`() = runTest(dispatcher) {
-        insert("a", startedAt = fixedNow - 1.hours)
-        val vm = viewModel()
-        collectState(vm)
-
-        vm.onIntent(HomeIntent.Stop("a"))
-        dispatcher.scheduler.advanceUntilIdle()
-
-        assertTrue(vm.state.value.taking.isEmpty())
-        assertEquals(fixedNow, vm.state.value.cabinet.single().schedule.stoppedAt)
-    }
-
-    @Test
-    fun `onDelete removes the medication entirely`() = runTest(dispatcher) {
-        insert("a")
-        insert("b")
-        val vm = viewModel()
-        collectState(vm)
-        assertEquals(2, vm.state.value.cabinet.size)
-
-        vm.onIntent(HomeIntent.Delete("a"))
-        dispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(listOf("b"), vm.state.value.cabinet.map { it.medication.id })
     }
 
     @Test

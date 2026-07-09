@@ -7,12 +7,10 @@ import androidx.lifecycle.viewModelScope
 import com.healthguard.dose.isDoubleDose
 import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.ComputeHomeStateUseCase
-import com.healthguard.home.domain.DeleteMedicationUseCase
 import com.healthguard.home.domain.HomeContent
 import com.healthguard.home.domain.RecordDoseUseCase
 import com.healthguard.home.domain.RemoveDemoDataUseCase
 import com.healthguard.home.domain.SeedDemoDataUseCase
-import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
 import com.healthguard.shared.domain.ObserveMedicationsUseCase
 import kotlin.time.ExperimentalTime
@@ -48,8 +46,6 @@ class HomeViewModel(
     private val recordDose: RecordDoseUseCase,
     private val undoDose: UndoDoseUseCase,
     private val activateMedication: ActivateMedicationUseCase,
-    private val stopMedication: StopMedicationUseCase,
-    private val deleteMedication: DeleteMedicationUseCase,
     private val observeMedications: ObserveMedicationsUseCase,
     private val seedDemoData: SeedDemoDataUseCase,
     private val removeDemoData: RemoveDemoDataUseCase,
@@ -94,8 +90,6 @@ class HomeViewModel(
             HomeIntent.DismissTakeConfirm -> _state.update { it.copy(takeConfirm = null) }
             is HomeIntent.UndoTake -> launchRefreshing { undoDose(intent.doseId) }
             is HomeIntent.Play -> launchRefreshing { activateMedication(intent.medicationId) }
-            is HomeIntent.Stop -> launchRefreshing { stopMedication(intent.medicationId) }
-            is HomeIntent.Delete -> launchRefreshing { deleteMedication(intent.medicationId) }
             HomeIntent.LoadDemoData -> launchRefreshing { seedDemoData() }
             HomeIntent.RemoveDemoData -> launchRefreshing { removeDemoData() }
         }

@@ -46,8 +46,6 @@ interface MedicationRepository {
 
     fun medications(): Flow<List<MedicationWithSchedule>>
 
-    fun activeMedications(): Flow<List<MedicationWithSchedule>>
-
     suspend fun getMedication(id: String): MedicationWithSchedule?
 
     /** Updates the editable medication fields; a missing id is a no-op. */
@@ -71,8 +69,6 @@ interface MedicationRepository {
 
     /** Removes a single dose log (undo of a just-recorded take); missing id is a no-op. */
     suspend fun deleteDoseLog(id: String)
-
-    suspend fun updateDoseStatus(id: String, status: DoseStatus, takenAt: Instant?)
 
     /** Half-open range: plannedAt in [from, to). */
     suspend fun dosesInRange(scheduleId: String, from: Instant, to: Instant): List<StoredDoseLog>

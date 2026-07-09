@@ -18,7 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 /** Preset category chips offered wherever a label can be assigned. */
-val CATEGORY_PRESETS = listOf(
+private val CATEGORY_PRESETS = listOf(
     "Supplement",
     "Cold & Flu",
     "Allergy",

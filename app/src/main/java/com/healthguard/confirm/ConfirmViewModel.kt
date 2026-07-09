@@ -3,13 +3,9 @@ package com.healthguard.confirm
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthguard.common.format.parseFrequency
-import com.healthguard.common.format.toHumanText
 import com.healthguard.confirm.domain.ExtractMedicationUseCase
 import com.healthguard.confirm.domain.NewMedication
 import com.healthguard.confirm.domain.SaveNewMedicationUseCase
-import com.healthguard.shared.extraction.ExtractedField
-import com.healthguard.shared.extraction.ExtractionResult
-import com.healthguard.shared.extraction.MedicationExtraction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
