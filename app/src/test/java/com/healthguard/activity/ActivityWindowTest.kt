@@ -1,37 +1,13 @@
 package com.healthguard.activity
 
-import kotlinx.datetime.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+/**
+ * The window display labels ([windowHeading]/[windowChipLabel]) stay in `:app`;
+ * the pure window-start math moved to `:core:domain` (see its ActivityWindowTest).
+ */
 class ActivityWindowTest {
-
-    /** 2024-07-03 is a Wednesday. */
-    private val today = LocalDate(2024, 7, 3)
-
-    @Test
-    fun `seven day window starts six days back`() {
-        assertEquals(
-            LocalDate(2024, 6, 27),
-            activityWindowStart(ActivityFilter.DAYS_7, today),
-        )
-    }
-
-    @Test
-    fun `thirty day window starts twenty nine days back`() {
-        assertEquals(
-            LocalDate(2024, 6, 4),
-            activityWindowStart(ActivityFilter.DAYS_30, today),
-        )
-    }
-
-    @Test
-    fun `twelve month window starts a calendar year back`() {
-        assertEquals(
-            LocalDate(2023, 7, 3),
-            activityWindowStart(ActivityFilter.MONTHS_12, today),
-        )
-    }
 
     @Test
     fun `each window names its record heading`() {

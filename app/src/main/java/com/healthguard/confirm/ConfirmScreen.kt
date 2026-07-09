@@ -19,7 +19,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -30,7 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.healthguard.ui.CategoryLabelInput
+import com.healthguard.common.ui.CategoryLabelInput
 
 /**
  * The import/confirm flow, presented as a full-width dialog card over the
@@ -40,18 +39,16 @@ import com.healthguard.ui.CategoryLabelInput
  * or confirmed before Accept unlocks.
  *
  * The scrim never dismisses (an accidental tap must not throw away edits);
- * only the back gesture or the explicit Cancel button calls [onCancel]. The
- * host is expected to hide this dialog when the state is Idle or Saved.
+ * only the back gesture or the explicit Cancel button raises [ConfirmIntent.Reset].
+ * The host is expected to hide this dialog when the state is Idle.
  */
 @Composable
 fun ConfirmDialog(
-    viewModel: ConfirmViewModel,
-    onCancel: () -> Unit,
+    state: ConfirmUiState,
+    onIntent: (ConfirmIntent) -> Unit,
 ) {
-    val state by viewModel.state.collectAsState()
-
     Dialog(
-        onDismissRequest = onCancel,
+        onDismissRequest = { onIntent(ConfirmIntent.Reset) },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             dismissOnClickOutside = false,
@@ -71,21 +68,18 @@ fun ConfirmDialog(
                 is ConfirmUiState.Idle, is ConfirmUiState.Extracting -> ExtractingContent()
                 is ConfirmUiState.Review -> ReviewContent(
                     fields = current.fields,
-                    canAccept = viewModel.canAccept,
-                    onFieldEdited = viewModel::onFieldEdited,
-                    onFieldConfirmed = viewModel::onFieldConfirmed,
-                    onAccept = viewModel::onAccept,
-                    onCancel = onCancel,
+                    canAccept = current.canAccept,
+                    onFieldEdited = { key, value -> onIntent(ConfirmIntent.FieldEdited(key, value)) },
+                    onFieldConfirmed = { key -> onIntent(ConfirmIntent.FieldConfirmed(key)) },
+                    onAccept = { label -> onIntent(ConfirmIntent.Accept(label)) },
+                    onCancel = { onIntent(ConfirmIntent.Reset) },
                 )
                 is ConfirmUiState.Error -> ErrorContent(
                     message = current.message,
                     retriable = current.retriable,
-                    onRetry = viewModel::onRetry,
-                    onCancel = onCancel,
+                    onRetry = { onIntent(ConfirmIntent.Retry) },
+                    onCancel = { onIntent(ConfirmIntent.Reset) },
                 )
-                // The host consumes Saved (toast + reset); render the spinner
-                // for the frame or two before the dialog is removed.
-                is ConfirmUiState.Saved -> ExtractingContent()
             }
         }
     }

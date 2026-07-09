@@ -26,11 +26,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.healthguard.ui.theme.heatRamp
+import com.healthguard.common.theme.heatRamp
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.isoDayNumber
-import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
 /**
@@ -38,14 +36,10 @@ import kotlinx.datetime.plus
  * (0, 1, 2, 3, 4+) rather than data-relative quantiles: medication counts
  * are small integers and a stable mapping keeps days comparable over time.
  */
-fun heatLevel(count: Int): Int = count.coerceIn(0, HEAT_LEVELS)
-
-/** The Monday on or before [date]. */
-fun mondayOf(date: LocalDate): LocalDate =
-    date.minus(date.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
+internal fun heatLevel(count: Int): Int = count.coerceIn(0, HEAT_LEVELS)
 
 /** The Monday week-column starts spanning [from]..[today], ascending. */
-fun weekStarts(from: LocalDate, today: LocalDate): List<LocalDate> =
+internal fun weekStarts(from: LocalDate, today: LocalDate): List<LocalDate> =
     generateSequence(mondayOf(from)) { it.plus(DAYS_PER_WEEK, DateTimeUnit.DAY) }
         .takeWhile { it <= mondayOf(today) }
         .toList()
@@ -59,7 +53,7 @@ fun weekStarts(from: LocalDate, today: LocalDate): List<LocalDate> =
  * survives the next two columns (a too-narrow leading month would collide
  * with the next label).
  */
-fun monthLabels(weekStarts: List<LocalDate>): List<String?> =
+internal fun monthLabels(weekStarts: List<LocalDate>): List<String?> =
     weekStarts.mapIndexed { index, monday ->
         val entersNewMonth = index > 0 && monday.month != weekStarts[index - 1].month
         val leadingWithRoom = index == 0 &&
@@ -73,7 +67,7 @@ fun monthLabels(weekStarts: List<LocalDate>): List<String?> =
     }
 
 /** Single-letter weekday mark under the 7-day row: M T W T F S S. */
-fun weekdayInitial(date: LocalDate): String = date.dayOfWeek.name.take(1)
+internal fun weekdayInitial(date: LocalDate): String = date.dayOfWeek.name.take(1)
 
 private fun LocalDate.shortMonthName(): String =
     month.name.lowercase().replaceFirstChar { it.uppercase() }.take(3)

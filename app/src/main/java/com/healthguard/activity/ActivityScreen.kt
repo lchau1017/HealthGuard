@@ -28,8 +28,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +37,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.healthguard.home.MedicationPhase
-import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -53,15 +50,17 @@ import kotlinx.datetime.toLocalDateTime
  */
 @Composable
 fun ActivityScreen(
-    viewModel: ActivityViewModel,
+    state: ActivityUiState,
+    onIntent: (ActivityIntent) -> Unit,
     modifier: Modifier = Modifier,
     bottomBar: @Composable () -> Unit = {},
 ) {
-    val state by viewModel.state.collectAsState()
-    LaunchedEffect(Unit) { viewModel.reload() }
+    LaunchedEffect(Unit) { onIntent(ActivityIntent.Reload) }
 
     val zone = remember { TimeZone.currentSystemDefault() }
-    val today = remember(state) { Clock.System.now().toLocalDateTime(zone).date }
+    // "Today" comes from the clock the state was computed against, so the
+    // today-outline in the grid rolls over with the content after midnight.
+    val today = state.now.toLocalDateTime(zone).date
 
     Scaffold(
         modifier = modifier,
@@ -78,7 +77,10 @@ fun ActivityScreen(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            FilterRow(selected = state.filter, onSelect = viewModel::setFilter)
+            FilterRow(
+                selected = state.filter,
+                onSelect = { onIntent(ActivityIntent.SetFilter(it)) },
+            )
 
             if (state.stats.totalEvents == 0) {
                 EmptyState()
@@ -91,7 +93,7 @@ fun ActivityScreen(
                         dayCounts = state.dayCounts,
                         from = from,
                         today = today,
-                        onDayClick = { date, _ -> viewModel.selectDay(date) },
+                        onDayClick = { date, _ -> onIntent(ActivityIntent.SelectDay(date)) },
                     )
                 }
 
@@ -102,7 +104,7 @@ fun ActivityScreen(
     }
 
     state.dayDetail?.let { detail ->
-        DayDetailSheet(detail = detail, onDismiss = viewModel::dismissDayDetail)
+        DayDetailSheet(detail = detail, onDismiss = { onIntent(ActivityIntent.DismissDayDetail) })
     }
 }
 

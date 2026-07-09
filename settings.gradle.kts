@@ -24,5 +24,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "HealthGuard"
 include(":app")
-include(":shared")
+include(":core:domain")
+include(":core:data")
 include(":backend:server")

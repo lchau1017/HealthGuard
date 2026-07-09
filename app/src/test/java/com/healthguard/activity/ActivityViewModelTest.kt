@@ -3,13 +3,17 @@
 package com.healthguard.activity
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import com.healthguard.activity.domain.ComputeActivityStateUseCase
+import com.healthguard.activity.domain.LoadActivityDayDetailUseCase
 import com.healthguard.home.MedicationPhase
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
+import com.healthguard.shared.data.SqlDelightMedicationRepository
 import com.healthguard.shared.data.StoredDoseLog
 import com.healthguard.shared.data.StoredMedication
 import com.healthguard.shared.data.StoredSchedule
 import com.healthguard.shared.db.HealthGuardDb
+import com.healthguard.shared.domain.ObserveDataChangesUseCase
 import com.healthguard.shared.extraction.Frequency
 import java.util.Properties
 import kotlin.time.Duration.Companion.days
@@ -50,7 +54,7 @@ class ActivityViewModelTest {
             Properties().apply { put("foreign_keys", "true") },
         )
         HealthGuardDb.Schema.create(driver)
-        repository = MedicationRepository(HealthGuardDb(driver), dispatcher)
+        repository = SqlDelightMedicationRepository(HealthGuardDb(driver), dispatcher)
     }
 
     @After
@@ -58,11 +62,15 @@ class ActivityViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = ActivityViewModel(
-        repository = repository,
-        clock = { fixedNow },
-        zone = TimeZone.UTC,
-    )
+    private fun viewModel(): ActivityViewModel {
+        val clock: () -> Instant = { fixedNow }
+        return ActivityViewModel(
+            computeActivityState = ComputeActivityStateUseCase(repository, clock, TimeZone.UTC),
+            loadActivityDayDetail = LoadActivityDayDetailUseCase(repository, clock, TimeZone.UTC),
+            observeDataChanges = ObserveDataChangesUseCase(repository),
+            zone = TimeZone.UTC,
+        )
+    }
 
     private suspend fun insert(
         id: String,
@@ -130,7 +138,7 @@ class ActivityViewModelTest {
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.setFilter(ActivityFilter.MONTHS_12)
+        vm.onIntent(ActivityIntent.SetFilter(ActivityFilter.MONTHS_12))
         dispatcher.scheduler.advanceUntilIdle()
 
         val state = vm.state.value
@@ -151,7 +159,7 @@ class ActivityViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
         assertEquals(3, vm.state.value.stats.totalEvents)
 
-        vm.setFilter(ActivityFilter.DAYS_7)
+        vm.onIntent(ActivityIntent.SetFilter(ActivityFilter.DAYS_7))
         dispatcher.scheduler.advanceUntilIdle()
 
         val state = vm.state.value
@@ -277,7 +285,7 @@ class ActivityViewModelTest {
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.setFilter(ActivityFilter.DAYS_7)
+        vm.onIntent(ActivityIntent.SetFilter(ActivityFilter.DAYS_7))
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
@@ -298,7 +306,7 @@ class ActivityViewModelTest {
             val vm = viewModel()
             dispatcher.scheduler.advanceUntilIdle()
 
-            vm.setFilter(ActivityFilter.MONTHS_12)
+            vm.onIntent(ActivityIntent.SetFilter(ActivityFilter.MONTHS_12))
             dispatcher.scheduler.advanceUntilIdle()
 
             val row = vm.state.value.breakdown.single()
@@ -350,7 +358,7 @@ class ActivityViewModelTest {
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.selectDay(LocalDate(2024, 7, 2))
+        vm.onIntent(ActivityIntent.SelectDay(LocalDate(2024, 7, 2)))
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
@@ -379,7 +387,7 @@ class ActivityViewModelTest {
             vm.state.value.dayDetail,
         )
 
-        vm.dismissDayDetail()
+        vm.onIntent(ActivityIntent.DismissDayDetail)
         assertNull(vm.state.value.dayDetail)
     }
 
@@ -389,7 +397,7 @@ class ActivityViewModelTest {
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.selectDay(LocalDate(2024, 7, 2))
+        vm.onIntent(ActivityIntent.SelectDay(LocalDate(2024, 7, 2)))
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
@@ -403,6 +411,18 @@ class ActivityViewModelTest {
     }
 
     @Test
+    fun `state carries the wall clock the content was computed against`() = runTest(dispatcher) {
+        // The screen derives "today" from state.now; a reload after midnight
+        // must therefore always roll the today-outline over, even when the
+        // recomputed content is otherwise unchanged.
+        insert("a", "Ibuprofen")
+        val vm = viewModel()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(fixedNow, vm.state.value.now)
+    }
+
+    @Test
     fun `reload picks up takes recorded since the last load`() = runTest(dispatcher) {
         insert("a", "Ibuprofen")
         val vm = viewModel()
@@ -410,7 +430,7 @@ class ActivityViewModelTest {
         assertEquals(0, vm.state.value.stats.totalEvents)
 
         logTaken("a", fixedNow - 1.hours)
-        vm.reload()
+        vm.onIntent(ActivityIntent.Reload)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(1, vm.state.value.stats.totalEvents)

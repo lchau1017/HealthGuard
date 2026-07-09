@@ -3,8 +3,13 @@
 package com.healthguard.confirm
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import com.healthguard.confirm.domain.ExtractMedicationUseCase
+import com.healthguard.confirm.domain.SaveNewMedicationUseCase
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.MedicationWithSchedule
+import com.healthguard.shared.data.SqlDelightMedicationRepository
+import com.healthguard.shared.data.StoredMedication
+import com.healthguard.shared.data.StoredSchedule
 import com.healthguard.shared.db.HealthGuardDb
 import com.healthguard.shared.extraction.ExtractedField
 import com.healthguard.shared.extraction.ExtractionResult
@@ -47,7 +52,7 @@ class ConfirmViewModelTest {
             Properties().apply { put("foreign_keys", "true") },
         )
         HealthGuardDb.Schema.create(driver)
-        repository = MedicationRepository(HealthGuardDb(driver), dispatcher)
+        repository = SqlDelightMedicationRepository(HealthGuardDb(driver), dispatcher)
     }
 
     @After
@@ -81,8 +86,22 @@ class ConfirmViewModelTest {
         withFood: ExtractedField<Boolean> = ExtractedField(true, 0.9),
     ) = MedicationExtraction(drugName, ingredients, dosage, form, frequency, withFood)
 
+    private fun viewModelWith(
+        extractor: VisionExtractor,
+        repository: MedicationRepository = this.repository,
+        encoder: ImageEncoder = ImageEncoder { "base64-$it" },
+    ) = ConfirmViewModel(
+        ExtractMedicationUseCase(extractor, dispatcher),
+        SaveNewMedicationUseCase(repository) { fixedNow },
+        encoder,
+    )
+
     private fun viewModel(vararg results: ExtractionResult) =
-        ConfirmViewModel(FakeExtractor(results.toMutableList()), repository, dispatcher) { fixedNow }
+        viewModelWith(FakeExtractor(results.toMutableList()))
+
+    /** Mirrors how the screen reads accept-readiness: false unless in Review. */
+    private val ConfirmUiState.canAccept: Boolean
+        get() = (this as? ConfirmUiState.Review)?.canAccept ?: false
 
     private suspend fun storedMedications(): List<MedicationWithSchedule> =
         repository.medications().first()
@@ -94,8 +113,8 @@ class ConfirmViewModelTest {
 
     @Test
     fun `onImagePicked enters Extracting while extractor is in flight`() = runTest(dispatcher) {
-        val vm = ConfirmViewModel(SuspendingExtractor(), repository, dispatcher) { fixedNow }
-        vm.onImagePicked("img")
+        val vm = viewModelWith(SuspendingExtractor())
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.runCurrent()
         assertEquals(ConfirmUiState.Extracting, vm.state.value)
     }
@@ -103,7 +122,7 @@ class ConfirmViewModelTest {
     @Test
     fun `success maps extraction to review fields with human readable values`() = runTest(dispatcher) {
         val vm = viewModel(ExtractionResult.Success(extraction()))
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
         val review = vm.state.value as ConfirmUiState.Review
@@ -127,7 +146,7 @@ class ConfirmViewModelTest {
                 ),
             ),
         )
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
         var byKey = (vm.state.value as ConfirmUiState.Review).fields.associateBy { it.key }
         assertEquals("once a day", byKey.getValue(ConfirmViewModel.KEY_FREQUENCY).value)
@@ -138,7 +157,7 @@ class ConfirmViewModelTest {
                 extraction(frequency = ExtractedField(Frequency.EveryHours(6), 0.9)),
             ),
         )
-        vm2.onImagePicked("img")
+        vm2.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
         byKey = (vm2.state.value as ConfirmUiState.Review).fields.associateBy { it.key }
         assertEquals("every 6 hours", byKey.getValue(ConfirmViewModel.KEY_FREQUENCY).value)
@@ -151,7 +170,7 @@ class ConfirmViewModelTest {
                 extraction(ingredients = listOf(goodField("paracetamol"), goodField("caffeine"))),
             ),
         )
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
         val byKey = (vm.state.value as ConfirmUiState.Review).fields.associateBy { it.key }
         assertEquals("paracetamol, caffeine", byKey.getValue(ConfirmViewModel.KEY_INGREDIENTS).value)
@@ -162,7 +181,7 @@ class ConfirmViewModelTest {
         val vm = viewModel(
             ExtractionResult.Success(extraction(drugName = ExtractedField(null, 0.0))),
         )
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
         val field = (vm.state.value as ConfirmUiState.Review)
             .fields.first { it.key == ConfirmViewModel.KEY_DRUG_NAME }
@@ -175,12 +194,12 @@ class ConfirmViewModelTest {
         val vm = viewModel(
             ExtractionResult.Success(extraction(dosage = ExtractedField("200 mg", 0.5))),
         )
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertFalse(vm.canAccept)
-        vm.onFieldConfirmed(ConfirmViewModel.KEY_DOSAGE)
-        assertTrue(vm.canAccept)
+        assertFalse(vm.state.value.canAccept)
+        vm.onIntent(ConfirmIntent.FieldConfirmed(ConfirmViewModel.KEY_DOSAGE))
+        assertTrue(vm.state.value.canAccept)
         val field = (vm.state.value as ConfirmUiState.Review)
             .fields.first { it.key == ConfirmViewModel.KEY_DOSAGE }
         assertTrue(field.userConfirmed)
@@ -191,16 +210,16 @@ class ConfirmViewModelTest {
         val vm = viewModel(
             ExtractionResult.Success(extraction(dosage = ExtractedField("2OO mg", 0.4))),
         )
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onFieldEdited(ConfirmViewModel.KEY_DOSAGE, "200 mg")
+        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, "200 mg"))
         val field = (vm.state.value as ConfirmUiState.Review)
             .fields.first { it.key == ConfirmViewModel.KEY_DOSAGE }
         assertEquals("200 mg", field.value)
         assertTrue(field.userConfirmed)
         assertFalse(field.needsReview)
-        assertTrue(vm.canAccept)
+        assertTrue(vm.state.value.canAccept)
     }
 
     @Test
@@ -208,16 +227,16 @@ class ConfirmViewModelTest {
         val vm = viewModel(
             ExtractionResult.Success(extraction(dosage = ExtractedField("2OO mg", 0.4))),
         )
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onFieldEdited(ConfirmViewModel.KEY_DOSAGE, "   ")
+        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, "   "))
         val field = (vm.state.value as ConfirmUiState.Review)
             .fields.first { it.key == ConfirmViewModel.KEY_DOSAGE }
         assertEquals("   ", field.value)
         assertFalse(field.userConfirmed)
         assertTrue(field.needsReview)
-        assertFalse(vm.canAccept)
+        assertFalse(vm.state.value.canAccept)
     }
 
     @Test
@@ -225,18 +244,18 @@ class ConfirmViewModelTest {
         val vm = viewModel(
             ExtractionResult.Success(extraction(dosage = ExtractedField("2OO mg", 0.4))),
         )
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onFieldEdited(ConfirmViewModel.KEY_DOSAGE, "")
-        assertFalse(vm.canAccept)
-        vm.onFieldEdited(ConfirmViewModel.KEY_DOSAGE, "200 mg")
+        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, ""))
+        assertFalse(vm.state.value.canAccept)
+        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, "200 mg"))
         val field = (vm.state.value as ConfirmUiState.Review)
             .fields.first { it.key == ConfirmViewModel.KEY_DOSAGE }
         assertEquals("200 mg", field.value)
         assertTrue(field.userConfirmed)
         assertFalse(field.needsReview)
-        assertTrue(vm.canAccept)
+        assertTrue(vm.state.value.canAccept)
     }
 
     @Test
@@ -250,35 +269,35 @@ class ConfirmViewModelTest {
                 ),
             ),
         )
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
-        assertFalse(vm.canAccept)
+        assertFalse(vm.state.value.canAccept)
 
-        vm.onFieldConfirmed(ConfirmViewModel.KEY_DRUG_NAME)
-        assertFalse(vm.canAccept)
-        vm.onFieldConfirmed(ConfirmViewModel.KEY_DOSAGE)
-        assertFalse(vm.canAccept)
-        vm.onFieldEdited(ConfirmViewModel.KEY_FORM, "tablet")
-        assertTrue(vm.canAccept)
+        vm.onIntent(ConfirmIntent.FieldConfirmed(ConfirmViewModel.KEY_DRUG_NAME))
+        assertFalse(vm.state.value.canAccept)
+        vm.onIntent(ConfirmIntent.FieldConfirmed(ConfirmViewModel.KEY_DOSAGE))
+        assertFalse(vm.state.value.canAccept)
+        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_FORM, "tablet"))
+        assertTrue(vm.state.value.canAccept)
     }
 
     @Test
     fun `canAccept is true when no field needs review`() = runTest(dispatcher) {
         val vm = viewModel(ExtractionResult.Success(extraction()))
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
-        assertTrue(vm.canAccept)
+        assertTrue(vm.state.value.canAccept)
     }
 
     @Test
     fun `canAccept is false outside review state`() {
-        assertFalse(viewModel().canAccept)
+        assertFalse(viewModel().state.value.canAccept)
     }
 
     @Test
     fun `malformed result maps to retriable error with photo hint`() = runTest(dispatcher) {
         val vm = viewModel(ExtractionResult.Malformed("bad json"))
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
         val error = vm.state.value as ConfirmUiState.Error
         assertEquals("Couldn't read the label — try another photo", error.message)
@@ -288,7 +307,7 @@ class ConfirmViewModelTest {
     @Test
     fun `unavailable result maps to retriable connection error`() = runTest(dispatcher) {
         val vm = viewModel(ExtractionResult.Unavailable)
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
         val error = vm.state.value as ConfirmUiState.Error
         assertEquals("Service unavailable — check connection", error.message)
@@ -300,36 +319,119 @@ class ConfirmViewModelTest {
         val extractor = FakeExtractor(
             mutableListOf(ExtractionResult.Unavailable, ExtractionResult.Success(extraction())),
         )
-        val vm = ConfirmViewModel(extractor, repository, dispatcher) { fixedNow }
-        vm.onImagePicked("img")
+        val vm = viewModelWith(extractor)
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value is ConfirmUiState.Error)
 
-        vm.onRetry()
+        vm.onIntent(ConfirmIntent.Retry)
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value is ConfirmUiState.Review)
-        assertEquals(listOf("img", "img"), extractor.calls)
+        assertEquals(listOf("base64-img", "base64-img"), extractor.calls)
+    }
+
+    @Test
+    fun `image is encoded before extraction and Extracting shows during the encode`() = runTest(dispatcher) {
+        val extractor = FakeExtractor(mutableListOf(ExtractionResult.Success(extraction())))
+        val gate = CompletableDeferred<String>()
+        val vm = viewModelWith(extractor, encoder = { gate.await() })
+
+        vm.onIntent(ConfirmIntent.ImagePicked("content://photo"))
+        dispatcher.scheduler.runCurrent()
+        // The dialog must be visible for the whole decode, not only extraction.
+        assertEquals(ConfirmUiState.Extracting, vm.state.value)
+
+        gate.complete("jpeg-bytes")
+        dispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.state.value is ConfirmUiState.Review)
+        assertEquals(listOf("jpeg-bytes"), extractor.calls)
+    }
+
+    @Test
+    fun `undecodable image surfaces a non-retriable error and never extracts`() = runTest(dispatcher) {
+        val extractor = FakeExtractor(mutableListOf())
+        val vm = viewModelWith(extractor, encoder = { null })
+
+        vm.onIntent(ConfirmIntent.ImagePicked("content://broken"))
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val error = vm.state.value as ConfirmUiState.Error
+        assertEquals("Couldn't load that image", error.message)
+        assertFalse(error.retriable)
+        assertTrue(extractor.calls.isEmpty())
+    }
+
+    @Test
+    fun `dismiss during extraction is final - a late result must not reopen the dialog`() = runTest(dispatcher) {
+        val extractor = SuspendingExtractor()
+        val vm = viewModelWith(extractor)
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
+        dispatcher.scheduler.runCurrent()
+        assertEquals(ConfirmUiState.Extracting, vm.state.value)
+
+        vm.onIntent(ConfirmIntent.Reset)
+        assertEquals(ConfirmUiState.Idle, vm.state.value)
+
+        // The (up to 60s slow) network call finally returns: still dismissed.
+        extractor.gate.complete(ExtractionResult.Success(extraction()))
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(ConfirmUiState.Idle, vm.state.value)
+    }
+
+    private class SuspendingSaveRepository(
+        private val delegate: MedicationRepository,
+    ) : MedicationRepository by delegate {
+        val gate = CompletableDeferred<Unit>()
+        override suspend fun insertMedication(medication: StoredMedication, schedule: StoredSchedule) {
+            gate.await()
+            delegate.insertMedication(medication, schedule)
+        }
+    }
+
+    @Test
+    fun `dismiss during save is final - a late save completion must not resurrect the dialog`() = runTest(dispatcher) {
+        val repo = SuspendingSaveRepository(repository)
+        val vm = viewModelWith(
+            FakeExtractor(mutableListOf(ExtractionResult.Success(extraction()))),
+            repo,
+        )
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
+        dispatcher.scheduler.advanceUntilIdle()
+        vm.onIntent(ConfirmIntent.Accept(null))
+        dispatcher.scheduler.runCurrent()
+        assertTrue(vm.state.value is ConfirmUiState.Review)
+
+        vm.onIntent(ConfirmIntent.Reset)
+        repo.gate.complete(Unit)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(ConfirmUiState.Idle, vm.state.value)
+        // The cancelled save never reached the database.
+        assertTrue(storedMedications().isEmpty())
     }
 
     @Test
     fun `reset returns to Idle`() = runTest(dispatcher) {
         val vm = viewModel(ExtractionResult.Success(extraction()))
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
-        vm.reset()
+        vm.onIntent(ConfirmIntent.Reset)
         assertEquals(ConfirmUiState.Idle, vm.state.value)
     }
 
     @Test
-    fun `accept persists medication with dormant schedule and enters Saved`() = runTest(dispatcher) {
+    fun `accept persists medication with dormant schedule and emits Saved`() = runTest(dispatcher) {
         val vm = viewModel(ExtractionResult.Success(extraction()))
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onAccept("Heart")
+        vm.onIntent(ConfirmIntent.Accept("Heart"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(ConfirmUiState.Saved, vm.state.value)
+        assertEquals(ConfirmEffect.Saved, vm.effects.first())
+        // The view model owns its state machine: a successful save returns
+        // the flow to Idle by itself, no Reset intent from the host needed.
+        assertEquals(ConfirmUiState.Idle, vm.state.value)
         val stored = storedMedications().single()
         assertEquals("Ibuprofen", stored.medication.drugName)
         assertEquals("200 mg", stored.medication.dosage)
@@ -344,16 +446,39 @@ class ConfirmViewModelTest {
     }
 
     @Test
+    fun `a new image after a successful save starts a fresh extraction`() = runTest(dispatcher) {
+        val extractor = FakeExtractor(
+            mutableListOf(
+                ExtractionResult.Success(extraction()),
+                ExtractionResult.Success(extraction()),
+            ),
+        )
+        val vm = viewModelWith(extractor)
+        vm.onIntent(ConfirmIntent.ImagePicked("img-1"))
+        dispatcher.scheduler.advanceUntilIdle()
+        vm.onIntent(ConfirmIntent.Accept(null))
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(ConfirmUiState.Idle, vm.state.value)
+
+        // The self-reset left no stale image or retry state behind: the next
+        // picked image goes through a full encode + extract.
+        vm.onIntent(ConfirmIntent.ImagePicked("img-2"))
+        dispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.state.value is ConfirmUiState.Review)
+        assertEquals(listOf("base64-img-1", "base64-img-2"), extractor.calls)
+    }
+
+    @Test
     fun `accept preserves the typed frequency rather than re-parsing display text`() = runTest(dispatcher) {
         val vm = viewModel(
             ExtractionResult.Success(
                 extraction(frequency = ExtractedField(Frequency.EveryHours(6), 0.9)),
             ),
         )
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onAccept(null)
+        vm.onIntent(ConfirmIntent.Accept(null))
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(Frequency.EveryHours(6), storedMedications().single().schedule.frequency)
@@ -362,12 +487,12 @@ class ConfirmViewModelTest {
     @Test
     fun `edited field values win over the original extraction`() = runTest(dispatcher) {
         val vm = viewModel(ExtractionResult.Success(extraction()))
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onFieldEdited(ConfirmViewModel.KEY_DRUG_NAME, "Paracetamol")
-        vm.onFieldEdited(ConfirmViewModel.KEY_DOSAGE, "500 mg")
-        vm.onAccept(null)
+        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DRUG_NAME, "Paracetamol"))
+        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, "500 mg"))
+        vm.onIntent(ConfirmIntent.Accept(null))
         dispatcher.scheduler.advanceUntilIdle()
 
         val stored = storedMedications().single()
@@ -378,10 +503,10 @@ class ConfirmViewModelTest {
     @Test
     fun `blank label is stored as null`() = runTest(dispatcher) {
         val vm = viewModel(ExtractionResult.Success(extraction()))
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onAccept("   ")
+        vm.onIntent(ConfirmIntent.Accept("   "))
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(storedMedications().single().medication.label)
@@ -390,11 +515,11 @@ class ConfirmViewModelTest {
     @Test
     fun `editing the frequency text updates the typed frequency`() = runTest(dispatcher) {
         val vm = viewModel(ExtractionResult.Success(extraction()))
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onFieldEdited(ConfirmViewModel.KEY_FREQUENCY, "every 8 hours")
-        vm.onAccept(null)
+        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_FREQUENCY, "every 8 hours"))
+        vm.onIntent(ConfirmIntent.Accept(null))
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(Frequency.EveryHours(8), storedMedications().single().schedule.frequency)
@@ -403,11 +528,11 @@ class ConfirmViewModelTest {
     @Test
     fun `unparseable frequency edit stores a null frequency`() = runTest(dispatcher) {
         val vm = viewModel(ExtractionResult.Success(extraction()))
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onFieldEdited(ConfirmViewModel.KEY_FREQUENCY, "whenever it hurts")
-        vm.onAccept(null)
+        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_FREQUENCY, "whenever it hurts"))
+        vm.onIntent(ConfirmIntent.Accept(null))
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(storedMedications().single().schedule.frequency)
@@ -416,11 +541,11 @@ class ConfirmViewModelTest {
     @Test
     fun `editing withFood text updates the typed value`() = runTest(dispatcher) {
         val vm = viewModel(ExtractionResult.Success(extraction()))
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onFieldEdited(ConfirmViewModel.KEY_WITH_FOOD, "No")
-        vm.onAccept(null)
+        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_WITH_FOOD, "No"))
+        vm.onIntent(ConfirmIntent.Accept(null))
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(false, storedMedications().single().schedule.withFood)
@@ -431,10 +556,10 @@ class ConfirmViewModelTest {
         val vm = viewModel(
             ExtractionResult.Success(extraction(dosage = ExtractedField("2OO mg", 0.4))),
         )
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onAccept(null)
+        vm.onIntent(ConfirmIntent.Accept(null))
         dispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(vm.state.value is ConfirmUiState.Review)
@@ -444,27 +569,21 @@ class ConfirmViewModelTest {
     private fun failingRepository(): MedicationRepository {
         val deadDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         HealthGuardDb.Schema.create(deadDriver)
-        val repository = MedicationRepository(HealthGuardDb(deadDriver), dispatcher)
+        val repository = SqlDelightMedicationRepository(HealthGuardDb(deadDriver), dispatcher)
         deadDriver.close()
         return repository
     }
 
-    private fun viewModelWith(
-        repository: MedicationRepository,
-        vararg results: ExtractionResult,
-    ) = ConfirmViewModel(
-        FakeExtractor(results.toMutableList()),
-        repository,
-        dispatcher,
-    ) { fixedNow }
-
     @Test
     fun `failed insert surfaces a retriable error instead of crashing`() = runTest(dispatcher) {
-        val vm = viewModelWith(failingRepository(), ExtractionResult.Success(extraction()))
-        vm.onImagePicked("img")
+        val vm = viewModelWith(
+            FakeExtractor(mutableListOf(ExtractionResult.Success(extraction()))),
+            failingRepository(),
+        )
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onAccept(null)
+        vm.onIntent(ConfirmIntent.Accept(null))
         dispatcher.scheduler.advanceUntilIdle()
 
         val error = vm.state.value as ConfirmUiState.Error
@@ -475,25 +594,63 @@ class ConfirmViewModelTest {
     @Test
     fun `accept can be attempted again after a failed save`() = runTest(dispatcher) {
         val vm = viewModelWith(
+            FakeExtractor(mutableListOf(ExtractionResult.Success(extraction()))),
             failingRepository(),
-            ExtractionResult.Success(extraction()),
-            ExtractionResult.Success(extraction()),
         )
-        vm.onImagePicked("img")
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
-        vm.onAccept(null)
+        vm.onIntent(ConfirmIntent.Accept(null))
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value is ConfirmUiState.Error)
 
-        // Retry re-extracts; a second Accept must attempt the insert again
-        // (failing again here) rather than being swallowed by a stuck saving
-        // flag, which would leave the state silently stuck in Review.
-        vm.onRetry()
-        dispatcher.scheduler.advanceUntilIdle()
-        assertTrue(vm.state.value is ConfirmUiState.Review)
-
-        vm.onAccept(null)
+        // Retry restores the review; the retried save must attempt the insert
+        // again (failing again here) rather than being swallowed by a stuck
+        // saving flag, which would leave the state silently stuck in Review.
+        vm.onIntent(ConfirmIntent.Retry)
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value is ConfirmUiState.Error)
+    }
+
+    private class FailOnceRepository(
+        private val delegate: MedicationRepository,
+    ) : MedicationRepository by delegate {
+        var failuresRemaining = 1
+        override suspend fun insertMedication(medication: StoredMedication, schedule: StoredSchedule) {
+            if (failuresRemaining > 0) {
+                failuresRemaining--
+                throw RuntimeException("save failed")
+            }
+            delegate.insertMedication(medication, schedule)
+        }
+    }
+
+    @Test
+    fun `retry after a failed save restores the edited review and saves it again`() = runTest(dispatcher) {
+        val extractor = FakeExtractor(mutableListOf(ExtractionResult.Success(extraction())))
+        val vm = viewModelWith(extractor, FailOnceRepository(repository))
+        vm.onIntent(ConfirmIntent.ImagePicked("img"))
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, "500 mg"))
+        vm.onIntent(ConfirmIntent.Accept("Heart"))
+        dispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.state.value is ConfirmUiState.Error)
+
+        vm.onIntent(ConfirmIntent.Retry)
+        // The review comes back exactly as the user left it — the edit
+        // survives; nothing was re-extracted.
+        val review = vm.state.value as ConfirmUiState.Review
+        assertEquals(
+            "500 mg",
+            review.fields.first { it.key == ConfirmViewModel.KEY_DOSAGE }.value,
+        )
+        assertEquals(1, extractor.calls.size)
+
+        // And the save was attempted again, succeeding this time.
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(ConfirmEffect.Saved, vm.effects.first())
+        val stored = storedMedications().single()
+        assertEquals("500 mg", stored.medication.dosage)
+        assertEquals("Heart", stored.medication.label)
     }
 }

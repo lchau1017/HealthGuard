@@ -1,0 +1,141 @@
+-- Timestamps (createdAt, startedAt, stoppedAt, plannedAt, takenAt) are epoch
+-- milliseconds (INTEGER). activeIngredients is a JSON array of strings
+-- (kotlinx.serialization), so ingredient names may contain any character.
+-- withFood is a nullable boolean stored as INTEGER 0/1.
+
+CREATE TABLE medication (
+    id TEXT NOT NULL PRIMARY KEY,
+    drugName TEXT NOT NULL,
+    label TEXT,
+    activeIngredients TEXT NOT NULL,
+    dosage TEXT,
+    form TEXT,
+    extractionConfidence REAL NOT NULL,
+    createdAt INTEGER NOT NULL
+);
+
+CREATE TABLE schedule (
+    id TEXT NOT NULL PRIMARY KEY,
+    medicationId TEXT NOT NULL REFERENCES medication(id) ON DELETE CASCADE,
+    frequencyType TEXT,
+    frequencyValue INTEGER,
+    withFood INTEGER,
+    -- null startedAt = dormant (imported to inventory but not yet taken).
+    startedAt INTEGER,
+    stoppedAt INTEGER
+);
+
+CREATE TABLE doseLog (
+    id TEXT NOT NULL PRIMARY KEY,
+    scheduleId TEXT NOT NULL REFERENCES schedule(id) ON DELETE CASCADE,
+    plannedAt INTEGER NOT NULL,
+    takenAt INTEGER,
+    -- TAKEN | MISSED | SKIPPED | PENDING
+    status TEXT NOT NULL
+);
+
+insertMedication:
+INSERT INTO medication(id, drugName, label, activeIngredients, dosage, form, extractionConfidence, createdAt)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+getMedication:
+SELECT m.id AS medicationId, m.drugName, m.label, m.activeIngredients, m.dosage, m.form,
+       m.extractionConfidence, m.createdAt,
+       s.id AS scheduleId, s.frequencyType, s.frequencyValue, s.withFood, s.startedAt, s.stoppedAt
+FROM medication m
+INNER JOIN schedule s ON s.medicationId = m.id
+WHERE m.id = :id;
+
+listMedications:
+SELECT m.id AS medicationId, m.drugName, m.label, m.activeIngredients, m.dosage, m.form,
+       m.extractionConfidence, m.createdAt,
+       s.id AS scheduleId, s.frequencyType, s.frequencyValue, s.withFood, s.startedAt, s.stoppedAt
+FROM medication m
+INNER JOIN schedule s ON s.medicationId = m.id
+ORDER BY m.createdAt DESC, m.id DESC;
+
+updateMedication:
+UPDATE medication
+SET drugName = :drugName, label = :label, activeIngredients = :activeIngredients,
+    dosage = :dosage, form = :form
+WHERE id = :id;
+
+deleteMedication:
+DELETE FROM medication WHERE id = :id;
+
+insertSchedule:
+INSERT INTO schedule(id, medicationId, frequencyType, frequencyValue, withFood, startedAt, stoppedAt)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- Deliberately never touches startedAt/stoppedAt: activation state changes
+-- go through activateSchedule/stopSchedule.
+updateSchedule:
+UPDATE schedule
+SET frequencyType = :frequencyType, frequencyValue = :frequencyValue, withFood = :withFood
+WHERE id = :id;
+
+activateSchedule:
+UPDATE schedule SET startedAt = :startedAt, stoppedAt = NULL WHERE id = :id;
+
+stopSchedule:
+UPDATE schedule SET stoppedAt = :stoppedAt WHERE id = :id;
+
+scheduleIdForMedication:
+SELECT id FROM schedule WHERE medicationId = :medicationId;
+
+insertDoseLog:
+INSERT INTO doseLog(id, scheduleId, plannedAt, takenAt, status)
+VALUES (?, ?, ?, ?, ?);
+
+deleteDoseLog:
+DELETE FROM doseLog WHERE id = :id;
+
+-- Half-open range: plannedAt in [from, to).
+doseLogsForScheduleInRange:
+SELECT * FROM doseLog
+WHERE scheduleId = :scheduleId AND plannedAt >= :fromMillis AND plannedAt < :toMillis
+ORDER BY plannedAt ASC;
+
+-- All TAKEN doses across every schedule, half-open on takenAt in [from, to),
+-- with the owning medication's identity: the activity history feed.
+takenDosesInRange:
+SELECT s.medicationId, m.drugName, d.takenAt
+FROM doseLog d
+INNER JOIN schedule s ON s.id = d.scheduleId
+INNER JOIN medication m ON m.id = s.medicationId
+WHERE d.status = 'TAKEN' AND d.takenAt IS NOT NULL
+  AND d.takenAt >= :fromMillis AND d.takenAt < :toMillis
+ORDER BY d.takenAt ASC;
+
+-- Latest dose logs of one schedule, any status, newest planned first.
+recentDoseLogsForSchedule:
+SELECT * FROM doseLog
+WHERE scheduleId = :scheduleId
+ORDER BY plannedAt DESC
+LIMIT :limit;
+
+latestDoseLogForSchedule:
+SELECT * FROM doseLog
+WHERE scheduleId = :scheduleId
+ORDER BY plannedAt DESC
+LIMIT 1;
+
+-- Every dose log (any status) across all schedules whose effective time —
+-- takenAt when present, plannedAt otherwise — falls in [from, to): the
+-- cross-medication day/status feed for the home week strip.
+doseLogsInRange:
+SELECT * FROM doseLog
+WHERE COALESCE(takenAt, plannedAt) >= :fromMillis
+  AND COALESCE(takenAt, plannedAt) < :toMillis
+ORDER BY plannedAt ASC;
+
+-- Same effective-time window as doseLogsInRange, but resolved through the
+-- schedule to the owning medication's identity: the day-detail sheet feed.
+doseLogsWithMedicationInRange:
+SELECT s.medicationId, m.drugName, m.dosage, d.plannedAt, d.takenAt, d.status
+FROM doseLog d
+INNER JOIN schedule s ON s.id = d.scheduleId
+INNER JOIN medication m ON m.id = s.medicationId
+WHERE COALESCE(d.takenAt, d.plannedAt) >= :fromMillis
+  AND COALESCE(d.takenAt, d.plannedAt) < :toMillis
+ORDER BY COALESCE(d.takenAt, d.plannedAt) ASC;

@@ -28,12 +28,6 @@ class HeatMapMathTest {
     }
 
     @Test
-    fun `dayLabel is compact day month text`() {
-        assertEquals("Wed 3 Jul", dayLabel(LocalDate(2024, 7, 3)))
-        assertEquals("Sun 29 Dec", dayLabel(LocalDate(2024, 12, 29)))
-    }
-
-    @Test
     fun `mondayOf returns the week start`() {
         // 2024-07-03 is a Wednesday.
         assertEquals(LocalDate(2024, 7, 1), mondayOf(LocalDate(2024, 7, 3)))
