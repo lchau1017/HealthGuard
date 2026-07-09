@@ -58,21 +58,89 @@ record (2× speed; [full-quality video](docs/demo/scan-take-record.mp4)):
 - Everything safety-related — dose timing, the double-dose warning, the
   adherence maths — is plain deterministic Kotlin with tests.
 
+## Architecture
+
+Clean Architecture with a compiler-enforced module graph and a full MVI
+presentation layer.
+
+```
+┌───────────────────────────── :app (Android) ─────────────────────────────┐
+│  Package-by-feature: home / detail / confirm / activity                  │
+│  Each feature owns its MVI set:                                          │
+│    Intent (sealed) ─► ViewModel.onIntent ─► UiState / Effect ─► Screen   │
+│    + UiStateMapper (domain content → view state)                         │
+└───────────────────────────────────┬───────────────────────────────────────┘
+                    depends on use cases only
+┌───────────────────────────────────▼───────────────────────────────┐
+│  :core:domain — Kotlin Multiplatform, pure                        │
+│  entities · use cases · repository interface · dose/adherence     │
+│  maths · extraction contracts                                     │
+└───────────────────────────────────▲───────────────────────────────┘
+                        implemented by
+┌───────────────────────────────────┴───────────────────────────────┐
+│  :core:data — KMP: SQLDelight repository, Ktor vision extractor   │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+Layering rules, enforced by module boundaries:
+
+- Presentation depends on **use cases only** — no ViewModel references the
+  repository; every read and write goes through a named use case
+  (`RecordDoseUseCase`, `ComputeHomeStateUseCase`, `ObserveMedicationsUseCase`, …).
+- `:core:domain` is framework-free — no Android, no `java.*`, no hardcoded
+  dispatchers, IDs via `kotlin.uuid` — so it compiles for any KMP target
+  (iOS-ready by construction).
+- `:core:data` implements the domain interfaces
+  (`SqlDelightMedicationRepository`, `ProxyVisionExtractor`); it is the only
+  layer that touches the database or the network.
+
+MVI, per feature (no shared base class — each feature is self-contained):
+
+- **Intent** — a sealed hierarchy of every user action, dispatched through a
+  single `onIntent(intent)` entry point.
+- **UiState** — one immutable view state per screen; state recomputes from
+  domain content and carries the wall-clock instant it was computed at, so
+  countdowns and "overdue" text can never drift from the underlying facts.
+- **Effect** — one-shot events (snackbars, navigation results) on a buffered
+  channel with a single consumer; never modelled as state, so they cannot
+  re-fire on rotation.
+- **UiStateMapper** — the only place domain models are converted to view
+  models; formatting (dates, captions, row status) lives here and in
+  per-feature `*Format` files, never in the domain.
+
+Cross-cutting choices:
+
+- Domain logic is pure functions — clock and timezone always injected, which
+  is how DST transitions and half-hour timezones got real tests.
+- Dose times are meal-aligned (9 AM, 9 PM, …) — never between 22:00 and
+  08:00.
+- Every write goes through one repository that broadcasts changes; the
+  `ObserveMedicationsUseCase` folds that signal into the medication stream so
+  every screen updates after every action.
+
+## Tech stack
+
+| Area | Choice |
+|---|---|
+| Language | Kotlin 2.2 — Multiplatform (`android` + `jvm` targets) |
+| UI | Jetpack Compose, Material 3 |
+| Architecture | Clean Architecture · MVI · package-by-feature |
+| Dependency injection | Koin (single composition root in `:app`) |
+| Persistence | SQLDelight (typed SQL, multiplatform drivers) |
+| Networking | Ktor client (app ↔ proxy), Ktor server (backend) |
+| Async | Kotlin coroutines + Flow (`StateFlow` view state, `Channel` effects) |
+| Serialization / time | kotlinx.serialization · kotlinx-datetime · `kotlin.time` |
+| Testing | kotlin.test + JUnit 4, in-memory SQLite, coroutines-test |
+| Build | Gradle version catalogs, AGP 9, JDK 21 toolchain (17 bytecode), GitHub Actions CI |
+
 ## Modules
 
 | Module | What it is |
 |---|---|
-| `app/` | The Android app — Jetpack Compose, Material 3, Koin |
-| `shared/` | Kotlin Multiplatform library — label parsing, dose scheduling, SQLDelight persistence. Android + JVM now, room for iOS later |
+| `app/` | Android presentation — Compose screens, MVI ViewModels, mappers, Koin composition root |
+| `core/domain/` | Pure Kotlin Multiplatform — entities, use cases, repository interface, dose scheduling and adherence maths |
+| `core/data/` | KMP data layer — SQLDelight repository implementation, vision-extraction client and parser |
 | `backend/server/` | Small Ktor server with one endpoint. It exists so the API key never ships inside the app |
-
-- Domain logic in `shared` is pure functions — clock and timezone always
-  passed in, which is how DST transitions and half-hour timezones got real
-  tests.
-- Dose times are meal-aligned (9 AM, 9 PM, …) — never between 22:00 and
-  08:00.
-- Every write goes through one repository that broadcasts changes, so every
-  screen updates after every action.
 
 ## How adherence is counted
 
@@ -89,12 +157,15 @@ record (2× speed; [full-quality video](docs/demo/scan-take-record.mp4)):
 
 ## Testing
 
-- 300+ tests across the three modules, written test-first.
+- 360+ tests across the four modules, written test-first.
 - Highest-value suites:
   - parser boundary tests — the LLM is an adversary as far as the parser is
     concerned
   - dose-time maths across DST changes and odd timezones
-  - ViewModel tests against a real in-memory database, not mocks
+  - use-case tests against an in-memory fake repository that mirrors the
+    real SQL semantics
+  - ViewModel tests against a real in-memory database, not mocks — driven
+    through the MVI `onIntent` surface and asserted on state and effects
 - CI runs everything plus lint on every push.
 
 ## Privacy
@@ -258,8 +329,9 @@ threshold commonly used in clinical adherence research.
 ## Running the tests
 
 ```bash
-./gradlew :shared:jvmTest            # parser, repository, dose calculator
-./gradlew :app:testDebugUnitTest     # view models (against a real in-memory DB)
+./gradlew :core:domain:jvmTest       # use cases, dose calculator, adherence maths
+./gradlew :core:data:jvmTest         # repository (real SQL), extraction parser
+./gradlew :app:testDebugUnitTest     # MVI view models (against a real in-memory DB)
 ./gradlew :backend:server:test       # proxy contract tests (stubbed upstream)
 ```
 
