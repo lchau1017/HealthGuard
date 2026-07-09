@@ -30,7 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.healthguard.ui.CategoryLabelInput
+import com.healthguard.common.ui.CategoryLabelInput
 
 /**
  * The import/confirm flow, presented as a full-width dialog card over the

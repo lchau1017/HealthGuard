@@ -15,7 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.healthguard.format.todayLabel
+import com.healthguard.common.format.todayLabel
 
 /**
  * The tapped-day bottom sheet behind every heat-map cell: the day's doses

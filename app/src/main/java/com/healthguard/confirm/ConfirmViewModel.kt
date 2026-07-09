@@ -4,9 +4,8 @@ package com.healthguard.confirm
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.healthguard.format.parseFrequency
-import com.healthguard.format.parseWithFood
-import com.healthguard.format.toHumanText
+import com.healthguard.common.format.parseFrequency
+import com.healthguard.common.format.toHumanText
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.StoredMedication
 import com.healthguard.shared.data.StoredSchedule

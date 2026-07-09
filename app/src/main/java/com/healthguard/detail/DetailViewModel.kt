@@ -15,8 +15,8 @@ import com.healthguard.detail.domain.ToggleTakingUseCase
 import com.healthguard.dose.RecordedTake
 import com.healthguard.dose.isDoubleDose
 import com.healthguard.dose.recordTakenDose
-import com.healthguard.format.parseFrequency
-import com.healthguard.format.toHumanText
+import com.healthguard.common.format.parseFrequency
+import com.healthguard.common.format.toHumanText
 import com.healthguard.home.MedicationPhase
 import com.healthguard.home.isActive
 import com.healthguard.home.phase

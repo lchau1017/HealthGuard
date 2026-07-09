@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalTime::class)
 
-package com.healthguard.format
+package com.healthguard.detail
 
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours

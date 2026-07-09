@@ -1,4 +1,4 @@
-package com.healthguard.ui.theme
+package com.healthguard.common.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme

@@ -1,4 +1,4 @@
-package com.healthguard.ui.theme
+package com.healthguard.common.theme
 
 import androidx.compose.ui.graphics.Color
 

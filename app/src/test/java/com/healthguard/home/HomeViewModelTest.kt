@@ -4,7 +4,6 @@ package com.healthguard.home
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.healthguard.activity.DoseDayStatus
-import com.healthguard.format.DoseRowStatus
 import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.ComputeHomeStateUseCase
 import com.healthguard.home.domain.DeleteMedicationUseCase

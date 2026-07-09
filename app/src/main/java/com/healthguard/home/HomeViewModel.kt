@@ -6,7 +6,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthguard.demo.DemoDataSeeder
 import com.healthguard.dose.isDoubleDose
-import com.healthguard.format.doseRowStatus
 import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.ComputeHomeStateUseCase
 import com.healthguard.home.domain.DeleteMedicationUseCase

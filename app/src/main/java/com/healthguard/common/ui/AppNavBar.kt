@@ -1,4 +1,4 @@
-package com.healthguard.ui
+package com.healthguard.common.ui
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange

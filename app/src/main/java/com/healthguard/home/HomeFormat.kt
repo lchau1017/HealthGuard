@@ -1,18 +1,16 @@
 @file:OptIn(ExperimentalTime::class)
 
-package com.healthguard.format
+package com.healthguard.home
 
-import com.healthguard.shared.data.DoseStatus
+import com.healthguard.common.format.shortDayName
+import com.healthguard.common.format.timeLabel
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
@@ -82,79 +80,9 @@ fun takeByText(nextDoseAt: Instant, now: Instant, zone: TimeZone): String {
     return if (late >= 1.minutes) "Take by $slot · overdue ${late.shortSpan()}" else "Take by $slot"
 }
 
-/** Locale-simple 12-hour clock text: "9:00 PM", "8:02 AM", "12:05 AM". */
-fun timeLabel(time: LocalTime): String {
-    val hour12 = when {
-        time.hour == 0 -> 12
-        time.hour > 12 -> time.hour - 12
-        else -> time.hour
-    }
-    val amPm = if (time.hour < 12) "AM" else "PM"
-    return "$hour12:${time.minute.toString().padStart(2, '0')} $amPm"
-}
-
-/** The home header's date line: "Tuesday, 8 July". */
-fun todayLabel(date: LocalDate): String =
-    "${date.dayOfWeek.titleCase()}, ${date.day} ${date.month.titleCase()}"
-
-/** Compact full date for schedule metadata: "27 Jun 2026". */
-fun mediumDateLabel(date: LocalDate): String =
-    "${date.day} ${date.month.titleCase().take(3)} ${date.year}"
-
-/** Dose timestamp with a relative day: "Today, 8:02 AM" / "Mon 6 Jul, 8:00 AM". */
-fun dayTimeLabel(at: Instant, now: Instant, zone: TimeZone): String {
-    val local = at.toLocalDateTime(zone)
-    val today = now.toLocalDateTime(zone).date
-    val day = when (local.date) {
-        today -> "Today"
-        today.minus(1, DateTimeUnit.DAY) -> "Yesterday"
-        else -> "${local.date.shortDayName()} ${local.date.day} ${local.date.month.titleCase().take(3)}"
-    }
-    return "$day, ${timeLabel(local.time)}"
-}
-
-/** Status-card line: "Last taken today, 8:02 AM". */
-fun lastTakenLabel(takenAt: Instant, now: Instant, zone: TimeZone): String {
-    val label = dayTimeLabel(takenAt, now, zone)
-    val decapitalized = when {
-        label.startsWith("Today") || label.startsWith("Yesterday") ->
-            label.replaceFirstChar { it.lowercase() }
-        else -> label
-    }
-    return "Last taken $decapitalized"
-}
-
-/** Doses taken within this much of the plan count as "on time". */
-private val ON_TIME_WINDOW = 10.minutes
-
-/**
- * Secondary annotation of a history row: "Taken · on time",
- * "Taken · 4 min late" (or "… early", whole minutes), "Missed", "Skipped".
- */
-fun doseAnnotation(status: DoseStatus, plannedAt: Instant, takenAt: Instant?): String =
-    when (status) {
-        DoseStatus.MISSED -> "Missed"
-        DoseStatus.SKIPPED -> "Skipped"
-        DoseStatus.PENDING -> "Pending"
-        DoseStatus.TAKEN -> {
-            val offset = takenAt?.minus(plannedAt)
-            when {
-                offset == null -> "Taken"
-                offset.absoluteValue <= ON_TIME_WINDOW -> "Taken · on time"
-                offset.isPositive() -> "Taken · ${offset.inWholeMinutes} min late"
-                else -> "Taken · ${(-offset).inWholeMinutes} min early"
-            }
-        }
-    }
-
 /** Compact span: "3h 20m" at an hour or more, else "45m". */
 private fun Duration.shortSpan(): String {
     val hours = inWholeHours
     val minutes = inWholeMinutes - hours * 60
     return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
 }
-
-private fun LocalDate.shortDayName(): String = dayOfWeek.titleCase().take(3)
-
-private fun Enum<*>.titleCase(): String =
-    name.lowercase().replaceFirstChar { it.uppercase() }

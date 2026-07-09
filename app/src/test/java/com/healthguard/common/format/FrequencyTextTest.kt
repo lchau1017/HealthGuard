@@ -1,4 +1,4 @@
-package com.healthguard.format
+package com.healthguard.common.format
 
 import com.healthguard.shared.extraction.Frequency
 import org.junit.Assert.assertEquals

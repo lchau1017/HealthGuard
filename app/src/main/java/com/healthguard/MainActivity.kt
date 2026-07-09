@@ -37,9 +37,9 @@ import com.healthguard.detail.DetailScreen
 import com.healthguard.detail.DetailViewModel
 import com.healthguard.home.HomeScreen
 import com.healthguard.home.HomeViewModel
-import com.healthguard.ui.AppNavBar
-import com.healthguard.ui.AppTab
-import com.healthguard.ui.theme.HealthGuardTheme
+import com.healthguard.common.ui.AppNavBar
+import com.healthguard.common.ui.AppTab
+import com.healthguard.common.theme.HealthGuardTheme
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
