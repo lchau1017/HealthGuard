@@ -27,7 +27,6 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +45,9 @@ import kotlinx.datetime.toLocalDateTime
  * The Activity tab: window filter, four stat tiles, the record grid at the
  * window's zoom with tap-to-open day-detail sheets, and the per-medicine
  * adherence breakdown — everything recomputes for the selected window.
- * Reloads on entry so takes recorded on other screens are always included.
+ * Freshness is the view model's job: it loads on construction and re-queries
+ * on every repository data change, so takes recorded on other screens are
+ * always included without the host raising anything on entry.
  */
 @Composable
 fun ActivityScreen(
@@ -55,8 +56,6 @@ fun ActivityScreen(
     modifier: Modifier = Modifier,
     bottomBar: @Composable () -> Unit = {},
 ) {
-    LaunchedEffect(Unit) { onIntent(ActivityIntent.Reload) }
-
     val zone = remember { TimeZone.currentSystemDefault() }
     // "Today" comes from the clock the state was computed against, so the
     // today-outline in the grid rolls over with the content after midnight.

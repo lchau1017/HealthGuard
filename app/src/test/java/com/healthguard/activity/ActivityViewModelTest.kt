@@ -425,14 +425,15 @@ class ActivityViewModelTest {
     }
 
     @Test
-    fun `reload picks up takes recorded since the last load`() = runTest(dispatcher) {
+    fun `a take recorded elsewhere reloads the window without any intent`() = runTest(dispatcher) {
         insert("a", "Ibuprofen")
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
         assertEquals(0, vm.state.value.stats.totalEvents)
 
+        // The repository's data-change signal is the only freshness trigger:
+        // the host raises nothing on (re)entry.
         logTaken("a", fixedNow - 1.hours)
-        vm.onIntent(ActivityIntent.Reload)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(1, vm.state.value.stats.totalEvents)

@@ -12,7 +12,4 @@ sealed interface ActivityIntent {
 
     /** Dismissed the day-detail sheet. */
     data object DismissDayDetail : ActivityIntent
-
-    /** Re-query the current window (screen (re)entry, catching takes from elsewhere). */
-    data object Reload : ActivityIntent
 }

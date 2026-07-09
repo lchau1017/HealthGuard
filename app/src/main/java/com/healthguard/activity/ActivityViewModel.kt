@@ -24,12 +24,11 @@ import kotlinx.datetime.TimeZone
  * [ActivityUiState] folds the use case's structured [ActivityContent] over this
  * layer's presentation formatter (the stopped-row label).
  *
- * State loads once per [ActivityIntent.SetFilter] change plus explicit
- * [ActivityIntent.Reload]s (the host raises one on (re)entry, catching takes
- * recorded elsewhere since the last load); the filter itself lives in the
- * retained view-model state, so it survives tab switches. Any write anywhere
- * ([observeDataChanges]) re-queries the current window, so a retained Activity
- * tab never shows stale tiles or grids.
+ * State loads once at construction and once per [ActivityIntent.SetFilter]
+ * change; the filter itself lives in the retained view-model state, so it
+ * survives tab switches. Any write anywhere ([observeDataChanges]) re-queries
+ * the current window, so a retained Activity tab never shows stale tiles or
+ * grids — the host raises nothing on (re)entry.
  */
 class ActivityViewModel(
     private val computeActivityState: ComputeActivityStateUseCase,
@@ -61,7 +60,6 @@ class ActivityViewModel(
             is ActivityIntent.SetFilter -> setFilter(intent.filter)
             is ActivityIntent.SelectDay -> selectDay(intent.date)
             ActivityIntent.DismissDayDetail -> _state.update { it.copy(dayDetail = null) }
-            ActivityIntent.Reload -> reload()
         }
     }
 
