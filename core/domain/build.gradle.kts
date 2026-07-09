@@ -27,8 +27,10 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(libs.kotlinx.datetime)
-            implementation(libs.kotlinx.coroutines.core)
+            // api: these types (LocalTime, TimeZone, Flow) appear in this
+            // module's public API, so consumers need them on their classpath.
+            api(libs.kotlinx.datetime)
+            api(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
