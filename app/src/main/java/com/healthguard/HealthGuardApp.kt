@@ -6,7 +6,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -16,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.healthguard.activity.ActivityScreen
 import com.healthguard.activity.ActivityViewModel
@@ -50,7 +50,7 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
 
     val confirmViewModel: ConfirmViewModel = koinViewModel()
     val homeViewModel: HomeViewModel = koinViewModel()
-    val homeState by homeViewModel.state.collectAsState()
+    val homeState by homeViewModel.state.collectAsStateWithLifecycle()
 
     // Decode and error handling live in the confirm feature: the view model
     // survives rotation (a composition-scoped decode would not) and renders
@@ -81,7 +81,7 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
             val detailViewModel: DetailViewModel = koinViewModel(
                 parameters = { parametersOf(openDetailId) },
             )
-            val detailState by detailViewModel.state.collectAsState()
+            val detailState by detailViewModel.state.collectAsStateWithLifecycle()
             BackHandler { detailMedicationId = null }
             // Dose logs alone don't retrigger the medications query; refresh on
             // entry so a retained view model catches up on takes from elsewhere.
@@ -105,7 +105,7 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
         }
     } else if (selectedTab == AppTab.ACTIVITY) {
         val activityViewModel: ActivityViewModel = koinViewModel()
-        val activityState by activityViewModel.state.collectAsState()
+        val activityState by activityViewModel.state.collectAsStateWithLifecycle()
         BackHandler { selectedTab = AppTab.HOME }
         ActivityScreen(
             state = activityState,

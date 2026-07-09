@@ -65,6 +65,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.healthguard.BuildConfig
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.common.format.todayLabel
@@ -108,18 +111,23 @@ fun HomeScreen(
     val today = now.toLocalDateTime(zone).date
 
     // One undo snackbar per recorded take; timing out or dismissing keeps
-    // the dose, only the explicit Undo action removes it.
-    LaunchedEffect(Unit) {
-        effects.collect { effect ->
-            when (effect) {
-                is HomeEffect.ShowUndoSnackbar -> {
-                    val result = snackbarHostState.showSnackbar(
-                        message = "${effect.take.drugName} recorded",
-                        actionLabel = "Undo",
-                        duration = SnackbarDuration.Short,
-                    )
-                    if (result == SnackbarResult.ActionPerformed) {
-                        onIntent(HomeIntent.UndoTake(effect.take.doseId))
+    // the dose, only the explicit Undo action removes it. Collected only
+    // while STARTED; the Channel-backed effects are buffered, so anything
+    // emitted while STOPPED is delivered when collection resumes.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(effects, lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            effects.collect { effect ->
+                when (effect) {
+                    is HomeEffect.ShowUndoSnackbar -> {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "${effect.take.drugName} recorded",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Short,
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            onIntent(HomeIntent.UndoTake(effect.take.doseId))
+                        }
                     }
                 }
             }
