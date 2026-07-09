@@ -13,6 +13,8 @@ import kotlin.time.ExperimentalTime
  */
 internal fun DetailContent.toTrackedState(current: DetailUiState): DetailUiState = current.copy(
     item = item,
+    // Same `now` the content was computed against — no formatting drift.
+    now = now,
     nextDoseAt = nextDoseAt,
     lastTakenAt = lastTakenAt,
     history = history,

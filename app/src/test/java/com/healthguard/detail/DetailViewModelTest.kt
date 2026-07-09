@@ -147,6 +147,17 @@ class DetailViewModelTest {
     }
 
     @Test
+    fun `state carries the wall clock the content was computed against`() = runTest(dispatcher) {
+        // Minute-grained rendering (phase chip, last-taken line, history
+        // rows) reads state.now; only the countdown owns a live ticker.
+        insert()
+        val vm = viewModel()
+        collectState(vm)
+
+        assertEquals(fixedNow, vm.state.value.now)
+    }
+
+    @Test
     fun `save maps every field including a changed frequency`() = runTest(dispatcher) {
         insert(frequency = Frequency.TimesPerDay(2))
         val vm = viewModel()

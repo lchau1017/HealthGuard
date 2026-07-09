@@ -105,14 +105,10 @@ fun DetailScreen(
     var confirmingDelete by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Per-second countdown: the detail page is where precision matters.
-    var now by remember { mutableStateOf(Clock.System.now()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1_000)
-            now = Clock.System.now()
-        }
-    }
+    // Everything minute-grained renders from state.now — the clock the
+    // tracked facts were computed against. Only the countdown text needs
+    // seconds; it owns its own ticker (LiveCountdown), so the rest of the
+    // screen never recomposes on a tick.
     val zone = remember { TimeZone.currentSystemDefault() }
 
     // Same undo contract as home: only the explicit action removes the dose.
@@ -174,12 +170,11 @@ fun DetailScreen(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            HeaderBlock(state = state, now = now, zone = zone)
+            HeaderBlock(state = state, now = state.now, zone = zone)
 
             if (state.isActive) {
                 StatusCard(
                     state = state,
-                    now = now,
                     zone = zone,
                     onTakeNow = { onIntent(DetailIntent.TakeNow) },
                 )
@@ -272,7 +267,7 @@ fun DetailScreen(
                 adherence = state.adherence,
                 isAsNeeded = state.isAsNeeded,
                 historyFrom = state.historyFrom,
-                now = now,
+                now = state.now,
                 zone = zone,
                 onDayClick = { onIntent(DetailIntent.SelectDay(it)) },
             )
@@ -403,7 +398,6 @@ private fun HeaderBlock(
 @Composable
 private fun StatusCard(
     state: DetailUiState,
-    now: Instant,
     zone: TimeZone,
     onTakeNow: () -> Unit,
     modifier: Modifier = Modifier,
@@ -416,15 +410,12 @@ private fun StatusCard(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(
-                    text = countdownTextSeconds(state.nextDoseAt, now, zone),
-                    style = MaterialTheme.typography.headlineMedium,
-                )
+                LiveCountdown(nextDoseAt = state.nextDoseAt, zone = zone)
             }
             state.lastTakenAt?.let { lastTaken ->
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = lastTakenLabel(lastTaken, now, zone),
+                    text = lastTakenLabel(lastTaken, state.now, zone),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -440,6 +431,37 @@ private fun StatusCard(
             }
         }
     }
+}
+
+/**
+ * The per-second countdown to the next dose — the detail page is where that
+ * precision matters. This composable owns its own ticking clock, so the
+ * every-second recomposition is confined to this one text; everything else
+ * on the screen renders from the minute-grained [DetailUiState.now]. The
+ * ticker runs inside repeatOnLifecycle(STARTED), so it pauses while the app
+ * is backgrounded and picks the clock straight back up on return.
+ */
+@Composable
+private fun LiveCountdown(
+    nextDoseAt: Instant,
+    zone: TimeZone,
+    modifier: Modifier = Modifier,
+) {
+    var now by remember { mutableStateOf(Clock.System.now()) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                now = Clock.System.now()
+                delay(1_000)
+            }
+        }
+    }
+    Text(
+        text = countdownTextSeconds(nextDoseAt, now, zone),
+        style = MaterialTheme.typography.headlineMedium,
+        modifier = modifier,
+    )
 }
 
 /** Schedule summary rows: dose times and the start date. */
