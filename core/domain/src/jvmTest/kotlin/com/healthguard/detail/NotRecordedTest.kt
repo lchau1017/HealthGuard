@@ -6,8 +6,8 @@ import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.StoredDoseLog
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
 class NotRecordedTest {
 

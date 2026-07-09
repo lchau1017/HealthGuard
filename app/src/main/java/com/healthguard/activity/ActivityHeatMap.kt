@@ -29,8 +29,6 @@ import androidx.compose.ui.unit.dp
 import com.healthguard.ui.theme.heatRamp
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.isoDayNumber
-import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
 /**
@@ -39,10 +37,6 @@ import kotlinx.datetime.plus
  * are small integers and a stable mapping keeps days comparable over time.
  */
 fun heatLevel(count: Int): Int = count.coerceIn(0, HEAT_LEVELS)
-
-/** The Monday on or before [date]. */
-fun mondayOf(date: LocalDate): LocalDate =
-    date.minus(date.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
 
 /** The Monday week-column starts spanning [from]..[today], ascending. */
 fun weekStarts(from: LocalDate, today: LocalDate): List<LocalDate> =
