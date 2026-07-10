@@ -9,10 +9,10 @@ sealed interface ConfirmIntent {
     data object Retry : ConfirmIntent
 
     /** The user edited a review field's text. */
-    data class FieldEdited(val key: String, val value: String) : ConfirmIntent
+    data class FieldEdited(val key: ReviewFieldKey, val value: String) : ConfirmIntent
 
     /** The user tapped "Looks right" on a flagged field. */
-    data class FieldConfirmed(val key: String) : ConfirmIntent
+    data class FieldConfirmed(val key: ReviewFieldKey) : ConfirmIntent
 
     /** The user edited the optional category label. */
     data class LabelChanged(val value: String) : ConfirmIntent

@@ -30,6 +30,7 @@ import com.healthguard.common.ui.CategoryLabelInput
 import com.healthguard.confirm.state.ConfirmIntent
 import com.healthguard.confirm.state.ConfirmUiState
 import com.healthguard.confirm.state.ReviewField
+import com.healthguard.confirm.state.ReviewFieldKey
 
 /**
  * The import/confirm flow, presented as a full-width dialog card over the
@@ -107,8 +108,8 @@ private fun ReviewContent(
     fields: List<ReviewField>,
     label: String,
     canAccept: Boolean,
-    onFieldEdited: (String, String) -> Unit,
-    onFieldConfirmed: (String) -> Unit,
+    onFieldEdited: (ReviewFieldKey, String) -> Unit,
+    onFieldConfirmed: (ReviewFieldKey) -> Unit,
     onLabelChange: (String) -> Unit,
     onAccept: () -> Unit,
     onCancel: () -> Unit,

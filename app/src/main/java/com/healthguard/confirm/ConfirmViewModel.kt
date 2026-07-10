@@ -9,8 +9,10 @@ import com.healthguard.confirm.domain.SaveNewMedicationUseCase
 import com.healthguard.confirm.format.parseWithFood
 import com.healthguard.confirm.state.ConfirmEffect
 import com.healthguard.confirm.state.ConfirmIntent
+import com.healthguard.confirm.state.ConfirmMessages
 import com.healthguard.confirm.state.ConfirmUiState
 import com.healthguard.confirm.state.ReviewField
+import com.healthguard.confirm.state.ReviewFieldKey
 import com.healthguard.confirm.state.toUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -97,7 +99,7 @@ class ConfirmViewModel(
         }
     }
 
-    private fun fieldEdited(key: String, newValue: String) {
+    private fun fieldEdited(key: ReviewFieldKey, newValue: String) {
         updateField(key) { field ->
             if (newValue.isBlank()) {
                 // A blank value can never stand in for a reviewed one: typing
@@ -112,9 +114,13 @@ class ConfirmViewModel(
         _state.update { current ->
             if (current !is ConfirmUiState.Review) return@update current
             when (key) {
-                KEY_FREQUENCY -> current.copy(frequency = parseFrequency(newValue))
-                KEY_WITH_FOOD -> current.copy(withFood = parseWithFood(newValue))
-                else -> current
+                ReviewFieldKey.FREQUENCY -> current.copy(frequency = parseFrequency(newValue))
+                ReviewFieldKey.WITH_FOOD -> current.copy(withFood = parseWithFood(newValue))
+                ReviewFieldKey.DRUG_NAME,
+                ReviewFieldKey.DOSAGE,
+                ReviewFieldKey.FORM,
+                ReviewFieldKey.INGREDIENTS,
+                -> current
             }
         }
     }
@@ -129,19 +135,19 @@ class ConfirmViewModel(
         saving = true
 
         val byKey = review.fields.associateBy { it.key }
-        fun value(key: String): String? =
+        fun value(key: ReviewFieldKey): String? =
             byKey[key]?.value?.trim()?.takeUnless { it.isEmpty() }
 
         val medication = NewMedication(
-            drugName = value(KEY_DRUG_NAME).orEmpty(),
+            drugName = value(ReviewFieldKey.DRUG_NAME).orEmpty(),
             label = review.label.trim().takeUnless { it.isEmpty() },
-            activeIngredients = value(KEY_INGREDIENTS)
+            activeIngredients = value(ReviewFieldKey.INGREDIENTS)
                 ?.split(",")
                 ?.map { it.trim() }
                 ?.filter { it.isNotEmpty() }
                 .orEmpty(),
-            dosage = value(KEY_DOSAGE),
-            form = value(KEY_FORM),
+            dosage = value(ReviewFieldKey.DOSAGE),
+            form = value(ReviewFieldKey.FORM),
             extractionConfidence = review.fields.minOfOrNull { it.confidence } ?: 0.0,
             frequency = review.frequency,
             withFood = review.withFood,
@@ -165,7 +171,7 @@ class ConfirmViewModel(
                 val current = _state.value as? ConfirmUiState.Review
                 if (current != null) {
                     reviewAwaitingSaveRetry = current
-                    _state.value = ConfirmUiState.Error(MESSAGE_SAVE_FAILED, retriable = true)
+                    _state.value = ConfirmUiState.Error(ConfirmMessages.SAVE_FAILED, retriable = true)
                 }
             } finally {
                 saving = false
@@ -206,7 +212,7 @@ class ConfirmViewModel(
         workJob = viewModelScope.launch {
             val base64 = imageEncoder.encode(uri)
             if (base64 == null) {
-                applyIfExtracting(ConfirmUiState.Error(MESSAGE_IMAGE_LOAD_FAILED, retriable = false))
+                applyIfExtracting(ConfirmUiState.Error(ConfirmMessages.IMAGE_LOAD_FAILED, retriable = false))
             } else {
                 lastImageBase64 = base64
                 applyIfExtracting(extractMedication(base64).toUiState())
@@ -232,26 +238,12 @@ class ConfirmViewModel(
         if (_state.value is ConfirmUiState.Extracting) _state.value = result
     }
 
-    private fun updateField(key: String, transform: (ReviewField) -> ReviewField) {
+    private fun updateField(key: ReviewFieldKey, transform: (ReviewField) -> ReviewField) {
         _state.update { current ->
             if (current !is ConfirmUiState.Review) return@update current
             current.copy(
                 fields = current.fields.map { if (it.key == key) transform(it) else it },
             )
         }
-    }
-
-    companion object {
-        const val KEY_DRUG_NAME = "drugName"
-        const val KEY_DOSAGE = "dosage"
-        const val KEY_FORM = "form"
-        const val KEY_FREQUENCY = "frequency"
-        const val KEY_WITH_FOOD = "withFood"
-        const val KEY_INGREDIENTS = "ingredients"
-
-        const val MESSAGE_IMAGE_LOAD_FAILED = "Couldn't load that image"
-        const val MESSAGE_MALFORMED = "Couldn't read the label — try another photo"
-        const val MESSAGE_UNAVAILABLE = "Service unavailable — check connection"
-        const val MESSAGE_SAVE_FAILED = "Couldn't save — try again"
     }
 }

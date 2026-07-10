@@ -4,7 +4,7 @@ import com.healthguard.domain.extraction.Frequency
 
 /** One display row on the confirmation screen. */
 data class ReviewField(
-    val key: String,
+    val key: ReviewFieldKey,
     val label: String,
     val value: String,
     val confidence: Double,
