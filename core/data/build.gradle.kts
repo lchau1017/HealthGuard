@@ -16,6 +16,12 @@ sqldelight {
 }
 
 kotlin {
+    compilerOptions {
+        // DriverFactory is a deliberate expect/actual class; opt in so every
+        // target compilation stops warning that the feature is in Beta.
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+
     androidLibrary {
         namespace = "com.healthguard.core.data"
         compileSdk = 36

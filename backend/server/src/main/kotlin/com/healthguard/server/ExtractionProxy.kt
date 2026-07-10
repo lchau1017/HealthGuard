@@ -11,6 +11,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.post
@@ -154,11 +155,7 @@ fun Application.extractionProxy(upstream: HttpClient, apiKey: String, modelId: S
                 ?.takeIf { it.isString }
                 ?.content
             if (image.isNullOrEmpty()) {
-                call.respondText(
-                    """{"error":"imageJpegBase64 required"}""",
-                    ContentType.Application.Json,
-                    HttpStatusCode.BadRequest,
-                )
+                call.respondError(HttpStatusCode.BadRequest, "imageJpegBase64 required")
                 return@post
             }
 
@@ -170,11 +167,7 @@ fun Application.extractionProxy(upstream: HttpClient, apiKey: String, modelId: S
                 }
             }.getOrNull()
             if (response == null || !response.status.isSuccess()) {
-                call.respondText(
-                    """{"error":"upstream"}""",
-                    ContentType.Application.Json,
-                    HttpStatusCode.BadGateway,
-                )
+                call.respondError(HttpStatusCode.BadGateway, "upstream")
                 return@post
             }
 
@@ -186,14 +179,17 @@ fun Application.extractionProxy(upstream: HttpClient, apiKey: String, modelId: S
                     ?.jsonPrimitive?.takeIf { it.isString }?.content
             }.getOrNull()
             if (content.isNullOrEmpty()) {
-                call.respondText(
-                    """{"error":"no content"}""",
-                    ContentType.Application.Json,
-                    HttpStatusCode.BadGateway,
-                )
+                call.respondError(HttpStatusCode.BadGateway, "no content")
             } else {
                 call.respondText(content, ContentType.Application.Json)
             }
         }
     }
 }
+
+/**
+ * The proxy's only error shape: a fixed short reason, never an upstream body —
+ * provider error text could leak details the client has no business seeing.
+ */
+private suspend fun ApplicationCall.respondError(status: HttpStatusCode, reason: String) =
+    respondText("""{"error":"$reason"}""", ContentType.Application.Json, status)
