@@ -22,14 +22,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalButton
@@ -37,8 +33,6 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -66,7 +60,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
-import com.healthguard.BuildConfig
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.common.format.phaseChipText
 import com.healthguard.common.format.todayLabel
@@ -144,35 +137,7 @@ fun HomeScreen(
                             contentDescription = "About HealthGuard and medical disclaimer",
                         )
                     }
-                    // Demo data controls exist in debug builds only.
-                    if (BuildConfig.DEBUG) {
-                        var demoMenuOpen by remember { mutableStateOf(false) }
-                        IconButton(onClick = { demoMenuOpen = true }) {
-                            Icon(
-                                imageVector = Icons.Filled.MoreVert,
-                                contentDescription = "Developer options",
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = demoMenuOpen,
-                            onDismissRequest = { demoMenuOpen = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Load demo data") },
-                                onClick = {
-                                    demoMenuOpen = false
-                                    onIntent(HomeIntent.LoadDemoData)
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Remove demo data") },
-                                onClick = {
-                                    demoMenuOpen = false
-                                    onIntent(HomeIntent.RemoveDemoData)
-                                },
-                            )
-                        }
-                    }
+                    DemoDataMenu(onIntent)
                 },
             )
         },
@@ -285,52 +250,15 @@ fun HomeScreen(
     }
 
     if (showDisclaimer) {
-        AlertDialog(
-            onDismissRequest = { showDisclaimer = false },
-            title = { Text("HealthGuard is an information tool") },
-            text = {
-                Text(
-                    "HealthGuard helps you keep track of your medications. It is " +
-                        "not medical advice. Always consult your doctor or " +
-                        "pharmacist about dosing, interactions, and side effects.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showDisclaimer = false }) { Text("Got it") }
-            },
-        )
+        DisclaimerDialog(onDismiss = { showDisclaimer = false })
     }
 
     if (showSourceSheet) {
-        ModalBottomSheet(onDismissRequest = { showSourceSheet = false }) {
-            Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
-                Text(
-                    text = "Add a medication label photo",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Spacer(Modifier.height(16.dp))
-                Button(
-                    onClick = {
-                        showSourceSheet = false
-                        onTakePhoto()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Take photo")
-                }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = {
-                        showSourceSheet = false
-                        onPickFromGallery()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Choose from gallery")
-                }
-                Spacer(Modifier.height(24.dp))
-            }
-        }
+        PhotoSourceSheet(
+            onDismiss = { showSourceSheet = false },
+            onTakePhoto = onTakePhoto,
+            onPickFromGallery = onPickFromGallery,
+        )
     }
 }
 
