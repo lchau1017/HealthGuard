@@ -1,6 +1,6 @@
-package com.healthguard.activity
+package com.healthguard.common.format
 
-import com.healthguard.common.format.timeLabel
+import com.healthguard.activity.DayMedicineLine
 
 /** "Cetirizine 10 mg — 2 taken (9:04 AM · 9:12 PM)"; no times when none. */
 fun dayLineTitle(line: DayMedicineLine): String {

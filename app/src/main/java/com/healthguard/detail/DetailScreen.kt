@@ -53,12 +53,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
-import com.healthguard.activity.ActivityHeatMap
 import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DayCount
-import com.healthguard.activity.DayDetailSheet
 import com.healthguard.activity.DoseDayStatus
-import com.healthguard.activity.HeatMapGrid
 import com.healthguard.common.format.targetCaption
 import com.healthguard.common.format.timeLabel
 import com.healthguard.common.format.toHumanText
@@ -68,9 +65,12 @@ import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.StoredDoseLog
 import com.healthguard.shared.domain.doseSlots
 import com.healthguard.shared.extraction.Frequency
+import com.healthguard.common.ui.ActivityHeatMap
 import com.healthguard.common.ui.CategoryChip
 import com.healthguard.common.ui.CategoryLabelInput
+import com.healthguard.common.ui.DayDetailSheet
 import com.healthguard.common.ui.DoubleDoseDialog
+import com.healthguard.common.ui.HeatMapGrid
 import com.healthguard.common.ui.StatusChip
 import com.healthguard.common.ui.showUndoTakeSnackbar
 import com.healthguard.common.theme.heatRamp

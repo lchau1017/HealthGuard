@@ -1,4 +1,4 @@
-package com.healthguard.activity
+package com.healthguard.common.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,6 +26,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.healthguard.activity.DAYS_PER_WEEK
+import com.healthguard.activity.DayCount
+import com.healthguard.activity.mondayOf
 import com.healthguard.common.format.shortName
 import com.healthguard.common.theme.heatRamp
 import kotlinx.datetime.DateTimeUnit

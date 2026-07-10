@@ -1,5 +1,6 @@
-package com.healthguard.activity
+package com.healthguard.common.format
 
+import com.healthguard.activity.DayMedicineLine
 import kotlinx.datetime.LocalTime
 import org.junit.Assert.assertEquals
 import org.junit.Test

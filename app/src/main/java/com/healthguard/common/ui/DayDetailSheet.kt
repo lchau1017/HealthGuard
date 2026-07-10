@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package com.healthguard.activity
+package com.healthguard.common.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,6 +15,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.healthguard.activity.DayDetail
+import com.healthguard.common.format.dayLineAnnotations
+import com.healthguard.common.format.dayLineTitle
+import com.healthguard.common.format.expectedNotRecordedText
 import com.healthguard.common.format.todayLabel
 
 /**

@@ -1,5 +1,6 @@
-package com.healthguard.activity
+package com.healthguard.common.ui
 
+import com.healthguard.activity.mondayOf
 import com.healthguard.common.format.hourLabel
 import kotlinx.datetime.LocalDate
 import org.junit.Assert.assertEquals
