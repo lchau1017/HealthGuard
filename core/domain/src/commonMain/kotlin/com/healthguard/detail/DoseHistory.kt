@@ -63,12 +63,19 @@ fun unansweredSlots(
  * Interleaves [logs] with derived [HistoryEntry.NotRecorded] rows, newest
  * first: every expected slot [unansweredSlots] leaves open becomes a
  * visible gap instead of silently vanishing from history.
+ *
+ * Slots are matched against [matchLogs], which defaults to [logs]. Pass a
+ * superset when the displayed list is time-clipped: a log up to
+ * [SLOT_MATCH_WINDOW] outside the clip can still answer a slot just inside
+ * it, and must suppress that slot's gap row even though the log itself is
+ * not displayed.
  */
 fun historyWithGaps(
     logs: List<StoredDoseLog>,
     expectedSlots: List<Instant>,
+    matchLogs: List<StoredDoseLog> = logs,
 ): List<HistoryEntry> {
-    val gaps = unansweredSlots(expectedSlots, logs.map { it.plannedAt })
+    val gaps = unansweredSlots(expectedSlots, matchLogs.map { it.plannedAt })
         .map { HistoryEntry.NotRecorded(it) }
     return (logs.map { HistoryEntry.Logged(it) } + gaps).sortedByDescending { it.at }
 }

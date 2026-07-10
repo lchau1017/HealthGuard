@@ -124,9 +124,11 @@ class ComputeDetailStateUseCase(
 
     /**
      * The recent-list rows, newest first, capped at [HISTORY_LIMIT]: the last
-     * 14 days' logs interleaved with derived "Not recorded" slots (matched
-     * against the complete window logs, so a capped recent query can never
-     * fake a gap), then older logs from the capped recent query.
+     * 14 days' logs interleaved with derived "Not recorded" slots, then older
+     * logs from the capped recent query. Gap slots are matched against the
+     * complete window logs, not just the displayed recent ones: a dose up to
+     * [SLOT_MATCH_WINDOW] before the 14-day cutoff can answer a slot just
+     * after it and must not leave a phantom gap row at the boundary.
      */
     private suspend fun historyEntries(
         schedule: StoredSchedule,
@@ -139,6 +141,7 @@ class ComputeDetailStateUseCase(
         val older = repository.recentDoses(schedule.id, HISTORY_LIMIT)
             .filter { (it.takenAt ?: it.plannedAt) < cutoff }
             .map { HistoryEntry.Logged(it) }
-        return (historyWithGaps(recentLogs, gapSlots) + older).take(HISTORY_LIMIT)
+        return (historyWithGaps(recentLogs, gapSlots, matchLogs = windowLogs) + older)
+            .take(HISTORY_LIMIT)
     }
 }

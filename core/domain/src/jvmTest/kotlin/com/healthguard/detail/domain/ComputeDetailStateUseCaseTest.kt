@@ -11,6 +11,7 @@ import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.FakeMedicationRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.test.runTest
@@ -91,6 +92,32 @@ class ComputeDetailStateUseCaseTest {
                 LocalDate(2024, 7, 3) to DoseDayStatus.NOT_TAKEN,
             ),
             content.dayStatuses,
+        )
+    }
+
+    @Test
+    fun `a take just before the gap cutoff answers a slot just after it`() = runTest {
+        // Gap rows reach back 14 days; the matching window is ±90 minutes.
+        // A dose 30 minutes BEFORE the cutoff must still answer a slot 30
+        // minutes AFTER it — no phantom "Not recorded" row at the boundary.
+        val boundaryNow = Instant.parse("2024-07-03T20:30:00Z")
+        val cutoffSlot = Instant.parse("2024-06-19T21:00:00Z") // cutoff + 30 min
+        val repo = FakeMedicationRepository()
+        val item = repo.seedMedication(
+            "d",
+            frequency = Frequency.TimesPerDay(2),
+            startedAt = Instant.parse("2024-06-01T08:00:00Z"),
+        )
+        // 30 min before the cutoff (2024-06-19T20:30Z), 60 min before the slot.
+        repo.seedDose("sched-d", takenAt = Instant.parse("2024-06-19T20:00:00Z"))
+
+        val content = ComputeDetailStateUseCase(repo, clock = { boundaryNow }, zone = TimeZone.UTC)(item)
+
+        val gaps = content.history.filterIsInstance<HistoryEntry.NotRecorded>()
+        assertTrue(gaps.isNotEmpty(), "later unanswered slots still surface as gaps")
+        assertTrue(
+            gaps.none { it.slotAt == cutoffSlot },
+            "the answered boundary slot must not read as a gap: $gaps",
         )
     }
 
