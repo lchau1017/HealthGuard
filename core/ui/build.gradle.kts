@@ -36,5 +36,7 @@ dependencies {
     api(libs.androidx.compose.material3)
     api(libs.kotlinx.datetime)
     implementation(libs.androidx.compose.material.icons.core)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
 }
