@@ -89,4 +89,19 @@ data class DetailUiState(
     val frequencyError: Boolean
         get() = frequencyText.isNotBlank() && parseFrequency(frequencyText) == null
     val canSave: Boolean get() = isLoaded && !nameError && !frequencyError
+
+    /** The form slice `DetailForm` renders. */
+    val formState: DetailFormState
+        get() = DetailFormState(
+            name = name,
+            dosage = dosage,
+            form = form,
+            label = label,
+            ingredients = ingredients,
+            frequencyText = frequencyText,
+            withFood = withFood,
+            nameError = nameError,
+            frequencyError = frequencyError,
+            canSave = canSave,
+        )
 }

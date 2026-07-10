@@ -143,19 +143,30 @@ fun DetailScreen(
                 .padding(horizontal = Spacing.xl),
             verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
-            HeaderBlock(state = state)
+            HeaderBlock(
+                drugName = state.drugName,
+                subtitle = state.subtitle,
+                categoryLabel = state.categoryLabel,
+                phaseChipText = state.phaseChipText,
+                phase = state.phase,
+            )
 
             if (state.isActive) {
                 StatusCard(
-                    state = state,
+                    nextDoseAt = state.nextDoseAt,
+                    lastTakenAt = state.lastTakenAt,
+                    now = state.now,
                     zone = zone,
                     onTakeNow = { onIntent(DetailIntent.TakeNow) },
                 )
             }
 
-            ScheduleCard(state = state)
+            ScheduleCard(
+                timesText = state.scheduleTimesText,
+                startedText = state.scheduleStartedText,
+            )
 
-            DetailForm(state = state, onIntent = onIntent)
+            DetailForm(state = state.formState, onIntent = onIntent)
 
             HistorySection(
                 history = state.history,
@@ -235,33 +246,36 @@ fun DetailScreen(
  */
 @Composable
 private fun HeaderBlock(
-    state: DetailUiState,
+    drugName: String?,
+    subtitle: String,
+    categoryLabel: String?,
+    phaseChipText: String?,
+    phase: MedicationPhase,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = state.drugName ?: "Medication",
+            text = drugName ?: "Medication",
             style = MaterialTheme.typography.headlineMedium,
         )
-        if (state.subtitle.isNotEmpty()) {
+        if (subtitle.isNotEmpty()) {
             Text(
-                text = state.subtitle,
+                text = subtitle,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        val phaseText = state.phaseChipText
-        if (state.categoryLabel != null || phaseText != null) {
+        if (categoryLabel != null || phaseChipText != null) {
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                state.categoryLabel?.let { label ->
+                categoryLabel?.let { label ->
                     CategoryChip(label)
                     Spacer(Modifier.width(6.dp))
                 }
-                phaseText?.let { text ->
+                phaseChipText?.let { text ->
                     StatusChip(
                         text = text,
-                        outlined = state.phase == MedicationPhase.NOT_STARTED,
+                        outlined = phase == MedicationPhase.NOT_STARTED,
                     )
                 }
             }
@@ -272,25 +286,27 @@ private fun HeaderBlock(
 /** Live dose status: countdown, last take, and the guarded Take now action. */
 @Composable
 private fun StatusCard(
-    state: DetailUiState,
+    nextDoseAt: Instant?,
+    lastTakenAt: Instant?,
+    now: Instant,
     zone: TimeZone,
     onTakeNow: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(Spacing.lg)) {
-            if (state.nextDoseAt != null) {
+            if (nextDoseAt != null) {
                 Text(
                     text = "Next dose",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                LiveCountdown(nextDoseAt = state.nextDoseAt, zone = zone)
+                LiveCountdown(nextDoseAt = nextDoseAt, zone = zone)
             }
-            state.lastTakenAt?.let { lastTaken ->
+            lastTakenAt?.let { lastTaken ->
                 Spacer(Modifier.height(Spacing.xs))
                 Text(
-                    text = lastTakenLabel(lastTaken, state.now, zone),
+                    text = lastTakenLabel(lastTaken, now, zone),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -342,11 +358,10 @@ private fun LiveCountdown(
 /** Schedule summary rows: dose times and the start date. */
 @Composable
 private fun ScheduleCard(
-    state: DetailUiState,
+    timesText: String?,
+    startedText: String?,
     modifier: Modifier = Modifier,
 ) {
-    val timesText = state.scheduleTimesText
-    val startedText = state.scheduleStartedText
     if (timesText == null && startedText == null) return
 
     Card(modifier = modifier.fillMaxWidth()) {
