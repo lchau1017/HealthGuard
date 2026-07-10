@@ -2,7 +2,7 @@ package com.healthguard.confirm
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.healthguard.common.format.parseFrequency
+import com.healthguard.domain.extraction.parseFrequency
 import com.healthguard.confirm.domain.ExtractMedicationUseCase
 import com.healthguard.confirm.domain.NewMedication
 import com.healthguard.confirm.domain.SaveNewMedicationUseCase

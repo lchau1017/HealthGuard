@@ -6,7 +6,7 @@ import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DayCount
 import com.healthguard.domain.tracking.DayDetail
 import com.healthguard.activity.DoseDayStatus
-import com.healthguard.common.format.parseFrequency
+import com.healthguard.domain.extraction.parseFrequency
 import com.healthguard.home.MedicationPhase
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant

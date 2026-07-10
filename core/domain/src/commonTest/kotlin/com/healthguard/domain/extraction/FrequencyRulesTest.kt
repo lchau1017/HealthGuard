@@ -1,11 +1,10 @@
-package com.healthguard.common.format
+package com.healthguard.domain.extraction
 
-import com.healthguard.domain.extraction.Frequency
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
-class FrequencyTextTest {
+class FrequencyRulesTest {
 
     @Test
     fun `parses canonical renderings back to typed frequencies`() {

@@ -4,7 +4,7 @@ package com.healthguard.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.healthguard.common.format.parseFrequency
+import com.healthguard.domain.extraction.parseFrequency
 import com.healthguard.common.format.toHumanText
 import com.healthguard.detail.domain.ComputeDetailStateUseCase
 import com.healthguard.detail.domain.DetailContent
