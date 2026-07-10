@@ -16,6 +16,7 @@ import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -31,6 +32,9 @@ import kotlinx.serialization.json.putJsonObject
 
 const val DEFAULT_MODEL = "qwen/qwen2.5-vl-72b-instruct"
 internal const val OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+/** Largest accepted /extract body; a base64 JPEG frame fits comfortably. */
+internal const val MAX_BODY_BYTES: Long = 10L * 1024 * 1024
 
 // The model must transcribe, never advise: safety decisions belong to the
 // verified drug-data layer, and the prompt must not invite inference.
@@ -148,6 +152,14 @@ internal fun upstreamRequestBody(modelId: String, imageJpegBase64: String): Json
 fun Application.extractionProxy(upstream: HttpClient, apiKey: String, modelId: String) {
     routing {
         post("/extract") {
+            // Bound the body before reading it: nothing legitimate outgrows
+            // one base64 JPEG frame.
+            val contentLength = call.request.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+            if (contentLength != null && contentLength > MAX_BODY_BYTES) {
+                call.respondError(HttpStatusCode.PayloadTooLarge, "body too large")
+                return@post
+            }
+
             val body = runCatching {
                 Json.parseToJsonElement(call.receiveText())
             }.getOrNull() as? JsonObject
@@ -159,13 +171,19 @@ fun Application.extractionProxy(upstream: HttpClient, apiKey: String, modelId: S
                 return@post
             }
 
-            val response = runCatching {
+            val response = try {
                 upstream.post(OPENROUTER_URL) {
                     header(HttpHeaders.Authorization, "Bearer $apiKey")
                     contentType(ContentType.Application.Json)
                     setBody(upstreamRequestBody(modelId, image).toString())
                 }
-            }.getOrNull()
+            } catch (cancellation: CancellationException) {
+                // Never swallow cancellation: a cancelled client call must
+                // cancel the upstream request, not read as a 502.
+                throw cancellation
+            } catch (_: Exception) {
+                null
+            }
             if (response == null || !response.status.isSuccess()) {
                 call.respondError(HttpStatusCode.BadGateway, "upstream")
                 return@post
@@ -192,4 +210,8 @@ fun Application.extractionProxy(upstream: HttpClient, apiKey: String, modelId: S
  * provider error text could leak details the client has no business seeing.
  */
 private suspend fun ApplicationCall.respondError(status: HttpStatusCode, reason: String) =
-    respondText("""{"error":"$reason"}""", ContentType.Application.Json, status)
+    respondText(
+        buildJsonObject { put("error", reason) }.toString(),
+        ContentType.Application.Json,
+        status,
+    )
