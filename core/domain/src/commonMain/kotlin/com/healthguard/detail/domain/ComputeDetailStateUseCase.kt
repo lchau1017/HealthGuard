@@ -6,9 +6,9 @@ import com.healthguard.activity.DoseDayStatus
 import com.healthguard.activity.dayCounts
 import com.healthguard.activity.doseDayStatusByDay
 import com.healthguard.activity.mondayOf
-import com.healthguard.detail.HistoryEntry
-import com.healthguard.detail.SLOT_MATCH_WINDOW
-import com.healthguard.detail.historyWithGaps
+import com.healthguard.domain.tracking.HistoryEntry
+import com.healthguard.domain.tracking.SLOT_MATCH_WINDOW
+import com.healthguard.domain.tracking.historyWithGaps
 import com.healthguard.domain.model.DoseStatus
 import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.model.MedicationWithSchedule

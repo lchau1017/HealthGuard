@@ -1,7 +1,7 @@
 package com.healthguard.activity.domain
 
-import com.healthguard.activity.DayDetail
-import com.healthguard.activity.DayMedicineLine
+import com.healthguard.domain.tracking.DayDetail
+import com.healthguard.domain.tracking.DayMedicineLine
 import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.FakeMedicationRepository
 import kotlin.test.Test

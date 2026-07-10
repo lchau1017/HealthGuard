@@ -1,4 +1,4 @@
-package com.healthguard.detail
+package com.healthguard.domain.tracking
 
 import com.healthguard.domain.model.DoseStatus
 import com.healthguard.domain.model.StoredDoseLog

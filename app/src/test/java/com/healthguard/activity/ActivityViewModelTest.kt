@@ -6,6 +6,8 @@ import com.healthguard.activity.domain.ComputeActivityStateUseCase
 import com.healthguard.activity.domain.LoadActivityDayDetailUseCase
 import com.healthguard.activity.state.ActivityIntent
 import com.healthguard.activity.state.MedicationAdherence
+import com.healthguard.domain.tracking.DayDetail
+import com.healthguard.domain.tracking.DayMedicineLine
 import com.healthguard.home.MedicationPhase
 import com.healthguard.domain.model.DoseStatus
 import com.healthguard.data.SqlDelightMedicationRepository

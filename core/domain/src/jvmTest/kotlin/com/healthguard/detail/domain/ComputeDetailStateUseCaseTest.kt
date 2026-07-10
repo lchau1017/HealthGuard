@@ -2,7 +2,7 @@ package com.healthguard.detail.domain
 
 import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DoseDayStatus
-import com.healthguard.detail.HistoryEntry
+import com.healthguard.domain.tracking.HistoryEntry
 import com.healthguard.domain.model.DoseStatus
 import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.extraction.Frequency

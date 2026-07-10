@@ -5,7 +5,7 @@ package com.healthguard.detail.state
 import com.healthguard.common.format.phaseChipText
 import com.healthguard.common.format.timeLabel
 import com.healthguard.common.format.toHumanText
-import com.healthguard.detail.HistoryEntry
+import com.healthguard.domain.tracking.HistoryEntry
 import com.healthguard.detail.domain.DetailContent
 import com.healthguard.detail.format.dayTimeLabel
 import com.healthguard.detail.format.doseAnnotation

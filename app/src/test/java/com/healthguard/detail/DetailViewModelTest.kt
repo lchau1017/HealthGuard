@@ -3,8 +3,8 @@
 package com.healthguard.detail
 
 import com.healthguard.activity.AdherenceResult
-import com.healthguard.activity.DayDetail
-import com.healthguard.activity.DayMedicineLine
+import com.healthguard.domain.tracking.DayDetail
+import com.healthguard.domain.tracking.DayMedicineLine
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.detail.domain.ComputeDetailStateUseCase
 import com.healthguard.detail.domain.LoadDayDetailUseCase

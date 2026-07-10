@@ -1,6 +1,5 @@
-package com.healthguard.activity
+package com.healthguard.domain.tracking
 
-import com.healthguard.detail.unansweredSlots
 import com.healthguard.domain.model.DoseLogWithMedication
 import com.healthguard.domain.model.DoseStatus
 import kotlin.time.Instant

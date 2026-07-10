@@ -1,8 +1,8 @@
 package com.healthguard.activity.domain
 
-import com.healthguard.activity.DayDetail
-import com.healthguard.activity.dayDetail
-import com.healthguard.detail.SLOT_MATCH_WINDOW
+import com.healthguard.domain.tracking.DayDetail
+import com.healthguard.domain.tracking.dayDetail
+import com.healthguard.domain.tracking.SLOT_MATCH_WINDOW
 import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.repository.MedicationRepository
 import com.healthguard.domain.schedule.expectedDoseTimes
