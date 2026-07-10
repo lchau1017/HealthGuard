@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
@@ -63,54 +64,64 @@ fun rememberScanImageLauncher(onImagePicked: (Uri) -> Unit): ScanImageLauncher {
         if (uri != null) onImagePicked(uri)
     }
 
-    return object : ScanImageLauncher {
-        override fun takePhoto() {
-            val imagesDir = File(context.cacheDir, "images").apply { mkdirs() }
-            // Constant name: only one capture is ever in flight, and reusing
-            // the same file keeps abandoned captures from piling up in cache.
-            val photoFile = File(imagesDir, "label_capture.jpg")
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${BuildConfig.APPLICATION_ID}.fileprovider",
-                photoFile,
-            )
-            // Modern Android requires an explicit URI grant for the capture
-            // intent — the FileProvider Uri is not implicitly readable or
-            // writable by the camera app. Give every resolvable camera app a
-            // read/write grant (revoked again in the launcher callback).
-            // Resolution relies on the IMAGE_CAPTURE <queries> entry in the
-            // manifest under Android 11+ package-visibility filtering.
-            val captureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-            resolveCameraApps(captureIntent).forEach { info ->
-                context.grantUriPermission(
-                    info.activityInfo.packageName,
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+    // Remembered so the launcher's identity is stable across recompositions —
+    // a fresh object every call would needlessly invalidate whatever it is
+    // passed to. Everything it captures is already stable for the
+    // composition's lifetime: the two activity-result launchers are
+    // remembered by rememberLauncherForActivityResult (their callbacks track
+    // the latest [onImagePicked] internally) and pendingCameraUriString
+    // writes go through the rememberSaveable-backed delegate. Only [context]
+    // can change identity, so it is the remember key.
+    return remember(context) {
+        object : ScanImageLauncher {
+            override fun takePhoto() {
+                val imagesDir = File(context.cacheDir, "images").apply { mkdirs() }
+                // Constant name: only one capture is ever in flight, and reusing
+                // the same file keeps abandoned captures from piling up in cache.
+                val photoFile = File(imagesDir, "label_capture.jpg")
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${BuildConfig.APPLICATION_ID}.fileprovider",
+                    photoFile,
                 )
-            }
-            pendingCameraUriString = uri.toString()
-            takePictureLauncher.launch(uri)
-        }
-
-        private fun resolveCameraApps(captureIntent: Intent): List<ResolveInfo> =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.packageManager.queryIntentActivities(
-                    captureIntent,
-                    PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong()),
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                context.packageManager.queryIntentActivities(
-                    captureIntent,
-                    PackageManager.MATCH_DEFAULT_ONLY,
-                )
+                // Modern Android requires an explicit URI grant for the capture
+                // intent — the FileProvider Uri is not implicitly readable or
+                // writable by the camera app. Give every resolvable camera app a
+                // read/write grant (revoked again in the launcher callback).
+                // Resolution relies on the IMAGE_CAPTURE <queries> entry in the
+                // manifest under Android 11+ package-visibility filtering.
+                val captureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+                resolveCameraApps(captureIntent).forEach { info ->
+                    context.grantUriPermission(
+                        info.activityInfo.packageName,
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                    )
+                }
+                pendingCameraUriString = uri.toString()
+                takePictureLauncher.launch(uri)
             }
 
-        override fun pickFromGallery() {
-            pickImageLauncher.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-            )
+            private fun resolveCameraApps(captureIntent: Intent): List<ResolveInfo> =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    context.packageManager.queryIntentActivities(
+                        captureIntent,
+                        PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong()),
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.packageManager.queryIntentActivities(
+                        captureIntent,
+                        PackageManager.MATCH_DEFAULT_ONLY,
+                    )
+                }
+
+            override fun pickFromGallery() {
+                pickImageLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                )
+            }
         }
     }
 }
