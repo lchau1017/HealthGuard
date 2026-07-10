@@ -1,13 +1,10 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.detail.domain
 
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.FakeMedicationRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.test.runTest
 

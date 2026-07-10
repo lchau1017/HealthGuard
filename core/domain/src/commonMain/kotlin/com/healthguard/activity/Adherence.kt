@@ -1,13 +1,10 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.activity
 
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.data.StoredSchedule
-import com.healthguard.shared.domain.expectedDoseTimes
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.model.StoredSchedule
+import com.healthguard.domain.schedule.expectedDoseTimes
 import kotlin.math.roundToInt
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 

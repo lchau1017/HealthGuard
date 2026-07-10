@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.healthguard.common.theme.Spacing
 import com.healthguard.common.theme.categoryTint
 
 /**
@@ -24,7 +25,7 @@ fun StatusChip(text: String, modifier: Modifier = Modifier, outlined: Boolean = 
     } else {
         modifier.background(MaterialTheme.colorScheme.surfaceVariant, shape)
     }
-    Box(modifier = base.padding(horizontal = 8.dp, vertical = 2.dp)) {
+    Box(modifier = base.padding(horizontal = Spacing.sm, vertical = 2.dp)) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
@@ -41,7 +42,7 @@ fun CategoryChip(label: String, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .background(tint.container, MaterialTheme.shapes.small)
-            .padding(horizontal = 8.dp, vertical = 2.dp),
+            .padding(horizontal = Spacing.sm, vertical = 2.dp),
     ) {
         Text(
             text = label,

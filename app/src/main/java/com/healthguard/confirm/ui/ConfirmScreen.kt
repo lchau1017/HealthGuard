@@ -25,10 +25,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.healthguard.common.theme.Spacing
 import com.healthguard.common.ui.CategoryLabelInput
-import com.healthguard.confirm.ConfirmIntent
-import com.healthguard.confirm.ConfirmUiState
-import com.healthguard.confirm.ReviewField
+import com.healthguard.confirm.state.ConfirmIntent
+import com.healthguard.confirm.state.ConfirmUiState
+import com.healthguard.confirm.state.ReviewField
+import com.healthguard.confirm.state.ReviewFieldKey
 
 /**
  * The import/confirm flow, presented as a full-width dialog card over the
@@ -45,6 +47,7 @@ import com.healthguard.confirm.ReviewField
 fun ConfirmDialog(
     state: ConfirmUiState,
     onIntent: (ConfirmIntent) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Dialog(
         onDismissRequest = { onIntent(ConfirmIntent.Reset) },
@@ -54,14 +57,16 @@ fun ConfirmDialog(
             decorFitsSystemWindows = false,
         ),
     ) {
+        // Dialog itself takes no modifier; the card Surface is the root of
+        // everything this composable draws.
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
             tonalElevation = 6.dp,
-            modifier = Modifier
+            modifier = modifier
                 .systemBarsPadding()
                 .imePadding()
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(Spacing.md),
         ) {
             when (val current = state) {
                 is ConfirmUiState.Idle, is ConfirmUiState.Extracting -> ExtractingContent()
@@ -96,7 +101,7 @@ private fun ExtractingContent(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center,
     ) {
         CircularProgressIndicator()
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.lg))
         Text("Reading label…", style = MaterialTheme.typography.bodyLarge)
     }
 }
@@ -106,8 +111,8 @@ private fun ReviewContent(
     fields: List<ReviewField>,
     label: String,
     canAccept: Boolean,
-    onFieldEdited: (String, String) -> Unit,
-    onFieldConfirmed: (String) -> Unit,
+    onFieldEdited: (ReviewFieldKey, String) -> Unit,
+    onFieldConfirmed: (ReviewFieldKey) -> Unit,
     onLabelChange: (String) -> Unit,
     onAccept: () -> Unit,
     onCancel: () -> Unit,
@@ -117,16 +122,16 @@ private fun ReviewContent(
         modifier = modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 20.dp),
+            .padding(horizontal = Spacing.xxl, vertical = Spacing.xl),
     ) {
         Text("Check the details", style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.xs))
         Text(
             text = "Fields marked with a warning need your review before saving.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         fields.forEach { field ->
             ReviewFieldRow(
@@ -134,7 +139,7 @@ private fun ReviewContent(
                 onValueChange = { onFieldEdited(field.key, it) },
                 onConfirm = { onFieldConfirmed(field.key) },
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
         }
 
         // The label is business data and lives in the Review state (like the
@@ -145,7 +150,7 @@ private fun ReviewContent(
             onLabelChange = onLabelChange,
         )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(Spacing.xl))
         Button(
             onClick = onAccept,
             enabled = canAccept,
@@ -153,7 +158,7 @@ private fun ReviewContent(
         ) {
             Text("Accept")
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
         OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
             Text("Cancel")
         }
@@ -207,7 +212,7 @@ private fun ErrorContent(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 40.dp),
+            .padding(horizontal = Spacing.xxl, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -216,18 +221,18 @@ private fun ErrorContent(
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.error,
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(Spacing.xxl))
         if (retriable) {
             Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
                 Text("Retry")
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
         }
         OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
             Text("Cancel")

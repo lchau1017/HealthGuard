@@ -2,24 +2,31 @@
 
 package com.healthguard.detail
 
+import com.healthguard.domain.model.DoseId
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.activity.AdherenceResult
-import com.healthguard.activity.DayDetail
-import com.healthguard.activity.DayMedicineLine
+import com.healthguard.domain.tracking.DayDetail
+import com.healthguard.domain.tracking.DayMedicineLine
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.detail.domain.ComputeDetailStateUseCase
 import com.healthguard.detail.domain.LoadDayDetailUseCase
 import com.healthguard.detail.domain.SaveMedicationUseCase
+import com.healthguard.detail.state.DetailEffect
+import com.healthguard.detail.state.DetailFinished
+import com.healthguard.detail.state.DetailIntent
+import com.healthguard.detail.state.HistoryRowKind
 import com.healthguard.home.MedicationPhase
 import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.DeleteMedicationUseCase
 import com.healthguard.home.domain.RecordDoseUseCase
 import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.domain.ObserveMedicationsUseCase
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.data.SqlDelightMedicationRepository
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.usecase.ObserveMedicationsUseCase
+import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.collectEffects
 import com.healthguard.testing.collectState
 import com.healthguard.testing.inMemoryRepository
@@ -50,7 +57,7 @@ import org.junit.Test
 class DetailViewModelTest {
 
     private lateinit var dispatcher: TestDispatcher
-    private lateinit var repository: MedicationRepository
+    private lateinit var repository: SqlDelightMedicationRepository
 
     private val fixedNow = Instant.parse("2024-07-03T10:00:00Z")
 
@@ -77,7 +84,8 @@ class DetailViewModelTest {
         deleteMedication = DeleteMedicationUseCase(repository),
         observeMedications = ObserveMedicationsUseCase(repository),
         clock = { fixedNow },
-        medicationId = id,
+        medicationId = MedicationId(id),
+        zone = TimeZone.UTC,
     )
 
     /** The one detail medication under test: Cetirizine on schedule "sch-1". */
@@ -115,7 +123,7 @@ class DetailViewModelTest {
         assertEquals("cetirizine hydrochloride, lactose", state.ingredients)
         assertEquals("2 times a day", state.frequencyText)
         assertEquals(true, state.withFood)
-        assertNotNull(state.item)
+        assertTrue(state.isLoaded)
     }
 
     @Test
@@ -146,7 +154,7 @@ class DetailViewModelTest {
         vm.onIntent(DetailIntent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
-        val stored = repository.getMedication("med-1")!!
+        val stored = repository.getMedication(MedicationId("med-1"))!!
         assertEquals("Loratadine", stored.medication.drugName)
         assertEquals("5 mg", stored.medication.dosage)
         assertEquals("capsule", stored.medication.form)
@@ -168,7 +176,7 @@ class DetailViewModelTest {
         vm.onIntent(DetailIntent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertNull(repository.getMedication("med-1")!!.schedule.frequency)
+        assertNull(repository.getMedication(MedicationId("med-1"))!!.schedule.frequency)
     }
 
     @Test
@@ -184,7 +192,7 @@ class DetailViewModelTest {
         vm.onIntent(DetailIntent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
-        val stored = repository.getMedication("med-1")!!.medication
+        val stored = repository.getMedication(MedicationId("med-1"))!!.medication
         assertNull(stored.label)
         assertNull(stored.dosage)
         assertNull(stored.form)
@@ -204,7 +212,7 @@ class DetailViewModelTest {
         vm.onIntent(DetailIntent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals("Cetirizine", repository.getMedication("med-1")!!.medication.drugName)
+        assertEquals("Cetirizine", repository.getMedication(MedicationId("med-1"))!!.medication.drugName)
         assertTrue(effects.filterIsInstance<DetailEffect.Finished>().isEmpty())
     }
 
@@ -223,7 +231,7 @@ class DetailViewModelTest {
 
         assertEquals(
             Frequency.TimesPerDay(2),
-            repository.getMedication("med-1")!!.schedule.frequency,
+            repository.getMedication(MedicationId("med-1"))!!.schedule.frequency,
         )
         assertTrue(effects.filterIsInstance<DetailEffect.Finished>().isEmpty())
     }
@@ -239,7 +247,7 @@ class DetailViewModelTest {
         vm.onIntent(DetailIntent.Save)
         dispatcher.scheduler.advanceUntilIdle()
 
-        val schedule = repository.getMedication("med-1")!!.schedule
+        val schedule = repository.getMedication(MedicationId("med-1"))!!.schedule
         assertEquals(fixedNow - 5.hours, schedule.startedAt)
         assertEquals(fixedNow - 1.hours, schedule.stoppedAt)
     }
@@ -255,13 +263,13 @@ class DetailViewModelTest {
         vm.onIntent(DetailIntent.ToggleTaking)
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value.isActive)
-        assertEquals(fixedNow, vm.state.value.item?.schedule?.startedAt)
+        assertEquals(fixedNow, repository.getMedication(MedicationId("med-1"))!!.schedule.startedAt)
         assertEquals(MedicationPhase.TAKING, vm.state.value.phase)
 
         vm.onIntent(DetailIntent.ToggleTaking)
         dispatcher.scheduler.advanceUntilIdle()
         assertFalse(vm.state.value.isActive)
-        assertEquals(fixedNow, vm.state.value.item?.schedule?.stoppedAt)
+        assertEquals(fixedNow, repository.getMedication(MedicationId("med-1"))!!.schedule.stoppedAt)
         assertEquals(MedicationPhase.STOPPED, vm.state.value.phase)
     }
 
@@ -294,7 +302,7 @@ class DetailViewModelTest {
         vm.onIntent(DetailIntent.Delete)
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertNull(repository.getMedication("med-1"))
+        assertNull(repository.getMedication(MedicationId("med-1")))
         assertTrue(effects.contains(DetailEffect.Finished(DetailFinished.DELETED)))
     }
 
@@ -318,8 +326,8 @@ class DetailViewModelTest {
         )
         repository.logDose(
             StoredDoseLog(
-                id = "d-other",
-                scheduleId = "sch-2",
+                id = DoseId("d-other"),
+                scheduleId = ScheduleId("sch-2"),
                 plannedAt = Instant.parse("2024-07-02T14:00:00Z"),
                 takenAt = Instant.parse("2024-07-02T14:00:00Z"),
                 status = DoseStatus.TAKEN,
@@ -336,7 +344,7 @@ class DetailViewModelTest {
                 date = LocalDate(2024, 7, 2),
                 lines = listOf(
                     DayMedicineLine(
-                        medicationId = "med-1",
+                        medicationId = MedicationId("med-1"),
                         name = "Cetirizine 10 mg",
                         takenTimes = listOf(LocalTime(9, 4)),
                         skipped = 0,
@@ -362,8 +370,8 @@ class DetailViewModelTest {
     ) {
         repository.logDose(
             StoredDoseLog(
-                id = id,
-                scheduleId = "sch-1",
+                id = DoseId(id),
+                scheduleId = ScheduleId("sch-1"),
                 plannedAt = plannedAt,
                 takenAt = takenAt,
                 status = status,
@@ -372,7 +380,9 @@ class DetailViewModelTest {
     }
 
     private fun loggedIds(vm: DetailViewModel): List<String> =
-        vm.state.value.history.filterIsInstance<HistoryEntry.Logged>().map { it.log.id }
+        vm.state.value.history
+            .filterNot { it.kind == HistoryRowKind.NOT_RECORDED }
+            .map { it.id }
 
     @Test
     fun `history lists recent dose logs newest first`() = runTest(dispatcher) {
@@ -400,17 +410,19 @@ class DetailViewModelTest {
 
         assertEquals(
             listOf(
-                HistoryEntry.NotRecorded(Instant.parse("2024-07-02T21:00:00Z")),
-                HistoryEntry.NotRecorded(Instant.parse("2024-07-02T09:00:00Z")),
-                HistoryEntry.NotRecorded(Instant.parse("2024-07-01T21:00:00Z")),
+                "slot-2024-07-02T21:00:00Z",
+                "slot-2024-07-02T09:00:00Z",
+                "slot-2024-07-01T21:00:00Z",
             ),
-            vm.state.value.history.filterIsInstance<HistoryEntry.NotRecorded>(),
+            vm.state.value.history
+                .filter { it.kind == HistoryRowKind.NOT_RECORDED }
+                .map { it.id },
         )
         assertEquals(listOf("d-3", "d-2", "d-1"), loggedIds(vm))
         // Interleaved chronologically: the three gaps precede the logged rows.
         assertEquals(
             listOf(true, true, true, false, false, false),
-            vm.state.value.history.map { it is HistoryEntry.NotRecorded },
+            vm.state.value.history.map { it.kind == HistoryRowKind.NOT_RECORDED },
         )
     }
 
@@ -489,7 +501,7 @@ class DetailViewModelTest {
         // No expectations: no completeness cells and no not-recorded rows —
         // the heat map falls back to take counts per day.
         assertTrue(state.dayStatuses.isEmpty())
-        assertTrue(state.history.filterIsInstance<HistoryEntry.NotRecorded>().isEmpty())
+        assertTrue(state.history.none { it.kind == HistoryRowKind.NOT_RECORDED })
         assertEquals(
             listOf(1, 1),
             state.dayTakeCounts.map { it.count },
@@ -516,14 +528,14 @@ class DetailViewModelTest {
         vm.onIntent(DetailIntent.TakeNow)
         dispatcher.scheduler.advanceUntilIdle()
 
-        val logged = repository.latestDose("sch-1")!!
+        val logged = repository.latestTakenDose(ScheduleId("sch-1"))!!
         assertEquals(DoseStatus.TAKEN, logged.status)
         assertEquals(fixedNow, logged.takenAt)
         assertEquals(fixedNow - 2.hours, logged.plannedAt)
         // The status card and history refresh without an external write.
         assertEquals(fixedNow + 6.hours, vm.state.value.nextDoseAt)
         assertEquals(fixedNow, vm.state.value.lastTakenAt)
-        assertEquals(listOf(logged.id), loggedIds(vm))
+        assertEquals(listOf(logged.id.value), loggedIds(vm))
         assertEquals(
             "Cetirizine",
             effects.filterIsInstance<DetailEffect.ShowUndoSnackbar>().last().take.drugName,
@@ -542,7 +554,7 @@ class DetailViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(20L, vm.state.value.takeConfirm)
-        assertEquals("d-1", repository.latestDose("sch-1")?.id)
+        assertEquals("d-1", repository.latestTakenDose(ScheduleId("sch-1"))?.id?.value)
         assertTrue(effects.filterIsInstance<DetailEffect.ShowUndoSnackbar>().isEmpty())
     }
 
@@ -557,7 +569,7 @@ class DetailViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
         vm.onIntent(DetailIntent.DismissTakeConfirm)
         assertNull(vm.state.value.takeConfirm)
-        assertEquals("d-1", repository.latestDose("sch-1")?.id)
+        assertEquals("d-1", repository.latestTakenDose(ScheduleId("sch-1"))?.id?.value)
 
         vm.onIntent(DetailIntent.TakeNow)
         dispatcher.scheduler.advanceUntilIdle()
@@ -565,7 +577,7 @@ class DetailViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(vm.state.value.takeConfirm)
-        assertEquals(fixedNow, repository.latestDose("sch-1")?.takenAt)
+        assertEquals(fixedNow, repository.latestTakenDose(ScheduleId("sch-1"))?.takenAt)
     }
 
     @Test
@@ -582,7 +594,7 @@ class DetailViewModelTest {
         vm.onIntent(DetailIntent.UndoTake(doseId))
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertNull(repository.latestDose("sch-1"))
+        assertNull(repository.latestTakenDose(ScheduleId("sch-1")))
         assertEquals(fixedNow - 2.hours, vm.state.value.nextDoseAt)
     }
 
@@ -613,7 +625,7 @@ class DetailViewModelTest {
         logDose("d-1", takenAt = fixedNow, plannedAt = fixedNow, status = DoseStatus.TAKEN)
         // Dose logs alone do not retrigger the medications flow; any
         // medication write does (same trigger the home refresh relies on).
-        repository.activate("med-1", fixedNow)
+        repository.activate(MedicationId("med-1"), fixedNow)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(listOf("d-1"), loggedIds(vm))
@@ -626,7 +638,7 @@ class DetailViewModelTest {
         collectState(vm.state)
         assertFalse(vm.state.value.isActive)
 
-        repository.activate("med-1", fixedNow)
+        repository.activate(MedicationId("med-1"), fixedNow)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(vm.state.value.isActive)
@@ -640,7 +652,7 @@ class DetailViewModelTest {
 
         vm.onIntent(DetailIntent.NameChanged("Edited name"))
         // Any repository write re-emits the medications flow.
-        repository.activate("med-1", fixedNow)
+        repository.activate(MedicationId("med-1"), fixedNow)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals("Edited name", vm.state.value.name)

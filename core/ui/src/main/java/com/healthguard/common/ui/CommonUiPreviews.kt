@@ -7,9 +7,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import com.healthguard.activity.DayCount
 import com.healthguard.common.theme.HealthGuardTheme
+import com.healthguard.common.theme.Spacing
 import kotlinx.datetime.LocalDate
 
 /*
@@ -32,14 +32,14 @@ private val sampleCounts = listOf(
 @Composable
 private fun ChipsSample() {
     Column(
-        modifier = Modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(Spacing.lg),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             StatusChip("Not started", outlined = true)
             StatusChip("Stopped 3 Jul")
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             CategoryChip("Allergy")
             CategoryChip("Pain relief")
             CategoryChip("Heart")
@@ -93,7 +93,7 @@ private fun DayRowHeatMapPreview() {
             dayCounts = sampleCounts,
             from = sampleFrom,
             today = sampleToday,
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(Spacing.lg),
         )
     }
 }
@@ -106,7 +106,7 @@ private fun DayRowHeatMapPreviewDark() {
             dayCounts = sampleCounts,
             from = sampleFrom,
             today = sampleToday,
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(Spacing.lg),
         )
     }
 }
@@ -119,7 +119,7 @@ private fun ActivityHeatMapPreview() {
             dayCounts = sampleCounts,
             from = LocalDate(2026, 6, 8),
             today = sampleToday,
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(Spacing.lg),
             showMonthLabels = true,
         )
     }
@@ -148,7 +148,7 @@ private fun CategoryLabelInputPreview() {
         CategoryLabelInput(
             label = "Allergy",
             onLabelChange = {},
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(Spacing.lg),
         )
     }
 }

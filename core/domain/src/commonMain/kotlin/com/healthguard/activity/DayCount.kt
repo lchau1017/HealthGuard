@@ -1,8 +1,5 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.activity
 
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone

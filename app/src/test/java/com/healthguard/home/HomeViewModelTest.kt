@@ -2,6 +2,8 @@
 
 package com.healthguard.home
 
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.ComputeHomeStateUseCase
@@ -9,10 +11,13 @@ import com.healthguard.home.domain.RecordDoseUseCase
 import com.healthguard.home.domain.RemoveDemoDataUseCase
 import com.healthguard.home.domain.SeedDemoDataUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.domain.ObserveMedicationsUseCase
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.home.format.DoseRowStatus
+import com.healthguard.home.state.HomeEffect
+import com.healthguard.home.state.HomeIntent
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.data.SqlDelightMedicationRepository
+import com.healthguard.domain.usecase.ObserveMedicationsUseCase
+import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.collectEffects
 import com.healthguard.testing.collectState
 import com.healthguard.testing.inMemoryRepository
@@ -43,7 +48,7 @@ import org.junit.Test
 class HomeViewModelTest {
 
     private lateinit var dispatcher: TestDispatcher
-    private lateinit var repository: MedicationRepository
+    private lateinit var repository: SqlDelightMedicationRepository
 
     /** 2024-07-03T10:00:00Z — mid-morning UTC so TimesPerDay slots are easy. */
     private val fixedNow = Instant.parse("2024-07-03T10:00:00Z")
@@ -101,7 +106,6 @@ class HomeViewModelTest {
         stoppedAt = stoppedAt,
     )
 
-
     @Test
     fun `taking sorts overdue first then ascending with null frequency last`() = runTest(dispatcher) {
         // No dose logged -> nextDoseAt = startedAt, which is in the past.
@@ -114,7 +118,7 @@ class HomeViewModelTest {
         collectState(vm.state)
 
         val taking = vm.state.value.taking
-        assertEquals(listOf("od2", "od1", "fut", "nofreq"), taking.map { it.item.medication.id })
+        assertEquals(listOf("od2", "od1", "fut", "nofreq"), taking.map { it.medicationId.value })
         assertEquals(fixedNow - 3.hours, taking[0].nextDoseAt)
         assertEquals(fixedNow + 4.hours, taking[2].nextDoseAt)
         assertNull(taking[3].nextDoseAt)
@@ -141,7 +145,7 @@ class HomeViewModelTest {
         collectState(vm.state)
 
         val alert = vm.state.value.dueAlert!!
-        assertEquals("due", alert.card.item.medication.id)
+        assertEquals("due", alert.card.medicationId.value)
         assertEquals(0, alert.othersDueCount)
     }
 
@@ -154,7 +158,7 @@ class HomeViewModelTest {
         collectState(vm.state)
 
         val alert = vm.state.value.dueAlert!!
-        assertEquals("od2", alert.card.item.medication.id)
+        assertEquals("od2", alert.card.medicationId.value)
         assertEquals(2, alert.othersDueCount)
     }
 
@@ -219,7 +223,7 @@ class HomeViewModelTest {
         assertTrue(before.isDue)
         assertEquals(DoseRowStatus.Due, before.status)
 
-        vm.onIntent(HomeIntent.TakeNow(before))
+        vm.onIntent(HomeIntent.TakeNow(before.scheduleId))
         dispatcher.scheduler.advanceUntilIdle()
 
         // The row is no longer a stale "Take": next slot today is 21:00, 11h out.
@@ -248,10 +252,10 @@ class HomeViewModelTest {
         val card = vm.state.value.taking.single()
         assertEquals(fixedNow - 2.hours, card.nextDoseAt) // overdue first dose
 
-        vm.onIntent(HomeIntent.TakeNow(card))
+        vm.onIntent(HomeIntent.TakeNow(card.scheduleId))
         dispatcher.scheduler.advanceUntilIdle()
 
-        val logged = repository.latestDose("sched-a")!!
+        val logged = repository.latestTakenDose(ScheduleId("sched-a"))!!
         assertEquals(DoseStatus.TAKEN, logged.status)
         assertEquals(fixedNow, logged.takenAt)
         assertEquals(fixedNow - 2.hours, logged.plannedAt)
@@ -266,10 +270,10 @@ class HomeViewModelTest {
         val vm = viewModel()
         collectState(vm.state)
 
-        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.single()))
+        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.single().scheduleId))
         dispatcher.scheduler.advanceUntilIdle()
 
-        val logged = repository.latestDose("sched-nofreq")!!
+        val logged = repository.latestTakenDose(ScheduleId("sched-nofreq"))!!
         assertEquals(fixedNow, logged.plannedAt)
         assertEquals(fixedNow, logged.takenAt)
     }
@@ -282,14 +286,14 @@ class HomeViewModelTest {
         collectState(vm.state)
         val effects = collectEffects(vm.effects)
 
-        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.single()))
+        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.single().scheduleId))
         dispatcher.scheduler.advanceUntilIdle()
 
         val confirm = vm.state.value.takeConfirm
         assertEquals(29L, confirm?.minutesAgo)
-        assertEquals("a", confirm?.card?.item?.medication?.id)
+        assertEquals("a", confirm?.card?.medicationId?.value)
         // Nothing was logged.
-        assertEquals(fixedNow - 29.minutes, repository.latestDose("sched-a")?.takenAt)
+        assertEquals(fixedNow - 29.minutes, repository.latestTakenDose(ScheduleId("sched-a"))?.takenAt)
         assertTrue(effects.filterIsInstance<HomeEffect.ShowUndoSnackbar>().isEmpty())
     }
 
@@ -300,11 +304,11 @@ class HomeViewModelTest {
         val vm = viewModel()
         collectState(vm.state)
 
-        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.single()))
+        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.single().scheduleId))
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(vm.state.value.takeConfirm)
-        assertEquals(fixedNow, repository.latestDose("sched-a")?.takenAt)
+        assertEquals(fixedNow, repository.latestTakenDose(ScheduleId("sched-a"))?.takenAt)
     }
 
     @Test
@@ -313,14 +317,14 @@ class HomeViewModelTest {
         repository.logTaken("a", fixedNow - 10.minutes)
         val vm = viewModel()
         collectState(vm.state)
-        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.single()))
+        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.single().scheduleId))
         dispatcher.scheduler.advanceUntilIdle()
 
         vm.onIntent(HomeIntent.ConfirmTakeAnyway)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(vm.state.value.takeConfirm)
-        assertEquals(fixedNow, repository.latestDose("sched-a")?.takenAt)
+        assertEquals(fixedNow, repository.latestTakenDose(ScheduleId("sched-a"))?.takenAt)
         assertEquals(fixedNow + 6.hours, vm.state.value.taking.single().nextDoseAt)
     }
 
@@ -330,13 +334,13 @@ class HomeViewModelTest {
         repository.logTaken("a", fixedNow - 10.minutes)
         val vm = viewModel()
         collectState(vm.state)
-        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.single()))
+        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.single().scheduleId))
         dispatcher.scheduler.advanceUntilIdle()
 
         vm.onIntent(HomeIntent.DismissTakeConfirm)
 
         assertNull(vm.state.value.takeConfirm)
-        assertEquals(fixedNow - 10.minutes, repository.latestDose("sched-a")?.takenAt)
+        assertEquals(fixedNow - 10.minutes, repository.latestTakenDose(ScheduleId("sched-a"))?.takenAt)
     }
 
     @Test
@@ -346,12 +350,12 @@ class HomeViewModelTest {
         collectState(vm.state)
         val effects = collectEffects(vm.effects)
 
-        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.single()))
+        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.single().scheduleId))
         dispatcher.scheduler.advanceUntilIdle()
 
         val recent = effects.filterIsInstance<HomeEffect.ShowUndoSnackbar>().last().take
         assertEquals("Ibuprofen", recent.drugName)
-        assertEquals(repository.latestDose("sched-a")?.id, recent.doseId)
+        assertEquals(repository.latestTakenDose(ScheduleId("sched-a"))?.id, recent.doseId)
     }
 
     @Test
@@ -360,7 +364,7 @@ class HomeViewModelTest {
         val vm = viewModel()
         collectState(vm.state)
         val effects = collectEffects(vm.effects)
-        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.single()))
+        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.single().scheduleId))
         dispatcher.scheduler.advanceUntilIdle()
         val doseId = effects.filterIsInstance<HomeEffect.ShowUndoSnackbar>().last().take.doseId
         assertEquals(fixedNow + 6.hours, vm.state.value.taking.single().nextDoseAt)
@@ -368,7 +372,7 @@ class HomeViewModelTest {
         vm.onIntent(HomeIntent.UndoTake(doseId))
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertNull(repository.latestDose("sched-a"))
+        assertNull(repository.latestTakenDose(ScheduleId("sched-a")))
         // Back to the untaken first dose, due at startedAt.
         assertEquals(fixedNow - 2.hours, vm.state.value.taking.single().nextDoseAt)
     }
@@ -385,7 +389,7 @@ class HomeViewModelTest {
         collectState(vm.state)
 
         assertEquals(2, vm.state.value.dueCount)
-        val byId = vm.state.value.taking.associateBy { it.item.medication.id }
+        val byId = vm.state.value.taking.associateBy { it.medicationId.value }
         assertTrue(byId.getValue("overdue").isDue)
         assertTrue(byId.getValue("due-now").isDue)
         assertFalse(byId.getValue("later").isDue)
@@ -401,16 +405,16 @@ class HomeViewModelTest {
         collectState(vm.state)
         assertEquals(
             listOf("urgent", "later"),
-            vm.state.value.taking.map { it.item.medication.id },
+            vm.state.value.taking.map { it.medicationId.value },
         )
 
-        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.first()))
+        vm.onIntent(HomeIntent.TakeNow(vm.state.value.taking.first().scheduleId))
         dispatcher.scheduler.advanceUntilIdle()
 
         // urgent's next dose is now in 6h, behind later's 1h.
         assertEquals(
             listOf("later", "urgent"),
-            vm.state.value.taking.map { it.item.medication.id },
+            vm.state.value.taking.map { it.medicationId.value },
         )
     }
 
@@ -467,9 +471,9 @@ class HomeViewModelTest {
         val state = vm.state.value
         assertEquals(
             listOf("stopped", "newer-dormant", "older-dormant"),
-            state.cabinet.map { it.medication.id },
+            state.cabinet.map { it.medicationId.value },
         )
-        assertEquals(listOf("active"), state.taking.map { it.item.medication.id })
+        assertEquals(listOf("active"), state.taking.map { it.medicationId.value })
     }
 
     @Test
@@ -479,11 +483,11 @@ class HomeViewModelTest {
         collectState(vm.state)
         assertTrue(vm.state.value.taking.isEmpty())
 
-        vm.onIntent(HomeIntent.Play("a"))
+        vm.onIntent(HomeIntent.Play(MedicationId("a")))
         dispatcher.scheduler.advanceUntilIdle()
 
-        val card = vm.state.value.taking.single()
-        assertEquals(fixedNow, card.item.schedule.startedAt)
+        assertEquals("a", vm.state.value.taking.single().medicationId.value)
+        assertEquals(fixedNow, repository.getMedication(MedicationId("a"))!!.schedule.startedAt)
         assertTrue(vm.state.value.cabinet.isEmpty())
     }
 
@@ -495,10 +499,10 @@ class HomeViewModelTest {
         val vm = viewModel()
         collectState(vm.state)
 
-        val all = vm.state.value.taking.map { it.item } + vm.state.value.cabinet
-        val byId = all.associateBy { it.medication.id }
-        assertTrue(byId.getValue("active").isActive)
-        assertTrue(!byId.getValue("dormant").isActive)
-        assertTrue(!byId.getValue("stopped").isActive)
+        assertEquals(listOf("active"), vm.state.value.taking.map { it.medicationId.value })
+        assertEquals(
+            setOf("dormant", "stopped"),
+            vm.state.value.cabinet.map { it.medicationId.value }.toSet(),
+        )
     }
 }

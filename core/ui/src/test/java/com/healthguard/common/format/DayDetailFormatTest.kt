@@ -1,6 +1,7 @@
 package com.healthguard.common.format
 
-import com.healthguard.activity.DayMedicineLine
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.tracking.DayMedicineLine
 import kotlinx.datetime.LocalTime
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -13,7 +14,7 @@ class DayDetailFormatTest {
         missed: Int = 0,
         notRecorded: Int = 0,
     ) = DayMedicineLine(
-        medicationId = "med-a",
+        medicationId = MedicationId("med-a"),
         name = "Cetirizine 10 mg",
         takenTimes = takenTimes,
         skipped = skipped,

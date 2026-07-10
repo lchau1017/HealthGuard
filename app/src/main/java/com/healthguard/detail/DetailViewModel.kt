@@ -4,19 +4,26 @@ package com.healthguard.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.healthguard.common.format.parseFrequency
+import com.healthguard.domain.extraction.parseFrequency
 import com.healthguard.common.format.toHumanText
 import com.healthguard.detail.domain.ComputeDetailStateUseCase
 import com.healthguard.detail.domain.DetailContent
 import com.healthguard.detail.domain.LoadDayDetailUseCase
 import com.healthguard.detail.domain.SaveMedicationUseCase
-import com.healthguard.dose.isDoubleDose
+import com.healthguard.detail.state.DetailEffect
+import com.healthguard.detail.state.DetailFinished
+import com.healthguard.detail.state.DetailIntent
+import com.healthguard.detail.state.DetailUiState
+import com.healthguard.detail.state.toTrackedState
+import com.healthguard.dose.minutesSinceLastTake
 import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.DeleteMedicationUseCase
 import com.healthguard.home.domain.RecordDoseUseCase
 import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
-import com.healthguard.shared.domain.ObserveMedicationsUseCase
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.model.MedicationWithSchedule
+import com.healthguard.domain.usecase.ObserveMedicationsUseCase
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.channels.Channel
@@ -31,6 +38,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 
 /**
  * The detail screen's MVI holder. It owns no business logic: every user
@@ -54,7 +62,8 @@ class DetailViewModel(
     private val deleteMedication: DeleteMedicationUseCase,
     private val observeMedications: ObserveMedicationsUseCase,
     private val clock: () -> Instant,
-    private val medicationId: String,
+    private val medicationId: MedicationId,
+    private val zone: TimeZone = TimeZone.currentSystemDefault(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(DetailUiState())
@@ -68,6 +77,13 @@ class DetailViewModel(
 
     private var fieldsSeeded = false
 
+    /**
+     * The latest persisted row, refreshed on every emission — the working
+     * domain reference [save]'s entity copies and [selectDay] act on. It
+     * lives here, never in [DetailUiState]: the UI renders view data only.
+     */
+    private var latestItem: MedicationWithSchedule? = null
+
     init {
         combine(
             // Writes from other screens (a take on Home, demo reseed) must
@@ -79,6 +95,7 @@ class DetailViewModel(
             .onEach { rows ->
                 val item = rows.firstOrNull { it.medication.id == medicationId }
                     ?: return@onEach // deleted (or bad id): keep last state
+                latestItem = item
                 _state.update { it.applyContent(computeDetailState(item)) }
             }
             .launchIn(viewModelScope)
@@ -90,7 +107,7 @@ class DetailViewModel(
      * afterwards — a background re-emission must not clobber typing.
      */
     private fun DetailUiState.applyContent(c: DetailContent): DetailUiState {
-        val tracked = c.toTrackedState(this)
+        val tracked = c.toTrackedState(this, zone)
         return if (fieldsSeeded) {
             tracked
         } else {
@@ -116,7 +133,15 @@ class DetailViewModel(
             is DetailIntent.FormChanged -> _state.update { it.copy(form = intent.value) }
             is DetailIntent.LabelChanged -> _state.update { it.copy(label = intent.value) }
             is DetailIntent.IngredientsChanged -> _state.update { it.copy(ingredients = intent.value) }
-            is DetailIntent.FrequencyChanged -> _state.update { it.copy(frequencyText = intent.value) }
+            is DetailIntent.FrequencyChanged -> _state.update {
+                it.copy(
+                    frequencyText = intent.value,
+                    // Parse once per edit, not on every state read; blank
+                    // means "no schedule", never an error.
+                    frequencyError = intent.value.isNotBlank() &&
+                        parseFrequency(intent.value) == null,
+                )
+            }
             is DetailIntent.WithFoodChanged -> _state.update { it.copy(withFood = intent.value) }
             DetailIntent.TakeNow -> takeNow()
             DetailIntent.ConfirmTakeAnyway -> confirmTakeAnyway()
@@ -137,13 +162,9 @@ class DetailViewModel(
      * into state instead and nothing is logged until [confirmTakeAnyway].
      */
     private fun takeNow() {
-        val now = clock()
-        val lastTaken = _state.value.lastTakenAt
-        if (isDoubleDose(lastTaken, now)) {
-            _state.update { it.copy(takeConfirm = (now - lastTaken!!).inWholeMinutes) }
-            return
-        }
-        record()
+        minutesSinceLastTake(_state.value.lastTakenAt, clock())?.let { minutes ->
+            _state.update { it.copy(takeConfirm = minutes) }
+        } ?: record()
     }
 
     /** User accepted the double-dose warning: record it after all. */
@@ -155,7 +176,7 @@ class DetailViewModel(
 
     private fun record() {
         val current = _state.value
-        val item = current.item ?: return
+        val item = latestItem ?: return
         viewModelScope.launch {
             val take = recordDose(
                 item.schedule.id,
@@ -172,7 +193,7 @@ class DetailViewModel(
      * medication only — the per-med grid answers for one schedule.
      */
     private fun selectDay(date: LocalDate) {
-        val item = _state.value.item ?: return
+        val item = latestItem ?: return
         viewModelScope.launch {
             _state.update { it.copy(dayDetail = loadDayDetail(item, date)) }
         }
@@ -184,7 +205,7 @@ class DetailViewModel(
      */
     private fun save() {
         val current = _state.value
-        val item = current.item ?: return
+        val item = latestItem ?: return
         if (!current.canSave) return
         viewModelScope.launch {
             saveMedication(

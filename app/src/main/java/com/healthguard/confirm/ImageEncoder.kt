@@ -1,7 +1,7 @@
 package com.healthguard.confirm
 
 import android.content.Context
-import android.net.Uri
+import androidx.core.net.toUri
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 
@@ -26,6 +26,6 @@ class AndroidImageEncoder(
     private val ioDispatcher: CoroutineDispatcher,
 ) : ImageEncoder {
     override suspend fun encode(uri: String): String? = withContext(ioDispatcher) {
-        loadDownsampledBitmap(context, Uri.parse(uri))?.toUploadJpegBase64()
+        loadDownsampledBitmap(context, uri.toUri())?.toUploadJpegBase64()
     }
 }

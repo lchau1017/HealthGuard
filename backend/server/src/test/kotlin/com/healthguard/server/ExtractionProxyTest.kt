@@ -98,6 +98,16 @@ class ExtractionProxyTest {
         }
 
     @Test
+    fun `oversized body returns 413 before reaching upstream`() =
+        withProxy(upstreamHandler = okUpstream) { client, captured ->
+            val padding = "x".repeat((MAX_BODY_BYTES + 1).toInt())
+            val response = client.post("/extract") { setBody(padding) }
+            assertEquals(HttpStatusCode.PayloadTooLarge, response.status)
+            assertEquals("""{"error":"body too large"}""", response.bodyAsText())
+            assertNull(captured(), "upstream must not be called on oversized input")
+        }
+
+    @Test
     fun `success passes model content through verbatim`() =
         withProxy(upstreamHandler = okUpstream) { client, _ ->
             val response = client.post("/extract") {

@@ -1,18 +1,19 @@
-@file:OptIn(ExperimentalCoroutinesApi::class, ExperimentalTime::class)
+@file:OptIn(ExperimentalCoroutinesApi::class)
 
 package com.healthguard.home.domain
 
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.activity.adherenceResult
 import com.healthguard.home.weekDayStates
-import com.healthguard.shared.data.DoseStatus
+import com.healthguard.domain.model.DoseStatus
 import com.healthguard.testing.FakeMedicationRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -77,7 +78,8 @@ class DemoDataUseCasesTest {
         val all = repo.medications().first()
         assertEquals(5, all.size)
         assertEquals(
-            listOf("demo-med-1", "demo-med-2", "demo-med-3", "demo-med-4", "demo-med-5"),
+            listOf("demo-med-1", "demo-med-2", "demo-med-3", "demo-med-4", "demo-med-5")
+                .map(::MedicationId),
             demoMedicationIds,
         )
         // Three taking, one never started (Amoxicillin), one stopped (Loratadine).
@@ -96,7 +98,7 @@ class DemoDataUseCasesTest {
         val repo = repository()
         repo.seedDemoData().invoke()
 
-        val schedule = repo.getMedication("demo-med-5")!!.schedule
+        val schedule = repo.getMedication(MedicationId("demo-med-5"))!!.schedule
         val startedAt = schedule.startedAt
         val stoppedAt = schedule.stoppedAt
         assertTrue(startedAt != null && stoppedAt != null)
@@ -105,7 +107,7 @@ class DemoDataUseCasesTest {
         assertTrue(now - startedAt!! >= 55.days)
         assertTrue(now - stoppedAt!! >= 13.days)
 
-        val logs = repo.dosesInRange("demo-sch-5", now - 90.days, now + 1.days)
+        val logs = repo.dosesInRange(ScheduleId("demo-sch-5"), now - 90.days, now + 1.days)
         assertTrue(logs.isNotEmpty(), "expected active-stretch history")
         assertTrue(logs.all { it.plannedAt >= startedAt && it.plannedAt < stoppedAt })
     }
@@ -117,7 +119,7 @@ class DemoDataUseCasesTest {
 
         val skippedDay = now.toLocalDateTime(zone).date.minus(5, DateTimeUnit.DAY)
         val dayLogs = repo.dosesInRange(
-            "demo-sch-2",
+            ScheduleId("demo-sch-2"),
             skippedDay.atStartOfDayIn(zone),
             skippedDay.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone),
         )
@@ -134,7 +136,7 @@ class DemoDataUseCasesTest {
 
         // Cetirizine is 2x/day: every planned dose lies on the 09:00/21:00
         // anchors, so seeded history matches the computed next-dose slots.
-        val planned = repo.dosesInRange("demo-sch-2", now - 90.days, now + 1.days)
+        val planned = repo.dosesInRange(ScheduleId("demo-sch-2"), now - 90.days, now + 1.days)
             .map { it.plannedAt.toLocalDateTime(zone).time }
         assertTrue(planned.isNotEmpty())
         assertTrue(
@@ -143,7 +145,7 @@ class DemoDataUseCasesTest {
         )
 
         // Vitamin D3 is 1x/day on the 09:00 anchor.
-        val vitamin = repo.dosesInRange("demo-sch-1", now - 90.days, now + 1.days)
+        val vitamin = repo.dosesInRange(ScheduleId("demo-sch-1"), now - 90.days, now + 1.days)
             .map { it.plannedAt.toLocalDateTime(zone).time }
         assertTrue(vitamin.all { it == LocalTime(9, 0) })
     }
@@ -153,9 +155,9 @@ class DemoDataUseCasesTest {
         val repo = repository()
         repo.seedDemoData().invoke()
 
-        val schedule = repo.getMedication("demo-med-2")!!.schedule
+        val schedule = repo.getMedication(MedicationId("demo-med-2"))!!.schedule
         val from = schedule.startedAt!!
-        val logs = repo.dosesInRange("demo-sch-2", from, now + 1.days)
+        val logs = repo.dosesInRange(ScheduleId("demo-sch-2"), from, now + 1.days)
         val result = adherenceResult(schedule, logs, from, now, zone)
 
         // Deterministic seed -> exact figure. The point is the band: the

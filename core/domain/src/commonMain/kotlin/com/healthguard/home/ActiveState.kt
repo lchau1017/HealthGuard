@@ -1,9 +1,6 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.home
 
-import com.healthguard.shared.data.MedicationWithSchedule
-import kotlin.time.ExperimentalTime
+import com.healthguard.domain.model.MedicationWithSchedule
 
 /** A schedule the user has started and not stopped. */
 val MedicationWithSchedule.isActive: Boolean

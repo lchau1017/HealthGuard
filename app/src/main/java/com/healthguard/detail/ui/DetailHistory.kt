@@ -22,20 +22,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DayCount
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.common.format.targetCaption
+import com.healthguard.common.theme.Spacing
 import com.healthguard.common.theme.heatRamp
 import com.healthguard.common.ui.ActivityHeatMap
 import com.healthguard.common.ui.HeatMapGrid
-import com.healthguard.detail.HistoryEntry
-import com.healthguard.detail.dayTimeLabel
-import com.healthguard.detail.doseAnnotation
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.StoredDoseLog
+import com.healthguard.detail.state.HistoryRowData
+import com.healthguard.detail.state.HistoryRowKind
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
@@ -50,7 +50,7 @@ import kotlinx.datetime.TimeZone
  */
 @Composable
 fun HistorySection(
-    history: List<HistoryEntry>,
+    history: List<HistoryRowData>,
     dayStatuses: Map<LocalDate, DoseDayStatus>,
     dayTakeCounts: List<DayCount>,
     adherence: AdherenceResult,
@@ -94,7 +94,7 @@ fun HistorySection(
             }
         }
         if (history.isEmpty()) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             Text(
                 text = "No doses recorded yet.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -103,7 +103,7 @@ fun HistorySection(
             return@Column
         }
         historyFrom?.let { from ->
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             if (isAsNeeded) {
                 // No dose is ever owed: intensity is honest, completeness is not.
                 ActivityHeatMap(
@@ -121,12 +121,11 @@ fun HistorySection(
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
-        history.forEach { entry ->
-            when (entry) {
-                is HistoryEntry.Logged -> HistoryRow(log = entry.log, now = now, zone = zone)
-                is HistoryEntry.NotRecorded ->
-                    NotRecordedRow(slotAt = entry.slotAt, now = now, zone = zone)
+        Spacer(Modifier.height(Spacing.sm))
+        history.forEach { row ->
+            when (row.kind) {
+                HistoryRowKind.NOT_RECORDED -> NotRecordedRow(row = row)
+                else -> HistoryRow(row = row)
             }
         }
     }
@@ -166,8 +165,7 @@ private fun DayStatusHeatMap(
                     DoseDayStatus.NOT_TAKEN -> ramp[1]
                     DoseDayStatus.SKIPPED -> skippedFill
                     // Out-of-treatment days are absent from the map.
-                    DoseDayStatus.OUT_OF_TREATMENT, null ->
-                        androidx.compose.ui.graphics.Color.Transparent
+                    DoseDayStatus.OUT_OF_TREATMENT, null -> Color.Transparent
                 }
             },
             cellDash = { date -> dayStatuses[date] == DoseDayStatus.SKIPPED },
@@ -189,14 +187,14 @@ private fun DayStatusHeatMap(
         Spacer(Modifier.height(6.dp))
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             LegendChip(color = ramp[4], text = "All taken")
             LegendChip(color = ramp[2], text = "Some")
             LegendChip(color = ramp[1], text = "Not taken")
             LegendChip(color = skippedFill, text = "Skipped", dashed = true)
             LegendChip(
-                color = androidx.compose.ui.graphics.Color.Transparent,
+                color = Color.Transparent,
                 text = "Not tracking",
                 hairline = true,
             )
@@ -206,7 +204,7 @@ private fun DayStatusHeatMap(
 
 @Composable
 private fun LegendChip(
-    color: androidx.compose.ui.graphics.Color,
+    color: Color,
     text: String,
     modifier: Modifier = Modifier,
     dashed: Boolean = false,
@@ -218,7 +216,7 @@ private fun LegendChip(
             .background(color, MaterialTheme.shapes.extraSmall)
         if (hairline) {
             swatch = swatch.border(
-                width = androidx.compose.ui.unit.Dp.Hairline,
+                width = Dp.Hairline,
                 color = MaterialTheme.colorScheme.outlineVariant,
                 shape = MaterialTheme.shapes.extraSmall,
             )
@@ -232,7 +230,7 @@ private fun LegendChip(
                 )
             }
         }
-        Spacer(Modifier.width(4.dp))
+        Spacer(Modifier.width(Spacing.xs))
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
@@ -244,12 +242,10 @@ private fun LegendChip(
 /** One recent dose: status circle, timestamp, and the on-time annotation. */
 @Composable
 private fun HistoryRow(
-    log: StoredDoseLog,
-    now: Instant,
-    zone: TimeZone,
+    row: HistoryRowData,
     modifier: Modifier = Modifier,
 ) {
-    val taken = log.status == DoseStatus.TAKEN
+    val taken = row.kind == HistoryRowKind.TAKEN
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -279,14 +275,14 @@ private fun HistoryRow(
         Spacer(Modifier.width(10.dp))
         Column {
             Text(
-                text = dayTimeLabel(log.takenAt ?: log.plannedAt, now, zone),
+                text = row.title,
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                text = doseAnnotation(log.status, log.plannedAt, log.takenAt),
+                text = row.annotation,
                 style = MaterialTheme.typography.bodySmall,
-                color = when (log.status) {
-                    DoseStatus.MISSED -> MaterialTheme.colorScheme.error
+                color = when (row.kind) {
+                    HistoryRowKind.MISSED -> MaterialTheme.colorScheme.error
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
@@ -300,9 +296,7 @@ private fun HistoryRow(
  */
 @Composable
 private fun NotRecordedRow(
-    slotAt: Instant,
-    now: Instant,
-    zone: TimeZone,
+    row: HistoryRowData,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -326,12 +320,12 @@ private fun NotRecordedRow(
         Spacer(Modifier.width(10.dp))
         Column {
             Text(
-                text = dayTimeLabel(slotAt, now, zone),
+                text = row.title,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "Not recorded",
+                text = row.annotation,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
             )

@@ -19,25 +19,26 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.healthguard.common.theme.Spacing
 import com.healthguard.common.ui.CategoryLabelInput
-import com.healthguard.detail.DetailIntent
-import com.healthguard.detail.DetailUiState
+import com.healthguard.detail.state.DetailFormState
+import com.healthguard.detail.state.DetailIntent
 
 /**
  * The editable "Details" section: the six text fields, the with-food
  * selector, and the Save action. Every keystroke goes straight to the view
  * model as an intent; validation errors and the Save gate come back through
- * [DetailUiState].
+ * [DetailFormState].
  */
 @Composable
 fun DetailForm(
-    state: DetailUiState,
+    state: DetailFormState,
     onIntent: (DetailIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         SectionTitle("Details")
         OutlinedTextField(
@@ -106,7 +107,7 @@ fun DetailForm(
             onSelect = { onIntent(DetailIntent.WithFoodChanged(it)) },
         )
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.xs))
         Button(
             onClick = { onIntent(DetailIntent.Save) },
             enabled = state.canSave,

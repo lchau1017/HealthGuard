@@ -4,17 +4,21 @@ package com.healthguard.confirm
 
 import com.healthguard.confirm.domain.ExtractMedicationUseCase
 import com.healthguard.confirm.domain.SaveNewMedicationUseCase
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.MedicationWithSchedule
-import com.healthguard.shared.data.SqlDelightMedicationRepository
-import com.healthguard.shared.data.StoredMedication
-import com.healthguard.shared.data.StoredSchedule
-import com.healthguard.shared.db.HealthGuardDb
-import com.healthguard.shared.extraction.ExtractedField
-import com.healthguard.shared.extraction.ExtractionResult
-import com.healthguard.shared.extraction.Frequency
-import com.healthguard.shared.extraction.MedicationExtraction
-import com.healthguard.shared.extraction.VisionExtractor
+import com.healthguard.confirm.state.ConfirmEffect
+import com.healthguard.confirm.state.ConfirmIntent
+import com.healthguard.confirm.state.ConfirmUiState
+import com.healthguard.confirm.state.ReviewFieldKey
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.model.MedicationWithSchedule
+import com.healthguard.data.SqlDelightMedicationRepository
+import com.healthguard.domain.model.StoredMedication
+import com.healthguard.domain.model.StoredSchedule
+import com.healthguard.data.db.HealthGuardDb
+import com.healthguard.domain.extraction.ExtractedField
+import com.healthguard.domain.extraction.ExtractionResult
+import com.healthguard.domain.extraction.Frequency
+import com.healthguard.domain.extraction.MedicationExtraction
+import com.healthguard.domain.extraction.VisionExtractor
 import com.healthguard.testing.inMemoryDriver
 import com.healthguard.testing.inMemoryRepository
 import kotlin.time.ExperimentalTime
@@ -122,12 +126,12 @@ class ConfirmViewModelTest {
 
         val review = vm.state.value as ConfirmUiState.Review
         val byKey = review.fields.associateBy { it.key }
-        assertEquals("Ibuprofen", byKey.getValue(ConfirmViewModel.KEY_DRUG_NAME).value)
-        assertEquals("200 mg", byKey.getValue(ConfirmViewModel.KEY_DOSAGE).value)
-        assertEquals("tablet", byKey.getValue(ConfirmViewModel.KEY_FORM).value)
-        assertEquals("2 times a day", byKey.getValue(ConfirmViewModel.KEY_FREQUENCY).value)
-        assertEquals("Yes", byKey.getValue(ConfirmViewModel.KEY_WITH_FOOD).value)
-        assertEquals("ibuprofen", byKey.getValue(ConfirmViewModel.KEY_INGREDIENTS).value)
+        assertEquals("Ibuprofen", byKey.getValue(ReviewFieldKey.DRUG_NAME).value)
+        assertEquals("200 mg", byKey.getValue(ReviewFieldKey.DOSAGE).value)
+        assertEquals("tablet", byKey.getValue(ReviewFieldKey.FORM).value)
+        assertEquals("2 times a day", byKey.getValue(ReviewFieldKey.FREQUENCY).value)
+        assertEquals("Yes", byKey.getValue(ReviewFieldKey.WITH_FOOD).value)
+        assertEquals("ibuprofen", byKey.getValue(ReviewFieldKey.INGREDIENTS).value)
         assertTrue(review.fields.none { it.needsReview })
     }
 
@@ -144,8 +148,8 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
         var byKey = (vm.state.value as ConfirmUiState.Review).fields.associateBy { it.key }
-        assertEquals("once a day", byKey.getValue(ConfirmViewModel.KEY_FREQUENCY).value)
-        assertEquals("No", byKey.getValue(ConfirmViewModel.KEY_WITH_FOOD).value)
+        assertEquals("once a day", byKey.getValue(ReviewFieldKey.FREQUENCY).value)
+        assertEquals("No", byKey.getValue(ReviewFieldKey.WITH_FOOD).value)
 
         val vm2 = viewModel(
             ExtractionResult.Success(
@@ -155,7 +159,7 @@ class ConfirmViewModelTest {
         vm2.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
         byKey = (vm2.state.value as ConfirmUiState.Review).fields.associateBy { it.key }
-        assertEquals("every 6 hours", byKey.getValue(ConfirmViewModel.KEY_FREQUENCY).value)
+        assertEquals("every 6 hours", byKey.getValue(ReviewFieldKey.FREQUENCY).value)
     }
 
     @Test
@@ -168,7 +172,7 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
         val byKey = (vm.state.value as ConfirmUiState.Review).fields.associateBy { it.key }
-        assertEquals("paracetamol, caffeine", byKey.getValue(ConfirmViewModel.KEY_INGREDIENTS).value)
+        assertEquals("paracetamol, caffeine", byKey.getValue(ReviewFieldKey.INGREDIENTS).value)
     }
 
     @Test
@@ -179,7 +183,7 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
         val field = (vm.state.value as ConfirmUiState.Review)
-            .fields.first { it.key == ConfirmViewModel.KEY_DRUG_NAME }
+            .fields.first { it.key == ReviewFieldKey.DRUG_NAME }
         assertEquals("", field.value)
         assertTrue(field.needsReview)
     }
@@ -193,10 +197,10 @@ class ConfirmViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertFalse(vm.state.value.canAccept)
-        vm.onIntent(ConfirmIntent.FieldConfirmed(ConfirmViewModel.KEY_DOSAGE))
+        vm.onIntent(ConfirmIntent.FieldConfirmed(ReviewFieldKey.DOSAGE))
         assertTrue(vm.state.value.canAccept)
         val field = (vm.state.value as ConfirmUiState.Review)
-            .fields.first { it.key == ConfirmViewModel.KEY_DOSAGE }
+            .fields.first { it.key == ReviewFieldKey.DOSAGE }
         assertTrue(field.userConfirmed)
     }
 
@@ -208,9 +212,9 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, "200 mg"))
+        vm.onIntent(ConfirmIntent.FieldEdited(ReviewFieldKey.DOSAGE, "200 mg"))
         val field = (vm.state.value as ConfirmUiState.Review)
-            .fields.first { it.key == ConfirmViewModel.KEY_DOSAGE }
+            .fields.first { it.key == ReviewFieldKey.DOSAGE }
         assertEquals("200 mg", field.value)
         assertTrue(field.userConfirmed)
         assertFalse(field.needsReview)
@@ -225,9 +229,9 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, "   "))
+        vm.onIntent(ConfirmIntent.FieldEdited(ReviewFieldKey.DOSAGE, "   "))
         val field = (vm.state.value as ConfirmUiState.Review)
-            .fields.first { it.key == ConfirmViewModel.KEY_DOSAGE }
+            .fields.first { it.key == ReviewFieldKey.DOSAGE }
         assertEquals("   ", field.value)
         assertFalse(field.userConfirmed)
         assertTrue(field.needsReview)
@@ -242,11 +246,11 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, ""))
+        vm.onIntent(ConfirmIntent.FieldEdited(ReviewFieldKey.DOSAGE, ""))
         assertFalse(vm.state.value.canAccept)
-        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, "200 mg"))
+        vm.onIntent(ConfirmIntent.FieldEdited(ReviewFieldKey.DOSAGE, "200 mg"))
         val field = (vm.state.value as ConfirmUiState.Review)
-            .fields.first { it.key == ConfirmViewModel.KEY_DOSAGE }
+            .fields.first { it.key == ReviewFieldKey.DOSAGE }
         assertEquals("200 mg", field.value)
         assertTrue(field.userConfirmed)
         assertFalse(field.needsReview)
@@ -268,11 +272,11 @@ class ConfirmViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
         assertFalse(vm.state.value.canAccept)
 
-        vm.onIntent(ConfirmIntent.FieldConfirmed(ConfirmViewModel.KEY_DRUG_NAME))
+        vm.onIntent(ConfirmIntent.FieldConfirmed(ReviewFieldKey.DRUG_NAME))
         assertFalse(vm.state.value.canAccept)
-        vm.onIntent(ConfirmIntent.FieldConfirmed(ConfirmViewModel.KEY_DOSAGE))
+        vm.onIntent(ConfirmIntent.FieldConfirmed(ReviewFieldKey.DOSAGE))
         assertFalse(vm.state.value.canAccept)
-        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_FORM, "tablet"))
+        vm.onIntent(ConfirmIntent.FieldEdited(ReviewFieldKey.FORM, "tablet"))
         assertTrue(vm.state.value.canAccept)
     }
 
@@ -486,8 +490,8 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DRUG_NAME, "Paracetamol"))
-        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, "500 mg"))
+        vm.onIntent(ConfirmIntent.FieldEdited(ReviewFieldKey.DRUG_NAME, "Paracetamol"))
+        vm.onIntent(ConfirmIntent.FieldEdited(ReviewFieldKey.DOSAGE, "500 mg"))
         vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -528,7 +532,7 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_FREQUENCY, "every 8 hours"))
+        vm.onIntent(ConfirmIntent.FieldEdited(ReviewFieldKey.FREQUENCY, "every 8 hours"))
         vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -541,7 +545,7 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_FREQUENCY, "whenever it hurts"))
+        vm.onIntent(ConfirmIntent.FieldEdited(ReviewFieldKey.FREQUENCY, "whenever it hurts"))
         vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -554,7 +558,7 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_WITH_FOOD, "No"))
+        vm.onIntent(ConfirmIntent.FieldEdited(ReviewFieldKey.WITH_FOOD, "No"))
         vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -641,7 +645,7 @@ class ConfirmViewModelTest {
         vm.onIntent(ConfirmIntent.ImagePicked("img"))
         dispatcher.scheduler.advanceUntilIdle()
 
-        vm.onIntent(ConfirmIntent.FieldEdited(ConfirmViewModel.KEY_DOSAGE, "500 mg"))
+        vm.onIntent(ConfirmIntent.FieldEdited(ReviewFieldKey.DOSAGE, "500 mg"))
         vm.onIntent(ConfirmIntent.LabelChanged("Heart"))
         vm.onIntent(ConfirmIntent.Accept)
         dispatcher.scheduler.advanceUntilIdle()
@@ -653,7 +657,7 @@ class ConfirmViewModelTest {
         val review = vm.state.value as ConfirmUiState.Review
         assertEquals(
             "500 mg",
-            review.fields.first { it.key == ConfirmViewModel.KEY_DOSAGE }.value,
+            review.fields.first { it.key == ReviewFieldKey.DOSAGE }.value,
         )
         assertEquals("Heart", review.label)
         assertEquals(1, extractor.calls.size)

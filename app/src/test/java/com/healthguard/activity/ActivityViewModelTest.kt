@@ -2,14 +2,23 @@
 
 package com.healthguard.activity
 
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.model.DoseId
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.activity.domain.ComputeActivityStateUseCase
 import com.healthguard.activity.domain.LoadActivityDayDetailUseCase
+import com.healthguard.activity.state.ActivityIntent
+import com.healthguard.activity.state.MedicationAdherence
+import com.healthguard.domain.tracking.DayDetail
+import com.healthguard.domain.tracking.DayMedicineLine
 import com.healthguard.home.MedicationPhase
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.domain.ObserveDataChangesUseCase
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.data.SqlDelightMedicationRepository
+import com.healthguard.domain.repository.DoseLogRepository
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.usecase.ObserveDataChangesUseCase
+import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.inMemoryRepository
 import com.healthguard.testing.logTaken
 import com.healthguard.testing.seedMedication
@@ -39,7 +48,7 @@ import org.junit.Test
 class ActivityViewModelTest {
 
     private lateinit var dispatcher: TestDispatcher
-    private lateinit var repository: MedicationRepository
+    private lateinit var repository: SqlDelightMedicationRepository
 
     /** 2024-07-03T10:00:00Z — a Wednesday. */
     private val fixedNow = Instant.parse("2024-07-03T10:00:00Z")
@@ -56,11 +65,16 @@ class ActivityViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(repository: MedicationRepository = this.repository): ActivityViewModel {
+    private fun viewModel(
+        repository: MedicationRepository = this.repository,
+        doseLogRepository: DoseLogRepository = this.repository,
+    ): ActivityViewModel {
         val clock: () -> Instant = { fixedNow }
         return ActivityViewModel(
-            computeActivityState = ComputeActivityStateUseCase(repository, clock, TimeZone.UTC),
-            loadActivityDayDetail = LoadActivityDayDetailUseCase(repository, clock, TimeZone.UTC),
+            computeActivityState =
+                ComputeActivityStateUseCase(repository, doseLogRepository, clock, TimeZone.UTC),
+            loadActivityDayDetail =
+                LoadActivityDayDetailUseCase(repository, doseLogRepository, clock, TimeZone.UTC),
             observeDataChanges = ObserveDataChangesUseCase(repository),
             zone = TimeZone.UTC,
         )
@@ -140,8 +154,8 @@ class ActivityViewModelTest {
     private suspend fun logSkipped(medicationId: String, plannedAt: Instant) {
         repository.logDose(
             StoredDoseLog(
-                id = "skip-$medicationId-${plannedAt.toEpochMilliseconds()}",
-                scheduleId = "sched-$medicationId",
+                id = DoseId("skip-$medicationId-${plannedAt.toEpochMilliseconds()}"),
+                scheduleId = ScheduleId("sched-$medicationId"),
                 plannedAt = plannedAt,
                 takenAt = null,
                 status = DoseStatus.SKIPPED,
@@ -333,7 +347,7 @@ class ActivityViewModelTest {
                 date = LocalDate(2024, 7, 2),
                 lines = listOf(
                     DayMedicineLine(
-                        medicationId = "a",
+                        medicationId = MedicationId("a"),
                         name = "Cetirizine",
                         takenTimes = listOf(LocalTime(9, 4)),
                         skipped = 0,
@@ -341,7 +355,7 @@ class ActivityViewModelTest {
                         notRecorded = 1,
                     ),
                     DayMedicineLine(
-                        medicationId = "b",
+                        medicationId = MedicationId("b"),
                         name = "Ibuprofen",
                         takenTimes = listOf(LocalTime(14, 0)),
                         skipped = 0,
@@ -427,8 +441,8 @@ class ActivityViewModelTest {
 
     /** Suspends every window query on its own gate, in call order. */
     private class GatedWindowRepository(
-        private val delegate: MedicationRepository,
-    ) : MedicationRepository by delegate {
+        private val delegate: SqlDelightMedicationRepository,
+    ) : MedicationRepository by delegate, DoseLogRepository by delegate {
         val gates = mutableListOf<CompletableDeferred<Unit>>()
         override suspend fun takenDosesInRange(from: Instant, to: Instant) =
             CompletableDeferred<Unit>()
@@ -443,7 +457,7 @@ class ActivityViewModelTest {
         repository.logTaken("a", fixedNow - 300.days) // only the 12-month window sees this
         repository.logTaken("a", fixedNow - 1.hours)
         val gated = GatedWindowRepository(repository)
-        val vm = viewModel(gated)
+        val vm = viewModel(gated, gated)
         dispatcher.scheduler.runCurrent()
         gated.gates[0].complete(Unit) // let the initial 30-day load land
         dispatcher.scheduler.advanceUntilIdle()

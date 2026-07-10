@@ -3,14 +3,18 @@
 package com.healthguard.testing
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.SqlDelightMedicationRepository
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.data.StoredMedication
-import com.healthguard.shared.data.StoredSchedule
-import com.healthguard.shared.db.HealthGuardDb
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseId
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.repository.DoseLogRepository
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.data.SqlDelightMedicationRepository
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.model.StoredMedication
+import com.healthguard.domain.model.StoredSchedule
+import com.healthguard.data.db.HealthGuardDb
+import com.healthguard.domain.extraction.Frequency
 import java.util.Properties
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -33,7 +37,7 @@ fun inMemoryDriver(): JdbcSqliteDriver = JdbcSqliteDriver(
 ).also { HealthGuardDb.Schema.create(it) }
 
 /** The real repository over a fresh in-memory database. */
-fun inMemoryRepository(dispatcher: CoroutineDispatcher): MedicationRepository =
+fun inMemoryRepository(dispatcher: CoroutineDispatcher): SqlDelightMedicationRepository =
     SqlDelightMedicationRepository(HealthGuardDb(inMemoryDriver()), dispatcher)
 
 /** Inserts one medication + schedule; defaults keep the row minimal. */
@@ -54,7 +58,7 @@ suspend fun MedicationRepository.seedMedication(
 ) {
     insertMedication(
         StoredMedication(
-            id = id,
+            id = MedicationId(id),
             drugName = drugName,
             label = label,
             activeIngredients = activeIngredients,
@@ -64,8 +68,8 @@ suspend fun MedicationRepository.seedMedication(
             createdAt = Instant.fromEpochMilliseconds(createdAtMillis),
         ),
         StoredSchedule(
-            id = scheduleId,
-            medicationId = id,
+            id = ScheduleId(scheduleId),
+            medicationId = MedicationId(id),
             frequency = frequency,
             withFood = withFood,
             startedAt = startedAt,
@@ -75,11 +79,11 @@ suspend fun MedicationRepository.seedMedication(
 }
 
 /** Logs a TAKEN dose against the seeded "sched-<medicationId>" schedule. */
-suspend fun MedicationRepository.logTaken(medicationId: String, takenAt: Instant) {
+suspend fun DoseLogRepository.logTaken(medicationId: String, takenAt: Instant) {
     logDose(
         StoredDoseLog(
-            id = "dose-$medicationId-${takenAt.toEpochMilliseconds()}",
-            scheduleId = "sched-$medicationId",
+            id = DoseId("dose-$medicationId-${takenAt.toEpochMilliseconds()}"),
+            scheduleId = ScheduleId("sched-$medicationId"),
             plannedAt = takenAt,
             takenAt = takenAt,
             status = DoseStatus.TAKEN,

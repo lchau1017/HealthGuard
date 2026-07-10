@@ -3,6 +3,7 @@ package com.healthguard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
+import com.healthguard.domain.model.MedicationId
 
 /**
  * Activity-retained registry of per-medication [ViewModelStore]s for the
@@ -28,17 +29,17 @@ class DetailStoreHolder : ViewModel() {
         override val viewModelStore = ViewModelStore()
     }
 
-    private val owners = mutableMapOf<String, DetailStoreOwner>()
+    private val owners = mutableMapOf<MedicationId, DetailStoreOwner>()
 
     /**
      * The retained store owner for the detail showing [id]; created on first
      * use and stable across calls, so providing it as a composition local
      * never invalidates readers on recomposition.
      */
-    fun ownerFor(id: String): ViewModelStoreOwner = owners.getOrPut(id) { DetailStoreOwner() }
+    fun ownerFor(id: MedicationId): ViewModelStoreOwner = owners.getOrPut(id) { DetailStoreOwner() }
 
     /** The detail for [id] has closed: clear its store and forget it. */
-    fun clear(id: String) {
+    fun clear(id: MedicationId) {
         owners.remove(id)?.viewModelStore?.clear()
     }
 

@@ -2,6 +2,7 @@
 
 package com.healthguard.detail
 
+import com.healthguard.detail.format.countdownTextSeconds
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
