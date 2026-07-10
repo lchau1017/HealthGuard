@@ -100,27 +100,33 @@ class ConfirmViewModel(
     }
 
     private fun fieldEdited(key: ReviewFieldKey, newValue: String) {
-        updateField(key) { field ->
-            if (newValue.isBlank()) {
-                // A blank value can never stand in for a reviewed one: typing
-                // (or clearing to) whitespace must not unlock Accept.
-                field.copy(value = newValue, userConfirmed = false, needsReview = true)
-            } else {
-                field.copy(value = newValue, userConfirmed = true, needsReview = false)
-            }
-        }
-        // Keep the typed values in sync with what the user now sees: a stale
-        // typed frequency must never silently override an edited display text.
         _state.update { current ->
             if (current !is ConfirmUiState.Review) return@update current
+            val edited = current.copy(
+                fields = current.fields.map { field ->
+                    when {
+                        field.key != key -> field
+                        // A blank value can never stand in for a reviewed one:
+                        // typing (or clearing to) whitespace must not unlock
+                        // Accept.
+                        newValue.isBlank() ->
+                            field.copy(value = newValue, userConfirmed = false, needsReview = true)
+                        else ->
+                            field.copy(value = newValue, userConfirmed = true, needsReview = false)
+                    }
+                },
+            )
+            // Keep the typed values in sync with what the user now sees: a
+            // stale typed frequency must never silently override an edited
+            // display text.
             when (key) {
-                ReviewFieldKey.FREQUENCY -> current.copy(frequency = parseFrequency(newValue))
-                ReviewFieldKey.WITH_FOOD -> current.copy(withFood = parseWithFood(newValue))
+                ReviewFieldKey.FREQUENCY -> edited.copy(frequency = parseFrequency(newValue))
+                ReviewFieldKey.WITH_FOOD -> edited.copy(withFood = parseWithFood(newValue))
                 ReviewFieldKey.DRUG_NAME,
                 ReviewFieldKey.DOSAGE,
                 ReviewFieldKey.FORM,
                 ReviewFieldKey.INGREDIENTS,
-                -> current
+                -> edited
             }
         }
     }

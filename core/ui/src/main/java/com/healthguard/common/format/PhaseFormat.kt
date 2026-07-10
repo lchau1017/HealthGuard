@@ -22,7 +22,9 @@ fun phaseChipText(schedule: StoredSchedule, now: Instant, zone: TimeZone): Strin
     when (schedule.phase) {
         MedicationPhase.TAKING -> null
         MedicationPhase.NOT_STARTED -> "Not started"
-        MedicationPhase.STOPPED -> stoppedLabel(schedule.stoppedAt!!, now, zone)
+        // A STOPPED phase implies stoppedAt is set; if a bad row ever
+        // violates that, show no chip rather than crash.
+        MedicationPhase.STOPPED -> schedule.stoppedAt?.let { stoppedLabel(it, now, zone) }
     }
 
 /**

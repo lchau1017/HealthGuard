@@ -4,7 +4,7 @@ package com.healthguard.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.healthguard.dose.isDoubleDose
+import com.healthguard.dose.minutesSinceLastTake
 import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.ComputeHomeStateUseCase
 import com.healthguard.home.domain.HomeContent
@@ -110,17 +110,9 @@ class HomeViewModel(
      */
     private fun takeNow(scheduleId: String) {
         val card = _state.value.taking.firstOrNull { it.scheduleId == scheduleId } ?: return
-        val now = clock()
-        val lastTaken = card.lastTaken
-        if (isDoubleDose(lastTaken, now)) {
-            _state.update {
-                it.copy(
-                    takeConfirm = TakeConfirmation(card, (now - lastTaken!!).inWholeMinutes),
-                )
-            }
-            return
-        }
-        record(card)
+        minutesSinceLastTake(card.lastTaken, clock())?.let { minutes ->
+            _state.update { it.copy(takeConfirm = TakeConfirmation(card, minutes)) }
+        } ?: record(card)
     }
 
     /** User accepted the double-dose warning: record it after all. */

@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 
 /**
  * The one delete confirmation used everywhere a medication can be removed
@@ -18,6 +19,7 @@ fun DeleteConfirmationDialog(
     isActive: Boolean,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val body = buildString {
         append("This removes the medication and its dose history.")
@@ -25,6 +27,7 @@ fun DeleteConfirmationDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = modifier,
         title = { Text("Delete $medicationName?") },
         text = { Text(body) },
         confirmButton = {

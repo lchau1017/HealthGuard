@@ -47,6 +47,7 @@ import com.healthguard.confirm.state.ReviewFieldKey
 fun ConfirmDialog(
     state: ConfirmUiState,
     onIntent: (ConfirmIntent) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Dialog(
         onDismissRequest = { onIntent(ConfirmIntent.Reset) },
@@ -56,10 +57,12 @@ fun ConfirmDialog(
             decorFitsSystemWindows = false,
         ),
     ) {
+        // Dialog itself takes no modifier; the card Surface is the root of
+        // everything this composable draws.
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
             tonalElevation = 6.dp,
-            modifier = Modifier
+            modifier = modifier
                 .systemBarsPadding()
                 .imePadding()
                 .fillMaxWidth()

@@ -111,7 +111,7 @@ private fun FilterRow(
     onSelect: (ActivityFilter) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val options = listOf(ActivityFilter.DAYS_7, ActivityFilter.DAYS_30, ActivityFilter.MONTHS_12)
+    val options = ActivityFilter.entries
     SingleChoiceSegmentedButtonRow(modifier = modifier.fillMaxWidth()) {
         options.forEachIndexed { index, filter ->
             SegmentedButton(

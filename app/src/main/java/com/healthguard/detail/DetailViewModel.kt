@@ -15,7 +15,7 @@ import com.healthguard.detail.state.DetailFinished
 import com.healthguard.detail.state.DetailIntent
 import com.healthguard.detail.state.DetailUiState
 import com.healthguard.detail.state.toTrackedState
-import com.healthguard.dose.isDoubleDose
+import com.healthguard.dose.minutesSinceLastTake
 import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.DeleteMedicationUseCase
 import com.healthguard.home.domain.RecordDoseUseCase
@@ -132,7 +132,15 @@ class DetailViewModel(
             is DetailIntent.FormChanged -> _state.update { it.copy(form = intent.value) }
             is DetailIntent.LabelChanged -> _state.update { it.copy(label = intent.value) }
             is DetailIntent.IngredientsChanged -> _state.update { it.copy(ingredients = intent.value) }
-            is DetailIntent.FrequencyChanged -> _state.update { it.copy(frequencyText = intent.value) }
+            is DetailIntent.FrequencyChanged -> _state.update {
+                it.copy(
+                    frequencyText = intent.value,
+                    // Parse once per edit, not on every state read; blank
+                    // means "no schedule", never an error.
+                    frequencyError = intent.value.isNotBlank() &&
+                        parseFrequency(intent.value) == null,
+                )
+            }
             is DetailIntent.WithFoodChanged -> _state.update { it.copy(withFood = intent.value) }
             DetailIntent.TakeNow -> takeNow()
             DetailIntent.ConfirmTakeAnyway -> confirmTakeAnyway()
@@ -153,13 +161,9 @@ class DetailViewModel(
      * into state instead and nothing is logged until [confirmTakeAnyway].
      */
     private fun takeNow() {
-        val now = clock()
-        val lastTaken = _state.value.lastTakenAt
-        if (isDoubleDose(lastTaken, now)) {
-            _state.update { it.copy(takeConfirm = (now - lastTaken!!).inWholeMinutes) }
-            return
-        }
-        record()
+        minutesSinceLastTake(_state.value.lastTakenAt, clock())?.let { minutes ->
+            _state.update { it.copy(takeConfirm = minutes) }
+        } ?: record()
     }
 
     /** User accepted the double-dose warning: record it after all. */

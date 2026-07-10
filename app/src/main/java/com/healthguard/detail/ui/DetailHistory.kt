@@ -22,7 +22,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DayCount
@@ -163,8 +165,7 @@ private fun DayStatusHeatMap(
                     DoseDayStatus.NOT_TAKEN -> ramp[1]
                     DoseDayStatus.SKIPPED -> skippedFill
                     // Out-of-treatment days are absent from the map.
-                    DoseDayStatus.OUT_OF_TREATMENT, null ->
-                        androidx.compose.ui.graphics.Color.Transparent
+                    DoseDayStatus.OUT_OF_TREATMENT, null -> Color.Transparent
                 }
             },
             cellDash = { date -> dayStatuses[date] == DoseDayStatus.SKIPPED },
@@ -193,7 +194,7 @@ private fun DayStatusHeatMap(
             LegendChip(color = ramp[1], text = "Not taken")
             LegendChip(color = skippedFill, text = "Skipped", dashed = true)
             LegendChip(
-                color = androidx.compose.ui.graphics.Color.Transparent,
+                color = Color.Transparent,
                 text = "Not tracking",
                 hairline = true,
             )
@@ -203,7 +204,7 @@ private fun DayStatusHeatMap(
 
 @Composable
 private fun LegendChip(
-    color: androidx.compose.ui.graphics.Color,
+    color: Color,
     text: String,
     modifier: Modifier = Modifier,
     dashed: Boolean = false,
@@ -215,7 +216,7 @@ private fun LegendChip(
             .background(color, MaterialTheme.shapes.extraSmall)
         if (hairline) {
             swatch = swatch.border(
-                width = androidx.compose.ui.unit.Dp.Hairline,
+                width = Dp.Hairline,
                 color = MaterialTheme.colorScheme.outlineVariant,
                 shape = MaterialTheme.shapes.extraSmall,
             )

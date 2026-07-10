@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,9 +60,7 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 
 /**
  * Full-screen medication detail: identity header, live status card with the
@@ -81,7 +80,8 @@ fun DetailScreen(
     onFinished: (DetailFinished) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var confirmingDelete by remember { mutableStateOf(false) }
+    // Saveable so rotation (or process death) keeps the confirmation open.
+    var confirmingDelete by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Everything minute-grained renders from state.now — the clock the
@@ -391,15 +391,3 @@ private fun ScheduleRow(label: String, value: String, modifier: Modifier = Modif
     }
 }
 
-/** The primary-tinted section heading shared by the form and history blocks. */
-@Composable
-internal fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = modifier.padding(top = Spacing.sm),
-    )
-}
-
-internal fun Instant.toLocalDate(zone: TimeZone): LocalDate = toLocalDateTime(zone).date

@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import com.healthguard.BuildConfig
 import com.healthguard.home.state.HomeIntent
 
@@ -21,10 +22,10 @@ import com.healthguard.home.state.HomeIntent
  * nothing.
  */
 @Composable
-fun DemoDataMenu(onIntent: (HomeIntent) -> Unit) {
+fun DemoDataMenu(onIntent: (HomeIntent) -> Unit, modifier: Modifier = Modifier) {
     if (!BuildConfig.DEBUG) return
     var demoMenuOpen by remember { mutableStateOf(false) }
-    IconButton(onClick = { demoMenuOpen = true }) {
+    IconButton(onClick = { demoMenuOpen = true }, modifier = modifier) {
         Icon(
             imageVector = Icons.Filled.MoreVert,
             contentDescription = "Developer options",

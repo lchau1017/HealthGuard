@@ -56,6 +56,12 @@ data class DetailUiState(
     val ingredients: String = "",
     /** Human frequency text, parsed with [parseFrequency]; blank = no schedule. */
     val frequencyText: String = "",
+    /**
+     * True when [frequencyText] is non-blank yet unparseable. Precomputed by
+     * the view model on each frequency edit (seeded false — the persisted
+     * frequency always round-trips) so reading state never re-runs the parser.
+     */
+    val frequencyError: Boolean = false,
     val withFood: Boolean? = null,
     val nextDoseAt: Instant? = null,
     val lastTakenAt: Instant? = null,
@@ -86,8 +92,6 @@ data class DetailUiState(
     val takeConfirm: Long? = null,
 ) {
     val nameError: Boolean get() = isLoaded && name.isBlank()
-    val frequencyError: Boolean
-        get() = frequencyText.isNotBlank() && parseFrequency(frequencyText) == null
     val canSave: Boolean get() = isLoaded && !nameError && !frequencyError
 
     /** The form slice `DetailForm` renders. */
