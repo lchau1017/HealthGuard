@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.data
 
 import app.cash.sqldelight.coroutines.asFlow
@@ -26,7 +24,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /**

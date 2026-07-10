@@ -20,6 +20,9 @@ kotlin {
         // DriverFactory is a deliberate expect/actual class; opt in so every
         // target compilation stops warning that the feature is in Beta.
         freeCompilerArgs.add("-Xexpect-actual-classes")
+        // The whole module computes with kotlin.time.Instant; opt in once
+        // here instead of a @file:OptIn header in every file.
+        optIn.add("kotlin.time.ExperimentalTime")
     }
 
     androidLibrary {

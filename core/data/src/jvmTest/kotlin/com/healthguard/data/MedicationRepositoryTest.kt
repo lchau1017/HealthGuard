@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalTime::class, ExperimentalCoroutinesApi::class)
+@file:OptIn(ExperimentalCoroutinesApi::class)
 
 package com.healthguard.data
 
@@ -20,7 +20,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 class MedicationRepositoryTest {

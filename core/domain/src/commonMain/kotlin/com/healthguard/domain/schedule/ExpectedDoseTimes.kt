@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.domain.schedule
 
 import com.healthguard.domain.model.StoredSchedule
@@ -10,7 +8,6 @@ import kotlinx.datetime.atTime
 import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /**

@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.domain.repository
 
 import com.healthguard.domain.model.MedicationWithSchedule
@@ -8,7 +6,6 @@ import com.healthguard.domain.model.StoredMedication
 import com.healthguard.domain.model.StoredSchedule
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /**

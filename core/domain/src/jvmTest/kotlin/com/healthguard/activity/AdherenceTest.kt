@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.activity
 
 import com.healthguard.domain.model.DoseStatus
@@ -9,7 +7,6 @@ import com.healthguard.domain.extraction.Frequency
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 

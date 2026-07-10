@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.home.domain
 
 import com.healthguard.domain.model.DoseStatus
@@ -10,7 +8,6 @@ import com.healthguard.domain.model.StoredSchedule
 import com.healthguard.domain.extraction.Frequency
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate

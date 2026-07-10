@@ -1,10 +1,7 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.detail
 
 import com.healthguard.domain.model.StoredDoseLog
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /**

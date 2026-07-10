@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.testing
 
 import com.healthguard.domain.model.DoseLogWithMedication
@@ -12,7 +10,6 @@ import com.healthguard.domain.model.StoredMedication
 import com.healthguard.domain.model.StoredSchedule
 import com.healthguard.domain.model.TakenDose
 import com.healthguard.domain.extraction.Frequency
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow

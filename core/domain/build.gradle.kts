@@ -6,6 +6,12 @@ plugins {
 }
 
 kotlin {
+    compilerOptions {
+        // The whole module computes with kotlin.time.Instant; opt in once
+        // here instead of a @file:OptIn header in every file.
+        optIn.add("kotlin.time.ExperimentalTime")
+    }
+
     androidLibrary {
         namespace = "com.healthguard.core.domain"
         compileSdk = 36

@@ -1,10 +1,7 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.home.domain
 
 import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.repository.MedicationRepository
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /** Undoes a just-recorded take by removing its dose log. */

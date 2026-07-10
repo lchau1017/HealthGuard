@@ -1,10 +1,7 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.detail
 
 import com.healthguard.domain.model.DoseStatus
 import com.healthguard.domain.model.StoredDoseLog
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals

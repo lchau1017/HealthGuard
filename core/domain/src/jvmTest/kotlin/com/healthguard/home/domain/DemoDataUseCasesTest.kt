@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalCoroutinesApi::class, ExperimentalTime::class)
+@file:OptIn(ExperimentalCoroutinesApi::class)
 
 package com.healthguard.home.domain
 
@@ -12,7 +12,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first

@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.detail.domain
 
 import com.healthguard.activity.AdherenceResult
@@ -20,7 +18,6 @@ import com.healthguard.domain.schedule.expectedDoseTimes
 import com.healthguard.domain.schedule.nextDose
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate

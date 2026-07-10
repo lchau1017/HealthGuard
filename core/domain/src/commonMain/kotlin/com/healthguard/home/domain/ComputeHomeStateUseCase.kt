@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.home.domain
 
 import com.healthguard.activity.DAYS_PER_WEEK
@@ -11,7 +9,6 @@ import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.model.MedicationWithSchedule
 import com.healthguard.domain.schedule.nextDose
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone

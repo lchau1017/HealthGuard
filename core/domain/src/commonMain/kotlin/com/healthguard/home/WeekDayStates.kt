@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.home
 
 import com.healthguard.activity.DAYS_PER_WEEK
@@ -10,7 +8,6 @@ import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.model.StoredSchedule
 import com.healthguard.domain.schedule.expectedDoseTimes
 import com.healthguard.domain.extraction.Frequency
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate

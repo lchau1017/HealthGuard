@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.home.domain
 
 import com.healthguard.activity.DoseDayStatus
@@ -15,7 +13,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.TimeZone

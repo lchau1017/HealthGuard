@@ -1,12 +1,9 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.dose
 
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 class DoseGuardTest {

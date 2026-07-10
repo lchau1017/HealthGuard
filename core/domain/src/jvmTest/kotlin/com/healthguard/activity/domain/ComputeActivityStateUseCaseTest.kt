@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.activity.domain
 
 import com.healthguard.activity.ActivityFilter
@@ -13,7 +11,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate

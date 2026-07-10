@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.domain.schedule
 
 import com.healthguard.domain.model.StoredSchedule
@@ -12,7 +10,6 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Duration.Companion.hours
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /** First dose slot of the waking window, minutes from local midnight (08:00). */

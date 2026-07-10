@@ -1,11 +1,8 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.domain.repository
 
 import com.healthguard.domain.model.DoseLogWithMedication
 import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.model.TakenDose
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /**

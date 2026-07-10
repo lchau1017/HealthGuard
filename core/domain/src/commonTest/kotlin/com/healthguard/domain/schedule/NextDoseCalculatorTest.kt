@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.domain.schedule
 
 import com.healthguard.domain.model.StoredSchedule
@@ -11,7 +9,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /**

@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalTime::class, ExperimentalUuidApi::class)
+@file:OptIn(ExperimentalUuidApi::class)
 
 package com.healthguard.home.domain
 
@@ -6,7 +6,6 @@ import com.healthguard.dose.RecordedTake
 import com.healthguard.domain.model.DoseStatus
 import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.model.StoredDoseLog
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid

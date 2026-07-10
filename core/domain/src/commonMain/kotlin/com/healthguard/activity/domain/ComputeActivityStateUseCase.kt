@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.activity.domain
 
 import com.healthguard.activity.ActivityEvent
@@ -16,7 +14,6 @@ import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.repository.MedicationRepository
 import com.healthguard.domain.extraction.Frequency
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.LocalDate

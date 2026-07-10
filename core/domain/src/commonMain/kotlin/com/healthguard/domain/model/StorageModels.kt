@@ -1,9 +1,6 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.domain.model
 
 import com.healthguard.domain.extraction.Frequency
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /**

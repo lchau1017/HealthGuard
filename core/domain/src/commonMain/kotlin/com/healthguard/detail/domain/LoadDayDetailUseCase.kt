@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.detail.domain
 
 import com.healthguard.activity.DayDetail
@@ -8,7 +6,6 @@ import com.healthguard.detail.SLOT_MATCH_WINDOW
 import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.model.MedicationWithSchedule
 import com.healthguard.domain.schedule.expectedDoseTimes
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
