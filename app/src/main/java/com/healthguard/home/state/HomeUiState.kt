@@ -3,7 +3,6 @@
 package com.healthguard.home.state
 
 import com.healthguard.home.WeekDay
-import com.healthguard.shared.data.MedicationWithSchedule
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
@@ -23,7 +22,7 @@ data class HomeUiState(
     /** Active schedules: overdue first, then soonest next dose, no-frequency last. */
     val taking: List<DoseCard> = emptyList(),
     /** Dormant or stopped medications, newest first. */
-    val cabinet: List<MedicationWithSchedule> = emptyList(),
+    val cabinet: List<CabinetRow> = emptyList(),
     /** How many taking entries are due now or overdue. */
     val dueCount: Int = 0,
     /** The last seven days ending today, oldest first (the week circles). */

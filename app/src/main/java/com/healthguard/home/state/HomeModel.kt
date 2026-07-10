@@ -2,14 +2,26 @@
 
 package com.healthguard.home.state
 
+import com.healthguard.home.MedicationPhase
 import com.healthguard.home.format.DoseRowStatus
-import com.healthguard.shared.data.MedicationWithSchedule
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
-/** One "Taking now" entry: the medication plus its dose timing. */
+/**
+ * One "Taking now" entry, as pure render-ready view data: pre-formatted
+ * strings plus the ids the intents carry back. No domain entities.
+ */
 data class DoseCard(
-    val item: MedicationWithSchedule,
+    val medicationId: String,
+    val scheduleId: String,
+    /** Pre-joined primary line: "Ibuprofen 200 mg". */
+    val title: String,
+    /** Bare drug name for accessibility labels, dialogs and the record path. */
+    val drugName: String,
+    /** Category label feeding [PillAvatar]/CategoryChip; null = uncategorised. */
+    val categoryLabel: String?,
+    /** Pre-capitalised form text ("Tablet"); null = none. */
+    val formLabel: String?,
     /** When the next dose is due; past = overdue; null = no frequency. */
     val nextDoseAt: Instant?,
     val lastTaken: Instant?,
@@ -17,6 +29,23 @@ data class DoseCard(
     val isDue: Boolean = false,
     /** What the row's trailing status shows (Take button, "Taken ✓", next time). */
     val status: DoseRowStatus = DoseRowStatus.None,
+)
+
+/** One "My cabinet" row: a dormant or stopped medication, as pure view data. */
+data class CabinetRow(
+    val medicationId: String,
+    /** Pre-joined primary line: "Ibuprofen 200 mg". */
+    val title: String,
+    /** Bare drug name for accessibility labels. */
+    val drugName: String,
+    /** Category label feeding [PillAvatar]/CategoryChip; null = uncategorised. */
+    val categoryLabel: String?,
+    /** Pre-capitalised form text ("Tablet"); null = none. */
+    val formLabel: String?,
+    /** Pre-formatted phase chip ("Not started" / "Stopped 3 Jul"); null = no chip. */
+    val phaseChipText: String?,
+    /** Treatment lifecycle phase (chip emphasis, Start/Resume verb). */
+    val phase: MedicationPhase,
 )
 
 /** The due-now banner: the most overdue card plus how many others are due. */

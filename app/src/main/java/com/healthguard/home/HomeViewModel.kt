@@ -91,7 +91,7 @@ class HomeViewModel(
     /** The single MVI entry point: each branch delegates to a use case or a state edit. */
     fun onIntent(intent: HomeIntent) {
         when (intent) {
-            is HomeIntent.TakeNow -> takeNow(intent.card)
+            is HomeIntent.TakeNow -> takeNow(intent.scheduleId)
             HomeIntent.ConfirmTakeAnyway -> confirmTakeAnyway()
             HomeIntent.DismissTakeConfirm -> _state.update { it.copy(takeConfirm = null) }
             is HomeIntent.UndoTake -> launchRefreshing { undoDose(intent.doseId) }
@@ -104,9 +104,12 @@ class HomeViewModel(
     /**
      * Records the dose as taken now — unless the last take was within the
      * double-dose window, in which case a confirmation is raised into state
-     * and nothing is logged until [confirmTakeAnyway].
+     * and nothing is logged until [confirmTakeAnyway]. The intent carries only
+     * the schedule id; the card is looked up in the CURRENT state, so a stale
+     * snapshot from the screen can never be recorded against.
      */
-    private fun takeNow(card: DoseCard) {
+    private fun takeNow(scheduleId: String) {
+        val card = _state.value.taking.firstOrNull { it.scheduleId == scheduleId } ?: return
         val now = clock()
         val lastTaken = card.lastTaken
         if (isDoubleDose(lastTaken, now)) {
@@ -130,9 +133,9 @@ class HomeViewModel(
     private fun record(card: DoseCard) {
         viewModelScope.launch {
             val take = recordDose(
-                card.item.schedule.id,
+                card.scheduleId,
                 card.nextDoseAt,
-                card.item.medication.drugName,
+                card.drugName,
             )
             _effects.send(HomeEffect.ShowUndoSnackbar(take))
             refresh.update { it + 1 }

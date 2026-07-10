@@ -61,7 +61,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.healthguard.activity.DoseDayStatus
-import com.healthguard.common.format.phaseChipText
 import com.healthguard.common.format.todayLabel
 import com.healthguard.common.theme.Spacing
 import com.healthguard.common.theme.heatRamp
@@ -73,13 +72,12 @@ import com.healthguard.home.MedicationPhase
 import com.healthguard.home.WeekDay
 import com.healthguard.home.format.DoseRowStatus
 import com.healthguard.home.format.takeByText
-import com.healthguard.home.phase
+import com.healthguard.home.state.CabinetRow
 import com.healthguard.home.state.DoseCard
 import com.healthguard.home.state.DueAlert
 import com.healthguard.home.state.HomeEffect
 import com.healthguard.home.state.HomeIntent
 import com.healthguard.home.state.HomeUiState
-import com.healthguard.shared.data.MedicationWithSchedule
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
@@ -196,8 +194,8 @@ fun HomeScreen(
                         alert = alert,
                         now = now,
                         zone = zone,
-                        onTakeNow = { onIntent(HomeIntent.TakeNow(alert.card)) },
-                        onClick = { onOpenDetail(alert.card.item.medication.id) },
+                        onTakeNow = { onIntent(HomeIntent.TakeNow(alert.card.scheduleId)) },
+                        onClick = { onOpenDetail(alert.card.medicationId) },
                     )
                 }
             }
@@ -221,11 +219,11 @@ fun HomeScreen(
                         )
                     }
                 } else {
-                    items(state.taking, key = { "taking-${it.item.medication.id}" }) { card ->
+                    items(state.taking, key = { "taking-${it.medicationId}" }) { card ->
                         TakingRow(
                             card = card,
-                            onTakeNow = { onIntent(HomeIntent.TakeNow(card)) },
-                            onClick = { onOpenDetail(card.item.medication.id) },
+                            onTakeNow = { onIntent(HomeIntent.TakeNow(card.scheduleId)) },
+                            onClick = { onOpenDetail(card.medicationId) },
                         )
                     }
                 }
@@ -236,13 +234,11 @@ fun HomeScreen(
                         SectionEmptyText("Everything you scanned is in use.")
                     }
                 } else {
-                    items(state.cabinet, key = { "cabinet-${it.medication.id}" }) { row ->
-                        CabinetRow(
+                    items(state.cabinet, key = { "cabinet-${it.medicationId}" }) { row ->
+                        CabinetRowCard(
                             row = row,
-                            now = now,
-                            zone = zone,
-                            onPlay = { onIntent(HomeIntent.Play(row.medication.id)) },
-                            onClick = { onOpenDetail(row.medication.id) },
+                            onPlay = { onIntent(HomeIntent.Play(row.medicationId)) },
+                            onClick = { onOpenDetail(row.medicationId) },
                         )
                     }
                 }
@@ -253,7 +249,7 @@ fun HomeScreen(
 
     state.takeConfirm?.let { confirm ->
         DoubleDoseDialog(
-            drugName = confirm.card.item.medication.drugName,
+            drugName = confirm.card.drugName,
             minutesAgo = confirm.minutesAgo,
             onConfirm = { onIntent(HomeIntent.ConfirmTakeAnyway) },
             onDismiss = { onIntent(HomeIntent.DismissTakeConfirm) },
@@ -288,7 +284,6 @@ private fun DueAlertCard(
     modifier: Modifier = Modifier,
 ) {
     val card = alert.card
-    val medication = card.item.medication
     Card(
         onClick = onClick,
         colors = CardDefaults.cardColors(
@@ -297,7 +292,7 @@ private fun DueAlertCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
         modifier = modifier
             .fillMaxWidth()
-            .semanticsLabel("Dose due: ${medication.drugName}, open details"),
+            .semanticsLabel("Dose due: ${card.drugName}, open details"),
     ) {
         Column(modifier = Modifier.padding(Spacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -305,8 +300,7 @@ private fun DueAlertCard(
                 Spacer(Modifier.width(Spacing.md))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = listOfNotNull(medication.drugName, medication.dosage)
-                            .joinToString(" ") + " is due",
+                        text = card.title + " is due",
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -334,7 +328,7 @@ private fun DueAlertCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = 48.dp)
-                    .semanticsLabel("Take ${medication.drugName} now"),
+                    .semanticsLabel("Take ${card.drugName} now"),
             ) {
                 Text("Take now", style = MaterialTheme.typography.titleMedium)
             }
@@ -490,23 +484,21 @@ private fun TakingRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val medication = card.item.medication
     Card(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .semanticsLabel("${medication.drugName}, open details"),
+            .semanticsLabel("${card.drugName}, open details"),
     ) {
         Row(
             modifier = Modifier.padding(Spacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            PillAvatar(label = medication.label)
+            PillAvatar(label = card.categoryLabel)
             Spacer(Modifier.width(Spacing.md))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = listOfNotNull(medication.drugName, medication.dosage)
-                        .joinToString(" "),
+                    text = card.title,
                     style = MaterialTheme.typography.titleMedium,
                     // Real labels produce dosage prose ("Take 1 or 2 caplets up
                     // to 3 times a day, as required.") — clamp the row.
@@ -515,13 +507,13 @@ private fun TakingRow(
                 )
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    medication.label?.let { label ->
+                    card.categoryLabel?.let { label ->
                         CategoryChip(label)
                         Spacer(Modifier.width(6.dp))
                     }
-                    medication.form?.let { form ->
+                    card.formLabel?.let { form ->
                         Text(
-                            text = form.replaceFirstChar { it.uppercase() },
+                            text = form,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -534,7 +526,7 @@ private fun TakingRow(
                     onClick = onTakeNow,
                     modifier = Modifier
                         .defaultMinSize(minHeight = 48.dp)
-                        .semanticsLabel("Take ${medication.drugName} now"),
+                        .semanticsLabel("Take ${card.drugName} now"),
                 ) {
                     Text("Take")
                 }
@@ -560,32 +552,27 @@ private fun TakingRow(
  * glance; the play affordance starts (or resumes) tracking.
  */
 @Composable
-private fun CabinetRow(
-    row: MedicationWithSchedule,
-    now: Instant,
-    zone: TimeZone,
+private fun CabinetRowCard(
+    row: CabinetRow,
     onPlay: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val medication = row.medication
-    val phase = row.schedule.phase
     Card(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .semanticsLabel("${medication.drugName}, open details"),
+            .semanticsLabel("${row.drugName}, open details"),
     ) {
         Row(
             modifier = Modifier.padding(Spacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            PillAvatar(label = medication.label)
+            PillAvatar(label = row.categoryLabel)
             Spacer(Modifier.width(Spacing.md))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = listOfNotNull(medication.drugName, medication.dosage)
-                        .joinToString(" "),
+                    text = row.title,
                     style = MaterialTheme.typography.titleMedium,
                     // Real labels produce dosage prose ("Take 1 or 2 caplets up
                     // to 3 times a day, as required.") — clamp the row.
@@ -594,34 +581,34 @@ private fun CabinetRow(
                 )
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    phaseChipText(row.schedule, now, zone)?.let { text ->
+                    row.phaseChipText?.let { text ->
                         StatusChip(
                             text = text,
-                            outlined = phase == MedicationPhase.NOT_STARTED,
+                            outlined = row.phase == MedicationPhase.NOT_STARTED,
                         )
                         Spacer(Modifier.width(6.dp))
                     }
-                    medication.label?.let { label ->
+                    row.categoryLabel?.let { label ->
                         CategoryChip(label)
                         Spacer(Modifier.width(6.dp))
                     }
-                    medication.form?.let { form ->
+                    row.formLabel?.let { form ->
                         Text(
-                            text = form.replaceFirstChar { it.uppercase() },
+                            text = form,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
             }
-            val verb = if (phase == MedicationPhase.STOPPED) "Resume" else "Start"
+            val verb = if (row.phase == MedicationPhase.STOPPED) "Resume" else "Start"
             FilledTonalIconButton(
                 onClick = onPlay,
                 modifier = Modifier.size(48.dp),
             ) {
                 Icon(
                     imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = "$verb taking ${medication.drugName}",
+                    contentDescription = "$verb taking ${row.drugName}",
                 )
             }
         }
