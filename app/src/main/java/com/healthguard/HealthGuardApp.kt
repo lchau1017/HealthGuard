@@ -18,13 +18,13 @@ import com.healthguard.activity.ActivityViewModel
 import com.healthguard.activity.ui.ActivityScreen
 import com.healthguard.common.ui.AppNavBar
 import com.healthguard.common.ui.AppTab
-import com.healthguard.confirm.ConfirmIntent
 import com.healthguard.confirm.ConfirmViewModel
+import com.healthguard.confirm.state.ConfirmIntent
 import com.healthguard.confirm.ui.ConfirmFlowHost
 import com.healthguard.confirm.ui.rememberScanImageLauncher
-import com.healthguard.detail.DetailFinished
-import com.healthguard.detail.DetailIntent
 import com.healthguard.detail.DetailViewModel
+import com.healthguard.detail.state.DetailFinished
+import com.healthguard.detail.state.DetailIntent
 import com.healthguard.detail.ui.DetailScreen
 import com.healthguard.home.HomeViewModel
 import com.healthguard.home.ui.HomeScreen

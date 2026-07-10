@@ -1,4 +1,4 @@
-package com.healthguard.confirm
+package com.healthguard.confirm.state
 
 /** One-shot events the confirm flow consumes once; never part of the rendered state. */
 sealed interface ConfirmEffect {

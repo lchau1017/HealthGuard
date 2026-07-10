@@ -10,6 +10,11 @@ import com.healthguard.detail.domain.ComputeDetailStateUseCase
 import com.healthguard.detail.domain.DetailContent
 import com.healthguard.detail.domain.LoadDayDetailUseCase
 import com.healthguard.detail.domain.SaveMedicationUseCase
+import com.healthguard.detail.state.DetailEffect
+import com.healthguard.detail.state.DetailFinished
+import com.healthguard.detail.state.DetailIntent
+import com.healthguard.detail.state.DetailUiState
+import com.healthguard.detail.state.toTrackedState
 import com.healthguard.dose.isDoubleDose
 import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.DeleteMedicationUseCase

@@ -1,4 +1,4 @@
-package com.healthguard.confirm
+package com.healthguard.confirm.state
 
 /** Every user action the confirm screen can raise, sent through [ConfirmViewModel.onIntent]. */
 sealed interface ConfirmIntent {

@@ -4,6 +4,8 @@ package com.healthguard.activity
 
 import com.healthguard.activity.domain.ComputeActivityStateUseCase
 import com.healthguard.activity.domain.LoadActivityDayDetailUseCase
+import com.healthguard.activity.state.ActivityIntent
+import com.healthguard.activity.state.MedicationAdherence
 import com.healthguard.home.MedicationPhase
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository

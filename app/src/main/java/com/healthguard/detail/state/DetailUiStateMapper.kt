@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalTime::class)
 
-package com.healthguard.detail
+package com.healthguard.detail.state
 
 import com.healthguard.detail.domain.DetailContent
 import kotlin.time.ExperimentalTime

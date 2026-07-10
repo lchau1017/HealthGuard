@@ -20,8 +20,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.healthguard.common.ui.CategoryLabelInput
-import com.healthguard.detail.DetailIntent
-import com.healthguard.detail.DetailUiState
+import com.healthguard.detail.state.DetailIntent
+import com.healthguard.detail.state.DetailUiState
 
 /**
  * The editable "Details" section: the six text fields, the with-food

@@ -1,4 +1,4 @@
-package com.healthguard.confirm
+package com.healthguard.confirm.format
 
 /** Maps a yes/no review answer back to a typed value; null when unclear. */
 fun parseWithFood(text: String): Boolean? = when (text.trim().lowercase()) {

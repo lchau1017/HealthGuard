@@ -9,6 +9,9 @@ import com.healthguard.activity.DoseDayStatus
 import com.healthguard.detail.domain.ComputeDetailStateUseCase
 import com.healthguard.detail.domain.LoadDayDetailUseCase
 import com.healthguard.detail.domain.SaveMedicationUseCase
+import com.healthguard.detail.state.DetailEffect
+import com.healthguard.detail.state.DetailFinished
+import com.healthguard.detail.state.DetailIntent
 import com.healthguard.home.MedicationPhase
 import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.DeleteMedicationUseCase

@@ -9,9 +9,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import com.healthguard.confirm.ConfirmEffect
-import com.healthguard.confirm.ConfirmUiState
 import com.healthguard.confirm.ConfirmViewModel
+import com.healthguard.confirm.state.ConfirmEffect
+import com.healthguard.confirm.state.ConfirmUiState
 import org.koin.androidx.compose.koinViewModel
 
 /**

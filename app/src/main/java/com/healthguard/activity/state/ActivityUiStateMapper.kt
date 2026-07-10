@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalTime::class)
 
-package com.healthguard.activity
+package com.healthguard.activity.state
 
 import com.healthguard.activity.domain.ActivityContent
 import com.healthguard.activity.domain.MedicationAdherenceContent

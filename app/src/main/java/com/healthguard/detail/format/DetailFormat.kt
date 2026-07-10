@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalTime::class)
 
-package com.healthguard.detail
+package com.healthguard.detail.format
 
 import com.healthguard.common.format.shortDayName
 import com.healthguard.common.format.shortName

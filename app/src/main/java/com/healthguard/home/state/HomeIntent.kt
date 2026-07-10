@@ -1,4 +1,4 @@
-package com.healthguard.home
+package com.healthguard.home.state
 
 /** Every user action the home screen can raise, sent through [HomeViewModel.onIntent]. */
 sealed interface HomeIntent {

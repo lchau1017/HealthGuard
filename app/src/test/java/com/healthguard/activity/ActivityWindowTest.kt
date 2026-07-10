@@ -1,5 +1,7 @@
 package com.healthguard.activity
 
+import com.healthguard.activity.format.windowChipLabel
+import com.healthguard.activity.format.windowHeading
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

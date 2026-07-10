@@ -4,6 +4,9 @@ package com.healthguard.confirm
 
 import com.healthguard.confirm.domain.ExtractMedicationUseCase
 import com.healthguard.confirm.domain.SaveNewMedicationUseCase
+import com.healthguard.confirm.state.ConfirmEffect
+import com.healthguard.confirm.state.ConfirmIntent
+import com.healthguard.confirm.state.ConfirmUiState
 import com.healthguard.shared.data.MedicationRepository
 import com.healthguard.shared.data.MedicationWithSchedule
 import com.healthguard.shared.data.SqlDelightMedicationRepository

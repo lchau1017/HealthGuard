@@ -1,6 +1,7 @@
-package com.healthguard.home
+package com.healthguard.home.format
 
 import com.healthguard.activity.DoseDayStatus
+import com.healthguard.home.WeekDay
 
 /**
  * The line under the week circles. Days that never owed anything

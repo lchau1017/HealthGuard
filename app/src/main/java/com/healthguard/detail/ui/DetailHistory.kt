@@ -32,8 +32,8 @@ import com.healthguard.common.theme.heatRamp
 import com.healthguard.common.ui.ActivityHeatMap
 import com.healthguard.common.ui.HeatMapGrid
 import com.healthguard.detail.HistoryEntry
-import com.healthguard.detail.dayTimeLabel
-import com.healthguard.detail.doseAnnotation
+import com.healthguard.detail.format.dayTimeLabel
+import com.healthguard.detail.format.doseAnnotation
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.StoredDoseLog
 import kotlin.time.ExperimentalTime

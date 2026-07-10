@@ -6,6 +6,12 @@ import com.healthguard.common.format.parseFrequency
 import com.healthguard.confirm.domain.ExtractMedicationUseCase
 import com.healthguard.confirm.domain.NewMedication
 import com.healthguard.confirm.domain.SaveNewMedicationUseCase
+import com.healthguard.confirm.format.parseWithFood
+import com.healthguard.confirm.state.ConfirmEffect
+import com.healthguard.confirm.state.ConfirmIntent
+import com.healthguard.confirm.state.ConfirmUiState
+import com.healthguard.confirm.state.ReviewField
+import com.healthguard.confirm.state.toUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel

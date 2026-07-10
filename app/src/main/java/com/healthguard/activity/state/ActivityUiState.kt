@@ -1,7 +1,11 @@
 @file:OptIn(ExperimentalTime::class)
 
-package com.healthguard.activity
+package com.healthguard.activity.state
 
+import com.healthguard.activity.ActivityFilter
+import com.healthguard.activity.ActivityStats
+import com.healthguard.activity.DayCount
+import com.healthguard.activity.DayDetail
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate

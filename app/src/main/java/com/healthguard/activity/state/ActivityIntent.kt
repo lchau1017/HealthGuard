@@ -1,5 +1,6 @@
-package com.healthguard.activity
+package com.healthguard.activity.state
 
+import com.healthguard.activity.ActivityFilter
 import kotlinx.datetime.LocalDate
 
 /** Every user action the Activity dashboard can raise, sent through [ActivityViewModel.onIntent]. */

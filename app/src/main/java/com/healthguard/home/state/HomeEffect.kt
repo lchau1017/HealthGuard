@@ -1,4 +1,4 @@
-package com.healthguard.home
+package com.healthguard.home.state
 
 import com.healthguard.dose.RecordedTake
 

@@ -1,8 +1,10 @@
 @file:OptIn(ExperimentalTime::class)
 
-package com.healthguard.home
+package com.healthguard.home.state
 
 import com.healthguard.home.domain.HomeContent
+import com.healthguard.home.format.doseRowStatus
+import com.healthguard.home.format.weekCaption
 import kotlin.time.ExperimentalTime
 import kotlinx.datetime.TimeZone
 

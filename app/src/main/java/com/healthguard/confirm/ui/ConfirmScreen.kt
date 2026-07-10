@@ -26,9 +26,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.healthguard.common.ui.CategoryLabelInput
-import com.healthguard.confirm.ConfirmIntent
-import com.healthguard.confirm.ConfirmUiState
-import com.healthguard.confirm.ReviewField
+import com.healthguard.confirm.state.ConfirmIntent
+import com.healthguard.confirm.state.ConfirmUiState
+import com.healthguard.confirm.state.ReviewField
 
 /**
  * The import/confirm flow, presented as a full-width dialog card over the

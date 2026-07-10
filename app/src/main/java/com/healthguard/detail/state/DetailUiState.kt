@@ -1,12 +1,13 @@
 @file:OptIn(ExperimentalTime::class)
 
-package com.healthguard.detail
+package com.healthguard.detail.state
 
 import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DayCount
 import com.healthguard.activity.DayDetail
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.common.format.parseFrequency
+import com.healthguard.detail.HistoryEntry
 import com.healthguard.home.MedicationPhase
 import com.healthguard.home.isActive
 import com.healthguard.home.phase

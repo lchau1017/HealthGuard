@@ -1,5 +1,6 @@
-package com.healthguard.activity
+package com.healthguard.activity.format
 
+import com.healthguard.activity.state.MedicationAdherence
 import com.healthguard.home.MedicationPhase
 
 /**

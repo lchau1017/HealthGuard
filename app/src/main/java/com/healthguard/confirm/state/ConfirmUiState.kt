@@ -1,4 +1,4 @@
-package com.healthguard.confirm
+package com.healthguard.confirm.state
 
 import com.healthguard.shared.extraction.Frequency
 

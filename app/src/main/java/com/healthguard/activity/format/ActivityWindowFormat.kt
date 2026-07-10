@@ -1,4 +1,6 @@
-package com.healthguard.activity
+package com.healthguard.activity.format
+
+import com.healthguard.activity.ActivityFilter
 
 /** The record section's heading for a window. */
 fun windowHeading(filter: ActivityFilter): String = when (filter) {

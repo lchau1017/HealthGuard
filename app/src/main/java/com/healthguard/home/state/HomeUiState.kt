@@ -1,7 +1,8 @@
 @file:OptIn(ExperimentalTime::class)
 
-package com.healthguard.home
+package com.healthguard.home.state
 
+import com.healthguard.home.WeekDay
 import com.healthguard.shared.data.MedicationWithSchedule
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant

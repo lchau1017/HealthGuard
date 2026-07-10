@@ -1,4 +1,4 @@
-package com.healthguard.activity
+package com.healthguard.activity.state
 
 import com.healthguard.home.MedicationPhase
 
