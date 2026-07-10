@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,7 +18,7 @@ import com.healthguard.common.theme.categoryTint
  */
 @Composable
 fun StatusChip(text: String, modifier: Modifier = Modifier, outlined: Boolean = false) {
-    val shape = RoundedCornerShape(8.dp)
+    val shape = MaterialTheme.shapes.small
     val base = if (outlined) {
         modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
     } else {
@@ -41,7 +40,7 @@ fun CategoryChip(label: String, modifier: Modifier = Modifier) {
     val tint = categoryTint(label)
     Box(
         modifier = modifier
-            .background(tint.container, RoundedCornerShape(8.dp))
+            .background(tint.container, MaterialTheme.shapes.small)
             .padding(horizontal = 8.dp, vertical = 2.dp),
     ) {
         Text(

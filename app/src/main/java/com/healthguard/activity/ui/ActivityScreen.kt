@@ -197,13 +197,14 @@ private fun RecordSection(
     }
 }
 
-/** Exactly four tiles: doses taken, day streak, active days, usual dose time. */
-@Composable
-private fun StatTiles(stats: ActivityStats, modifier: Modifier = Modifier) {
+/** One stat tile's display content. */
+private data class Tile(val value: String, val label: String, val description: String)
+
+/** Builds the four tiles' text from the window's stats. */
+private fun statTiles(stats: ActivityStats): List<Tile> {
     val streakValue =
         if (stats.currentStreakDays == 1) "1 day" else "${stats.currentStreakDays} days"
-    data class Tile(val value: String, val label: String, val description: String)
-    val tiles = listOf(
+    return listOf(
         Tile(
             value = "${stats.totalEvents}",
             label = "Doses taken",
@@ -229,6 +230,13 @@ private fun StatTiles(stats: ActivityStats, modifier: Modifier = Modifier) {
                 ?: "Usual dose time: not enough doses yet",
         ),
     )
+}
+
+/** Exactly four tiles: doses taken, day streak, active days, usual dose time. */
+@Composable
+private fun StatTiles(stats: ActivityStats, modifier: Modifier = Modifier) {
+    // The tiles are pure string formatting; recompute only when the stats change.
+    val tiles = remember(stats) { statTiles(stats) }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         tiles.chunked(2).forEach { rowTiles ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
