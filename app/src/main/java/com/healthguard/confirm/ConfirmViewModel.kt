@@ -40,14 +40,13 @@ class ConfirmViewModel(
     private var saving = false
 
     /**
-     * The review (and its accept label) as it stood when a save failed, so
-     * Retry can restore it and attempt the save again. Re-extracting instead
-     * would rebuild the review from scratch and throw away every edit and
-     * confirmation the user made. Null unless the current Error came from a
-     * failed save.
+     * The review (its fields and category label) as it stood when a save
+     * failed, so Retry can restore it and attempt the save again.
+     * Re-extracting instead would rebuild the review from scratch and throw
+     * away every edit and confirmation the user made. Null unless the current
+     * Error came from a failed save.
      */
     private var reviewAwaitingSaveRetry: ConfirmUiState.Review? = null
-    private var lastAcceptLabel: String? = null
 
     /**
      * The single in-flight extraction/save job. [reset] cancels it: a
@@ -63,7 +62,8 @@ class ConfirmViewModel(
             ConfirmIntent.Retry -> retry()
             is ConfirmIntent.FieldEdited -> fieldEdited(intent.key, intent.value)
             is ConfirmIntent.FieldConfirmed -> updateField(intent.key) { it.copy(userConfirmed = true) }
-            is ConfirmIntent.Accept -> accept(intent.label)
+            is ConfirmIntent.LabelChanged -> labelChanged(intent.value)
+            ConfirmIntent.Accept -> accept()
             ConfirmIntent.Reset -> reset()
         }
     }
@@ -76,10 +76,18 @@ class ConfirmViewModel(
         val review = reviewAwaitingSaveRetry
         if (review != null) {
             reviewAwaitingSaveRetry = null
+            // The restored review carries the category label too, so the
+            // retried save persists exactly what the user accepted.
             _state.value = review
-            accept(lastAcceptLabel)
+            accept()
         } else {
             lastImageBase64?.let { extract(it) }
+        }
+    }
+
+    private fun labelChanged(value: String) {
+        _state.update { current ->
+            if (current is ConfirmUiState.Review) current.copy(label = value) else current
         }
     }
 
@@ -109,7 +117,7 @@ class ConfirmViewModel(
      * Persists the reviewed medication with a dormant schedule (started later
      * from the home list). No-op unless every flagged field is confirmed.
      */
-    private fun accept(label: String?) {
+    private fun accept() {
         val review = _state.value as? ConfirmUiState.Review ?: return
         if (!review.canAccept || saving) return
         saving = true
@@ -120,7 +128,7 @@ class ConfirmViewModel(
 
         val medication = NewMedication(
             drugName = value(KEY_DRUG_NAME).orEmpty(),
-            label = label?.trim()?.takeUnless { it.isEmpty() },
+            label = review.label.trim().takeUnless { it.isEmpty() },
             activeIngredients = value(KEY_INGREDIENTS)
                 ?.split(",")
                 ?.map { it.trim() }
@@ -151,7 +159,6 @@ class ConfirmViewModel(
                 val current = _state.value as? ConfirmUiState.Review
                 if (current != null) {
                     reviewAwaitingSaveRetry = current
-                    lastAcceptLabel = label
                     _state.value = ConfirmUiState.Error(MESSAGE_SAVE_FAILED, retriable = true)
                 }
             } finally {
@@ -174,7 +181,6 @@ class ConfirmViewModel(
     private fun clearToIdle() {
         lastImageBase64 = null
         reviewAwaitingSaveRetry = null
-        lastAcceptLabel = null
         saving = false
         _state.value = ConfirmUiState.Idle
     }
@@ -189,7 +195,6 @@ class ConfirmViewModel(
     private fun encodeAndExtract(uri: String) {
         // A fresh image starts a fresh flow; no stale save retry may linger.
         reviewAwaitingSaveRetry = null
-        lastAcceptLabel = null
         _state.value = ConfirmUiState.Extracting
         workJob?.cancel()
         workJob = viewModelScope.launch {

@@ -25,6 +25,14 @@ import kotlinx.datetime.LocalDate
  */
 data class DetailUiState(
     val item: MedicationWithSchedule? = null,
+    /**
+     * The wall-clock instant the tracked facts were computed against (from
+     * `DetailContent.now`). Minute-grained rendering (phase chip, last-taken
+     * line, history timestamps) reads this one clock, so the labels never
+     * drift from the derived facts; only the countdown text owns a live
+     * per-second ticker (`LiveCountdown`).
+     */
+    val now: Instant = Instant.DISTANT_PAST,
     val name: String = "",
     val dosage: String = "",
     val form: String = "",
