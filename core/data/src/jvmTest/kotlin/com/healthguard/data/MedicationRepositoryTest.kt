@@ -10,7 +10,7 @@ import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.model.StoredMedication
 import com.healthguard.domain.model.StoredSchedule
 import com.healthguard.domain.model.TakenDose
-import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.repository.DoseLogRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -297,7 +297,7 @@ class MedicationRepositoryTest {
         assertEquals(schedule(), only.schedule)
     }
 
-    private suspend fun MedicationRepository.logTaken(
+    private suspend fun DoseLogRepository.logTaken(
         id: String,
         scheduleId: String = "sch-1",
         takenAtMillis: Long,

@@ -12,7 +12,7 @@ import com.healthguard.detail.HistoryEntry
 import com.healthguard.detail.SLOT_MATCH_WINDOW
 import com.healthguard.detail.historyWithGaps
 import com.healthguard.domain.model.DoseStatus
-import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.model.MedicationWithSchedule
 import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.model.StoredSchedule
@@ -77,7 +77,7 @@ data class DetailContent(
  * the 16-week window.
  */
 class ComputeDetailStateUseCase(
-    private val repository: MedicationRepository,
+    private val repository: DoseLogRepository,
     private val clock: () -> Instant,
     private val zone: TimeZone,
 ) {

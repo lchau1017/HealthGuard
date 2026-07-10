@@ -21,7 +21,7 @@ class LoadActivityDayDetailUseCaseTest {
     private val now = Instant.parse("2024-07-03T10:00:00Z")
 
     private fun useCase(repo: FakeMedicationRepository) =
-        LoadActivityDayDetailUseCase(repo, clock = { now }, zone = TimeZone.UTC)
+        LoadActivityDayDetailUseCase(repo, repo, clock = { now }, zone = TimeZone.UTC)
 
     @Test
     fun `selecting a day builds its detail sheet across all medicines`() = runTest {

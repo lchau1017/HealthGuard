@@ -25,7 +25,7 @@ class ComputeActivityStateUseCaseTest {
     private val now = Instant.parse("2024-07-03T10:00:00Z")
 
     private fun useCase(repo: FakeMedicationRepository) =
-        ComputeActivityStateUseCase(repo, clock = { now }, zone = TimeZone.UTC)
+        ComputeActivityStateUseCase(repo, repo, clock = { now }, zone = TimeZone.UTC)
 
     private fun FakeMedicationRepository.insert(
         id: String,

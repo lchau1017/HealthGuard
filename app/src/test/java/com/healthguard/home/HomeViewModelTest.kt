@@ -13,7 +13,7 @@ import com.healthguard.home.format.DoseRowStatus
 import com.healthguard.home.state.HomeEffect
 import com.healthguard.home.state.HomeIntent
 import com.healthguard.domain.model.DoseStatus
-import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.data.SqlDelightMedicationRepository
 import com.healthguard.domain.usecase.ObserveMedicationsUseCase
 import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.collectEffects
@@ -46,7 +46,7 @@ import org.junit.Test
 class HomeViewModelTest {
 
     private lateinit var dispatcher: TestDispatcher
-    private lateinit var repository: MedicationRepository
+    private lateinit var repository: SqlDelightMedicationRepository
 
     /** 2024-07-03T10:00:00Z — mid-morning UTC so TimesPerDay slots are easy. */
     private val fixedNow = Instant.parse("2024-07-03T10:00:00Z")

@@ -4,6 +4,7 @@ package com.healthguard.testing
 
 import com.healthguard.domain.model.DoseLogWithMedication
 import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.repository.MedicationRepository
 import com.healthguard.domain.model.MedicationWithSchedule
 import com.healthguard.domain.model.StoredDoseLog
@@ -28,7 +29,7 @@ import kotlinx.coroutines.flow.SharedFlow
  * so an accidental reliance surfaces loudly rather than silently returning
  * empty data.
  */
-class FakeMedicationRepository : MedicationRepository {
+class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
 
     private val medications = mutableListOf<MedicationWithSchedule>()
     private val doseLogs = mutableListOf<StoredDoseLog>()

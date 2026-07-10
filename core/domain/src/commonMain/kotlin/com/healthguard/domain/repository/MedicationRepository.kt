@@ -2,19 +2,19 @@
 
 package com.healthguard.domain.repository
 
-import com.healthguard.domain.model.DoseLogWithMedication
 import com.healthguard.domain.model.MedicationWithSchedule
 import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.model.StoredMedication
 import com.healthguard.domain.model.StoredSchedule
-import com.healthguard.domain.model.TakenDose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /**
- * Persistence facade over the medication store. Query flows are cold and hop
+ * Persistence facade over the medication inventory: medication and schedule
+ * reads, writes and activation state. Dose-log history lives on the sibling
+ * [DoseLogRepository]; one store implements both. Query flows are cold and hop
  * to the implementation's dispatcher; mutating calls fire [dataChanges] so
  * screens deriving state from tables SQLDelight's per-query flows don't cover
  * can recompute. Ids are caller-provided (UUIDs in production) so tests stay
@@ -23,10 +23,11 @@ import kotlin.time.Instant
 interface MedicationRepository {
 
     /**
-     * Fires after every mutating call. SQLDelight's query flows only notify
-     * listeners of the tables they read, so screens that derive state from
-     * dose logs (or hold a retained view model while another screen writes)
-     * fold this into their recompute triggers to never go stale.
+     * Fires after every mutating call (including [DoseLogRepository] writes on
+     * the same store). SQLDelight's query flows only notify listeners of the
+     * tables they read, so screens that derive state from dose logs (or hold
+     * a retained view model while another screen writes) fold this into their
+     * recompute triggers to never go stale.
      */
     val dataChanges: SharedFlow<Unit>
 
@@ -70,39 +71,4 @@ interface MedicationRepository {
     suspend fun activate(medicationId: String, at: Instant)
 
     suspend fun stop(medicationId: String, at: Instant)
-
-    suspend fun logDose(log: StoredDoseLog)
-
-    /** Removes a single dose log (undo of a just-recorded take); missing id is a no-op. */
-    suspend fun deleteDoseLog(id: String)
-
-    /** Half-open range: plannedAt in [from, to). */
-    suspend fun dosesInRange(scheduleId: String, from: Instant, to: Instant): List<StoredDoseLog>
-
-    suspend fun latestDose(scheduleId: String): StoredDoseLog?
-
-    /**
-     * Every TAKEN dose across all schedules with takenAt in [from, to)
-     * (half-open), oldest first, resolved to its medication.
-     */
-    suspend fun takenDosesInRange(from: Instant, to: Instant): List<TakenDose>
-
-    /** The schedule's latest [limit] dose logs, any status, newest planned first. */
-    suspend fun recentDoses(scheduleId: String, limit: Int): List<StoredDoseLog>
-
-    /**
-     * Every dose log (any status) across all schedules whose effective time —
-     * takenAt when present, plannedAt otherwise — is in [from, to) (half-open).
-     */
-    suspend fun doseLogsInRange(from: Instant, to: Instant): List<StoredDoseLog>
-
-    /**
-     * Like [doseLogsInRange] (any status, effective time in [from, to),
-     * half-open), but each log carries its medication's identity — the
-     * day-detail sheet's per-medicine grouping input.
-     */
-    suspend fun doseLogsWithMedicationInRange(
-        from: Instant,
-        to: Instant,
-    ): List<DoseLogWithMedication>
 }

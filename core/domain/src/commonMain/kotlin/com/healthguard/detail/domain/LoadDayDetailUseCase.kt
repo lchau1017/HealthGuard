@@ -5,7 +5,7 @@ package com.healthguard.detail.domain
 import com.healthguard.activity.DayDetail
 import com.healthguard.activity.dayDetail
 import com.healthguard.detail.SLOT_MATCH_WINDOW
-import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.model.MedicationWithSchedule
 import com.healthguard.domain.schedule.expectedDoseTimes
 import kotlin.time.ExperimentalTime
@@ -23,7 +23,7 @@ import kotlinx.datetime.plus
  * still inside the 90-minute answer window are not "not recorded" yet).
  */
 class LoadDayDetailUseCase(
-    private val repository: MedicationRepository,
+    private val repository: DoseLogRepository,
     private val clock: () -> Instant,
     private val zone: TimeZone,
 ) {

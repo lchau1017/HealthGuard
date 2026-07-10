@@ -2,13 +2,14 @@
 
 package com.healthguard.home.domain
 
+import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.repository.MedicationRepository
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /** Undoes a just-recorded take by removing its dose log. */
 class UndoDoseUseCase(
-    private val repository: MedicationRepository,
+    private val repository: DoseLogRepository,
 ) {
     suspend operator fun invoke(doseId: String) = repository.deleteDoseLog(doseId)
 }

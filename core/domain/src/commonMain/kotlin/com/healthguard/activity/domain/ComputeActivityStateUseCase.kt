@@ -12,6 +12,7 @@ import com.healthguard.activity.adherenceResult
 import com.healthguard.activity.dayCounts
 import com.healthguard.home.MedicationPhase
 import com.healthguard.home.phase
+import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.repository.MedicationRepository
 import com.healthguard.domain.extraction.Frequency
 import kotlin.time.Duration.Companion.minutes
@@ -80,7 +81,8 @@ data class ActivityContent(
  * adherence list with its sorting/grouping/quiet-row rules.
  */
 class ComputeActivityStateUseCase(
-    private val repository: MedicationRepository,
+    private val medicationRepository: MedicationRepository,
+    private val doseLogRepository: DoseLogRepository,
     private val clock: () -> Instant,
     private val zone: TimeZone,
 ) {
@@ -90,7 +92,7 @@ class ComputeActivityStateUseCase(
         val from = activityWindowStart(filter, today)
         // Exclusive upper bounds: pad past `now` so a take recorded at this
         // exact instant still counts.
-        val taken = repository.takenDosesInRange(
+        val taken = doseLogRepository.takenDosesInRange(
             from = from.atStartOfDayIn(zone),
             to = now + 1.minutes,
         )
@@ -125,13 +127,13 @@ class ComputeActivityStateUseCase(
      * alphabetical.
      */
     private suspend fun breakdown(from: Instant, now: Instant): List<MedicationAdherenceContent> =
-        repository.medications().first()
+        medicationRepository.medications().first()
             .mapNotNull { row ->
                 val phase = row.schedule.phase
                 if (phase == MedicationPhase.NOT_STARTED) return@mapNotNull null
                 // Padded past `now` like the queries above; expected doses
                 // are computed against `now` so future slots never count.
-                val logs = repository.dosesInRange(row.schedule.id, from, now + 1.minutes)
+                val logs = doseLogRepository.dosesInRange(row.schedule.id, from, now + 1.minutes)
                 val result = adherenceResult(row.schedule, logs, from, now, zone)
                 val quiet = when {
                     phase == MedicationPhase.STOPPED -> logs.isEmpty()

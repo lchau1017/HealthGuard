@@ -4,6 +4,7 @@ package com.healthguard.testing
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.repository.MedicationRepository
 import com.healthguard.data.SqlDelightMedicationRepository
 import com.healthguard.domain.model.StoredDoseLog
@@ -33,7 +34,7 @@ fun inMemoryDriver(): JdbcSqliteDriver = JdbcSqliteDriver(
 ).also { HealthGuardDb.Schema.create(it) }
 
 /** The real repository over a fresh in-memory database. */
-fun inMemoryRepository(dispatcher: CoroutineDispatcher): MedicationRepository =
+fun inMemoryRepository(dispatcher: CoroutineDispatcher): SqlDelightMedicationRepository =
     SqlDelightMedicationRepository(HealthGuardDb(inMemoryDriver()), dispatcher)
 
 /** Inserts one medication + schedule; defaults keep the row minimal. */
@@ -75,7 +76,7 @@ suspend fun MedicationRepository.seedMedication(
 }
 
 /** Logs a TAKEN dose against the seeded "sched-<medicationId>" schedule. */
-suspend fun MedicationRepository.logTaken(medicationId: String, takenAt: Instant) {
+suspend fun DoseLogRepository.logTaken(medicationId: String, takenAt: Instant) {
     logDose(
         StoredDoseLog(
             id = "dose-$medicationId-${takenAt.toEpochMilliseconds()}",

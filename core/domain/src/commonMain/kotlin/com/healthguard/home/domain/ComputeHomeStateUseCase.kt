@@ -7,7 +7,7 @@ import com.healthguard.home.WeekDay
 import com.healthguard.home.isActive
 import com.healthguard.home.todayHasPendingSlots
 import com.healthguard.home.weekDayStates
-import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.model.MedicationWithSchedule
 import com.healthguard.domain.schedule.nextDose
 import kotlin.time.Duration.Companion.minutes
@@ -62,7 +62,7 @@ data class HomeContent(
  * strip and today-pending flag come from every schedule's owed slots.
  */
 class ComputeHomeStateUseCase(
-    private val repository: MedicationRepository,
+    private val repository: DoseLogRepository,
     private val clock: () -> Instant,
     private val zone: TimeZone,
 ) {

@@ -8,6 +8,8 @@ import com.healthguard.activity.state.ActivityIntent
 import com.healthguard.activity.state.MedicationAdherence
 import com.healthguard.home.MedicationPhase
 import com.healthguard.domain.model.DoseStatus
+import com.healthguard.data.SqlDelightMedicationRepository
+import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.repository.MedicationRepository
 import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.usecase.ObserveDataChangesUseCase
@@ -41,7 +43,7 @@ import org.junit.Test
 class ActivityViewModelTest {
 
     private lateinit var dispatcher: TestDispatcher
-    private lateinit var repository: MedicationRepository
+    private lateinit var repository: SqlDelightMedicationRepository
 
     /** 2024-07-03T10:00:00Z — a Wednesday. */
     private val fixedNow = Instant.parse("2024-07-03T10:00:00Z")
@@ -58,11 +60,16 @@ class ActivityViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(repository: MedicationRepository = this.repository): ActivityViewModel {
+    private fun viewModel(
+        repository: MedicationRepository = this.repository,
+        doseLogRepository: DoseLogRepository = this.repository,
+    ): ActivityViewModel {
         val clock: () -> Instant = { fixedNow }
         return ActivityViewModel(
-            computeActivityState = ComputeActivityStateUseCase(repository, clock, TimeZone.UTC),
-            loadActivityDayDetail = LoadActivityDayDetailUseCase(repository, clock, TimeZone.UTC),
+            computeActivityState =
+                ComputeActivityStateUseCase(repository, doseLogRepository, clock, TimeZone.UTC),
+            loadActivityDayDetail =
+                LoadActivityDayDetailUseCase(repository, doseLogRepository, clock, TimeZone.UTC),
             observeDataChanges = ObserveDataChangesUseCase(repository),
             zone = TimeZone.UTC,
         )
@@ -429,8 +436,8 @@ class ActivityViewModelTest {
 
     /** Suspends every window query on its own gate, in call order. */
     private class GatedWindowRepository(
-        private val delegate: MedicationRepository,
-    ) : MedicationRepository by delegate {
+        private val delegate: SqlDelightMedicationRepository,
+    ) : MedicationRepository by delegate, DoseLogRepository by delegate {
         val gates = mutableListOf<CompletableDeferred<Unit>>()
         override suspend fun takenDosesInRange(from: Instant, to: Instant) =
             CompletableDeferred<Unit>()
@@ -445,7 +452,7 @@ class ActivityViewModelTest {
         repository.logTaken("a", fixedNow - 300.days) // only the 12-month window sees this
         repository.logTaken("a", fixedNow - 1.hours)
         val gated = GatedWindowRepository(repository)
-        val vm = viewModel(gated)
+        val vm = viewModel(gated, gated)
         dispatcher.scheduler.runCurrent()
         gated.gates[0].complete(Unit) // let the initial 30-day load land
         dispatcher.scheduler.advanceUntilIdle()

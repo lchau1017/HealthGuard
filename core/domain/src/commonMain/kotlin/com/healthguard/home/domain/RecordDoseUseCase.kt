@@ -4,7 +4,7 @@ package com.healthguard.home.domain
 
 import com.healthguard.dose.RecordedTake
 import com.healthguard.domain.model.DoseStatus
-import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.model.StoredDoseLog
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -18,7 +18,7 @@ import kotlin.uuid.Uuid
  * has a stable handle; [kotlin.uuid.Uuid] keeps this KMP-safe (no java.util).
  */
 class RecordDoseUseCase(
-    private val repository: MedicationRepository,
+    private val repository: DoseLogRepository,
     private val clock: () -> Instant,
 ) {
     suspend operator fun invoke(

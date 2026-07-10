@@ -25,6 +25,7 @@ import com.healthguard.home.domain.SeedDemoDataUseCase
 import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
 import com.healthguard.data.DriverFactory
+import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.repository.MedicationRepository
 import com.healthguard.data.SqlDelightMedicationRepository
 import com.healthguard.data.db.HealthGuardDb
@@ -42,6 +43,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.TimeZone
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
+import org.koin.dsl.binds
 import org.koin.dsl.module
 
 val appModule = module {
@@ -60,7 +62,9 @@ val appModule = module {
 
     single { DriverFactory(androidContext()) }
     single { HealthGuardDb(get<DriverFactory>().createDriver()) }
-    single<MedicationRepository> { SqlDelightMedicationRepository(get(), Dispatchers.IO) }
+    // One store implements both repository roles; bind each interface to it.
+    single { SqlDelightMedicationRepository(get(), Dispatchers.IO) } binds
+        arrayOf(MedicationRepository::class, DoseLogRepository::class)
 
     single<() -> Instant> { { Clock.System.now() } }
 
@@ -80,8 +84,8 @@ val appModule = module {
     factory { LoadDayDetailUseCase(get(), get(), TimeZone.currentSystemDefault()) }
     factory { SaveMedicationUseCase(get()) }
 
-    factory { ComputeActivityStateUseCase(get(), get(), TimeZone.currentSystemDefault()) }
-    factory { LoadActivityDayDetailUseCase(get(), get(), TimeZone.currentSystemDefault()) }
+    factory { ComputeActivityStateUseCase(get(), get(), get(), TimeZone.currentSystemDefault()) }
+    factory { LoadActivityDayDetailUseCase(get(), get(), get(), TimeZone.currentSystemDefault()) }
 
     factory { ExtractMedicationUseCase(get(), Dispatchers.IO) }
     factory { SaveNewMedicationUseCase(get(), get()) }

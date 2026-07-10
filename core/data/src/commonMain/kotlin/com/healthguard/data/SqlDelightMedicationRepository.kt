@@ -14,6 +14,7 @@ import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.model.StoredMedication
 import com.healthguard.domain.model.StoredSchedule
 import com.healthguard.domain.model.TakenDose
+import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.repository.MedicationRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.channels.BufferOverflow
@@ -36,7 +37,7 @@ import kotlin.time.Instant
 class SqlDelightMedicationRepository(
     db: HealthGuardDb,
     private val dispatcher: CoroutineDispatcher,
-) : MedicationRepository {
+) : MedicationRepository, DoseLogRepository {
     private val queries = db.healthGuardQueries
 
     private val _dataChanges = MutableSharedFlow<Unit>(

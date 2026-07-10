@@ -20,7 +20,7 @@ import com.healthguard.home.domain.RecordDoseUseCase
 import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
 import com.healthguard.domain.model.DoseStatus
-import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.data.SqlDelightMedicationRepository
 import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.usecase.ObserveMedicationsUseCase
 import com.healthguard.domain.extraction.Frequency
@@ -54,7 +54,7 @@ import org.junit.Test
 class DetailViewModelTest {
 
     private lateinit var dispatcher: TestDispatcher
-    private lateinit var repository: MedicationRepository
+    private lateinit var repository: SqlDelightMedicationRepository
 
     private val fixedNow = Instant.parse("2024-07-03T10:00:00Z")
 
