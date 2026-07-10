@@ -21,10 +21,10 @@ import kotlinx.coroutines.flow.SharedFlow
  * test source set cannot depend on `:core:data` (that would close a project
  * dependency cycle), so the real SQLDelight repository is unavailable here.
  *
- * Only the methods the Home, Detail and Activity use cases actually touch are
- * implemented against simple collections; every other interface member throws
- * so an accidental reliance surfaces loudly rather than silently returning
- * empty data.
+ * Every interface member is implemented against simple collections, each
+ * mirroring the real SQL's semantics (half-open ranges, effective-time
+ * COALESCE, editable-columns-only updates) so use-case tests exercise
+ * production behaviour rather than a convenient fiction.
  */
 class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
 
@@ -176,7 +176,12 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
      */
     override suspend fun updateMedication(medication: StoredMedication) {
         val index = medications.indexOfFirst { it.medication.id == medication.id }
-        if (index < 0) return
+        if (index < 0) {
+            // Parity with the real repository: it signals a data change even
+            // when the UPDATE matched no row.
+            _dataChanges.emit(Unit)
+            return
+        }
         updatedMedications += medication
         val current = medications[index].medication
         medications[index] = medications[index].copy(
@@ -199,7 +204,12 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
      */
     override suspend fun updateSchedule(schedule: StoredSchedule) {
         val index = medications.indexOfFirst { it.schedule.id == schedule.id }
-        if (index < 0) return
+        if (index < 0) {
+            // Parity with the real repository: it signals a data change even
+            // when the UPDATE matched no row.
+            _dataChanges.emit(Unit)
+            return
+        }
         updatedSchedules += schedule
         val current = medications[index].schedule
         medications[index] = medications[index].copy(
