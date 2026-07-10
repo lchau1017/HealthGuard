@@ -18,6 +18,7 @@ import com.healthguard.home.state.HomeIntent
 import com.healthguard.home.state.HomeUiState
 import com.healthguard.home.state.TakeConfirmation
 import com.healthguard.home.state.toUiState
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.domain.usecase.ObserveMedicationsUseCase
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -108,7 +109,7 @@ class HomeViewModel(
      * the schedule id; the card is looked up in the CURRENT state, so a stale
      * snapshot from the screen can never be recorded against.
      */
-    private fun takeNow(scheduleId: String) {
+    private fun takeNow(scheduleId: ScheduleId) {
         val card = _state.value.taking.firstOrNull { it.scheduleId == scheduleId } ?: return
         minutesSinceLastTake(card.lastTaken, clock())?.let { minutes ->
             _state.update { it.copy(takeConfirm = TakeConfirmation(card, minutes)) }

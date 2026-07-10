@@ -1,5 +1,6 @@
 package com.healthguard.activity.domain
 
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.domain.tracking.DayDetail
 import com.healthguard.domain.tracking.DayMedicineLine
 import com.healthguard.domain.extraction.Frequency
@@ -46,7 +47,7 @@ class LoadActivityDayDetailUseCaseTest {
                 date = LocalDate(2024, 7, 2),
                 lines = listOf(
                     DayMedicineLine(
-                        medicationId = "a",
+                        medicationId = MedicationId("a"),
                         name = "Cetirizine 200 mg",
                         takenTimes = listOf(LocalTime(9, 4)),
                         skipped = 0,
@@ -54,7 +55,7 @@ class LoadActivityDayDetailUseCaseTest {
                         notRecorded = 1,
                     ),
                     DayMedicineLine(
-                        medicationId = "b",
+                        medicationId = MedicationId("b"),
                         name = "Ibuprofen 200 mg",
                         takenTimes = listOf(LocalTime(14, 0)),
                         skipped = 0,

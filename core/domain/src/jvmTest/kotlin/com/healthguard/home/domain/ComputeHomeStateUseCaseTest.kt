@@ -1,5 +1,7 @@
 package com.healthguard.home.domain
 
+import com.healthguard.domain.model.DoseId
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.domain.model.DoseStatus
 import com.healthguard.domain.model.MedicationWithSchedule
@@ -41,7 +43,7 @@ class ComputeHomeStateUseCaseTest {
 
         val content = useCase(repo)(repo.rows())
 
-        assertEquals(listOf("od2", "od1", "fut", "nofreq"), content.taking.map { it.item.medication.id })
+        assertEquals(listOf("od2", "od1", "fut", "nofreq"), content.taking.map { it.item.medication.id.value })
         assertEquals(now - 3.hours, content.taking[0].nextDoseAt)
         assertEquals(now + 4.hours, content.taking[2].nextDoseAt)
         assertNull(content.taking[3].nextDoseAt)
@@ -60,7 +62,7 @@ class ComputeHomeStateUseCaseTest {
         val content = useCase(repo)(repo.rows())
 
         assertEquals(2, content.dueCount)
-        val byId = content.taking.associateBy { it.item.medication.id }
+        val byId = content.taking.associateBy { it.item.medication.id.value }
         assertTrue(byId.getValue("overdue").isDue)
         assertTrue(byId.getValue("due-now").isDue)
         assertFalse(byId.getValue("later").isDue)
@@ -117,8 +119,8 @@ class ComputeHomeStateUseCaseTest {
         // trip the double-dose guard.
         repo.logDose(
             StoredDoseLog(
-                id = "skip-1",
-                scheduleId = "sched-a",
+                id = DoseId("skip-1"),
+                scheduleId = ScheduleId("sched-a"),
                 plannedAt = now - 1.hours,
                 takenAt = null,
                 status = DoseStatus.SKIPPED,
@@ -153,8 +155,8 @@ class ComputeHomeStateUseCaseTest {
 
         assertEquals(
             listOf("stopped", "newer-dormant", "older-dormant"),
-            content.cabinet.map { it.medication.id },
+            content.cabinet.map { it.medication.id.value },
         )
-        assertEquals(listOf("active"), content.taking.map { it.item.medication.id })
+        assertEquals(listOf("active"), content.taking.map { it.item.medication.id.value })
     }
 }

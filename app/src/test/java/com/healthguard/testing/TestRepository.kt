@@ -3,7 +3,10 @@
 package com.healthguard.testing
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import com.healthguard.domain.model.DoseId
 import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.repository.MedicationRepository
 import com.healthguard.data.SqlDelightMedicationRepository
@@ -55,7 +58,7 @@ suspend fun MedicationRepository.seedMedication(
 ) {
     insertMedication(
         StoredMedication(
-            id = id,
+            id = MedicationId(id),
             drugName = drugName,
             label = label,
             activeIngredients = activeIngredients,
@@ -65,8 +68,8 @@ suspend fun MedicationRepository.seedMedication(
             createdAt = Instant.fromEpochMilliseconds(createdAtMillis),
         ),
         StoredSchedule(
-            id = scheduleId,
-            medicationId = id,
+            id = ScheduleId(scheduleId),
+            medicationId = MedicationId(id),
             frequency = frequency,
             withFood = withFood,
             startedAt = startedAt,
@@ -79,8 +82,8 @@ suspend fun MedicationRepository.seedMedication(
 suspend fun DoseLogRepository.logTaken(medicationId: String, takenAt: Instant) {
     logDose(
         StoredDoseLog(
-            id = "dose-$medicationId-${takenAt.toEpochMilliseconds()}",
-            scheduleId = "sched-$medicationId",
+            id = DoseId("dose-$medicationId-${takenAt.toEpochMilliseconds()}"),
+            scheduleId = ScheduleId("sched-$medicationId"),
             plannedAt = takenAt,
             takenAt = takenAt,
             status = DoseStatus.TAKEN,

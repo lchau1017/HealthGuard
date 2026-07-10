@@ -1,5 +1,8 @@
 package com.healthguard.activity
 
+import com.healthguard.domain.model.DoseId
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.domain.model.DoseStatus
 import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.model.StoredSchedule
@@ -18,8 +21,8 @@ class DoseDayStatusTest {
         frequency: Frequency? = Frequency.TimesPerDay(2),
         startedAt: Instant? = Instant.parse("2026-06-01T00:00:00Z"),
     ) = StoredSchedule(
-        id = "sch-1",
-        medicationId = "med-1",
+        id = ScheduleId("sch-1"),
+        medicationId = MedicationId("med-1"),
         frequency = frequency,
         withFood = null,
         startedAt = startedAt,
@@ -31,8 +34,8 @@ class DoseDayStatusTest {
     private fun log(at: String, status: DoseStatus = DoseStatus.TAKEN): StoredDoseLog {
         val instant = Instant.parse(at)
         return StoredDoseLog(
-            id = "d-${doseCounter++}",
-            scheduleId = "sch-1",
+            id = DoseId("d-${doseCounter++}"),
+            scheduleId = ScheduleId("sch-1"),
             plannedAt = instant,
             takenAt = if (status == DoseStatus.TAKEN) instant else null,
             status = status,
@@ -141,8 +144,8 @@ class DoseDayStatusTest {
             Instant.parse("2026-06-02T21:00:00Z"),
         )
         val lateTake = StoredDoseLog(
-            id = "late",
-            scheduleId = "sch-1",
+            id = DoseId("late"),
+            scheduleId = ScheduleId("sch-1"),
             plannedAt = Instant.parse("2026-06-02T21:00:00Z"),
             takenAt = Instant.parse("2026-06-03T00:30:00Z"),
             status = DoseStatus.TAKEN,

@@ -73,7 +73,7 @@ private fun scheduleTimesText(frequency: Frequency?): String? = when (frequency)
 /** One history entry as a pre-formatted view row. */
 private fun HistoryEntry.toRowData(now: Instant, zone: TimeZone): HistoryRowData = when (this) {
     is HistoryEntry.Logged -> HistoryRowData(
-        id = log.id,
+        id = log.id.value,
         title = dayTimeLabel(log.takenAt ?: log.plannedAt, now, zone),
         annotation = doseAnnotation(log.status, log.plannedAt, log.takenAt),
         kind = when (log.status) {

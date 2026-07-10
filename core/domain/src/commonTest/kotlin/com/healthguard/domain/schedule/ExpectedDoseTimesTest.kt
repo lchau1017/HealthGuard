@@ -1,5 +1,7 @@
 package com.healthguard.domain.schedule
 
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.domain.model.StoredSchedule
 import com.healthguard.domain.extraction.Frequency
 import kotlinx.datetime.TimeZone
@@ -30,8 +32,8 @@ class ExpectedDoseTimesTest {
         startedAt: Instant? = Instant.parse("2026-06-01T06:00:00Z"),
         stoppedAt: Instant? = null,
     ) = StoredSchedule(
-        id = "sched-1",
-        medicationId = "med-1",
+        id = ScheduleId("sched-1"),
+        medicationId = MedicationId("med-1"),
         frequency = frequency,
         withFood = null,
         startedAt = startedAt,

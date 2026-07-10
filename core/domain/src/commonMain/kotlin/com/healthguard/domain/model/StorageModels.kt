@@ -9,7 +9,7 @@ import kotlin.time.Instant
  * the medication lives on its [StoredSchedule].
  */
 data class StoredMedication(
-    val id: String,
+    val id: MedicationId,
     val drugName: String,
     /** Optional user-assigned category chip, e.g. "Heart". */
     val label: String?,
@@ -27,8 +27,8 @@ data class StoredMedication(
  * is active.
  */
 data class StoredSchedule(
-    val id: String,
-    val medicationId: String,
+    val id: ScheduleId,
+    val medicationId: MedicationId,
     val frequency: Frequency?,
     val withFood: Boolean?,
     val startedAt: Instant?,
@@ -44,7 +44,7 @@ enum class DoseStatus { TAKEN, MISSED, SKIPPED }
 
 /** One recorded take, resolved to its medication: an activity-history event. */
 data class TakenDose(
-    val medicationId: String,
+    val medicationId: MedicationId,
     val drugName: String,
     val takenAt: Instant,
 )
@@ -55,7 +55,7 @@ data class TakenDose(
  * second lookup.
  */
 data class DoseLogWithMedication(
-    val medicationId: String,
+    val medicationId: MedicationId,
     val drugName: String,
     val dosage: String?,
     val plannedAt: Instant,
@@ -64,8 +64,8 @@ data class DoseLogWithMedication(
 )
 
 data class StoredDoseLog(
-    val id: String,
-    val scheduleId: String,
+    val id: DoseId,
+    val scheduleId: ScheduleId,
     val plannedAt: Instant,
     val takenAt: Instant?,
     val status: DoseStatus,

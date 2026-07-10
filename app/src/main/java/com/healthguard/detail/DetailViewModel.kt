@@ -21,6 +21,7 @@ import com.healthguard.home.domain.DeleteMedicationUseCase
 import com.healthguard.home.domain.RecordDoseUseCase
 import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.domain.model.MedicationWithSchedule
 import com.healthguard.domain.usecase.ObserveMedicationsUseCase
 import kotlin.time.ExperimentalTime
@@ -61,7 +62,7 @@ class DetailViewModel(
     private val deleteMedication: DeleteMedicationUseCase,
     private val observeMedications: ObserveMedicationsUseCase,
     private val clock: () -> Instant,
-    private val medicationId: String,
+    private val medicationId: MedicationId,
     private val zone: TimeZone = TimeZone.currentSystemDefault(),
 ) : ViewModel() {
 

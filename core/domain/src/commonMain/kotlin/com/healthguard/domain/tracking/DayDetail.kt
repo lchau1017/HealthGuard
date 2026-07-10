@@ -1,6 +1,7 @@
 package com.healthguard.domain.tracking
 
 import com.healthguard.domain.model.DoseLogWithMedication
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.domain.model.DoseStatus
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
@@ -16,7 +17,7 @@ import kotlinx.datetime.toLocalDateTime
  * detail history's "Not recorded" rows.
  */
 data class DayMedicineLine(
-    val medicationId: String,
+    val medicationId: MedicationId,
     /** "Cetirizine 10 mg" — drug name plus dosage when known. */
     val name: String,
     /** Take times ascending, local to the display zone. */
@@ -50,7 +51,7 @@ data class DayDetail(
 fun dayDetail(
     date: LocalDate,
     logs: List<DoseLogWithMedication>,
-    expectedByMedication: Map<String, List<Instant>>,
+    expectedByMedication: Map<MedicationId, List<Instant>>,
     zone: TimeZone,
 ): DayDetail {
     val byMedication = logs.groupBy { it.medicationId }

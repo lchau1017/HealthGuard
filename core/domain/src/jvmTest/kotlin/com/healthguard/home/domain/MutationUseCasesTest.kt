@@ -1,6 +1,9 @@
 package com.healthguard.home.domain
 
+import com.healthguard.domain.model.DoseId
 import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.testing.FakeMedicationRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -18,13 +21,13 @@ class MutationUseCasesTest {
         val useCase = RecordDoseUseCase(repo, clock = { now })
 
         val planned = now - kotlin.time.Duration.parse("2h")
-        val take = useCase("sched-a", plannedAt = planned, drugName = "Ibuprofen")
+        val take = useCase(ScheduleId("sched-a"), plannedAt = planned, drugName = "Ibuprofen")
 
         val logged = repo.loggedDoses.single()
         assertEquals(DoseStatus.TAKEN, logged.status)
         assertEquals(now, logged.takenAt)
         assertEquals(planned, logged.plannedAt)
-        assertEquals("sched-a", logged.scheduleId)
+        assertEquals(ScheduleId("sched-a"), logged.scheduleId)
         // Returned handle mirrors the persisted log.
         assertEquals(logged.id, take.doseId)
         assertEquals("Ibuprofen", take.drugName)
@@ -35,7 +38,7 @@ class MutationUseCasesTest {
         val repo = FakeMedicationRepository()
         val useCase = RecordDoseUseCase(repo, clock = { now })
 
-        useCase("sched-a", plannedAt = null, drugName = "Ibuprofen")
+        useCase(ScheduleId("sched-a"), plannedAt = null, drugName = "Ibuprofen")
 
         val logged = repo.loggedDoses.single()
         assertEquals(now, logged.plannedAt)
@@ -47,9 +50,9 @@ class MutationUseCasesTest {
         val repo = FakeMedicationRepository()
         val useCase = UndoDoseUseCase(repo)
 
-        useCase("dose-42")
+        useCase(DoseId("dose-42"))
 
-        assertEquals(listOf("dose-42"), repo.deletedDoseIds)
+        assertEquals(listOf(DoseId("dose-42")), repo.deletedDoseIds)
     }
 
     @Test
@@ -57,9 +60,9 @@ class MutationUseCasesTest {
         val repo = FakeMedicationRepository()
         val useCase = ActivateMedicationUseCase(repo, clock = { now })
 
-        useCase("med-a")
+        useCase(MedicationId("med-a"))
 
-        assertEquals(listOf("med-a" to now), repo.activations)
+        assertEquals(listOf(MedicationId("med-a") to now), repo.activations)
     }
 
     @Test
@@ -67,9 +70,9 @@ class MutationUseCasesTest {
         val repo = FakeMedicationRepository()
         val useCase = StopMedicationUseCase(repo, clock = { now })
 
-        useCase("med-a")
+        useCase(MedicationId("med-a"))
 
-        assertEquals(listOf("med-a" to now), repo.stops)
+        assertEquals(listOf(MedicationId("med-a") to now), repo.stops)
     }
 
     @Test
@@ -78,9 +81,9 @@ class MutationUseCasesTest {
         repo.seedMedication("med-a")
         val useCase = DeleteMedicationUseCase(repo)
 
-        useCase("med-a")
+        useCase(MedicationId("med-a"))
 
-        assertEquals(listOf("med-a"), repo.deletedMedicationIds)
-        assertNull(repo.currentMedications().firstOrNull { it.medication.id == "med-a" })
+        assertEquals(listOf(MedicationId("med-a")), repo.deletedMedicationIds)
+        assertNull(repo.currentMedications().firstOrNull { it.medication.id == MedicationId("med-a") })
     }
 }

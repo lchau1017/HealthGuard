@@ -1,5 +1,8 @@
 package com.healthguard.home
 
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.model.DoseId
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.domain.model.DoseStatus
 import com.healthguard.domain.model.StoredDoseLog
@@ -30,8 +33,8 @@ class WeekDayStatesTest {
         stoppedAt: Instant? = null,
         id: String = "sch-${counter++}",
     ) = StoredSchedule(
-        id = id,
-        medicationId = "med-$id",
+        id = ScheduleId(id),
+        medicationId = MedicationId("med-$id"),
         frequency = frequency,
         withFood = null,
         startedAt = startedAt,
@@ -45,8 +48,8 @@ class WeekDayStatesTest {
     ): StoredDoseLog {
         val instant = Instant.parse(at)
         return StoredDoseLog(
-            id = "d-${counter++}",
-            scheduleId = scheduleId,
+            id = DoseId("d-${counter++}"),
+            scheduleId = ScheduleId(scheduleId),
             plannedAt = instant,
             takenAt = if (status == DoseStatus.TAKEN) instant else null,
             status = status,

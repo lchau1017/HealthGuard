@@ -5,9 +5,12 @@ import app.cash.sqldelight.coroutines.mapToList
 import com.healthguard.data.db.DoseLog
 import com.healthguard.data.db.HealthGuardDb
 import com.healthguard.domain.extraction.Frequency
+import com.healthguard.domain.model.DoseId
 import com.healthguard.domain.model.DoseLogWithMedication
 import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.domain.model.MedicationWithSchedule
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.model.StoredMedication
 import com.healthguard.domain.model.StoredSchedule
@@ -76,16 +79,16 @@ class SqlDelightMedicationRepository(
         override fun insertMedication(medication: StoredMedication, schedule: StoredSchedule) =
             writeMedication(medication, schedule)
 
-        override fun activate(medicationId: String, at: Instant) = writeActivation(medicationId, at)
+        override fun activate(medicationId: MedicationId, at: Instant) = writeActivation(medicationId, at)
 
-        override fun stop(medicationId: String, at: Instant) = writeStop(medicationId, at)
+        override fun stop(medicationId: MedicationId, at: Instant) = writeStop(medicationId, at)
 
         override fun logDose(log: StoredDoseLog) = writeDoseLog(log)
     }
 
     private fun writeMedication(medication: StoredMedication, schedule: StoredSchedule) {
         queries.insertMedication(
-            id = medication.id,
+            id = medication.id.value,
             drugName = medication.drugName,
             label = medication.label,
             activeIngredients = encodeIngredients(medication.activeIngredients),
@@ -95,8 +98,8 @@ class SqlDelightMedicationRepository(
             createdAt = medication.createdAt.toEpochMilliseconds(),
         )
         queries.insertSchedule(
-            id = schedule.id,
-            medicationId = schedule.medicationId,
+            id = schedule.id.value,
+            medicationId = schedule.medicationId.value,
             frequencyType = schedule.frequency.typeColumn(),
             frequencyValue = schedule.frequency.valueColumn(),
             withFood = schedule.withFood.toDbBool(),
@@ -105,22 +108,22 @@ class SqlDelightMedicationRepository(
         )
     }
 
-    private fun writeActivation(medicationId: String, at: Instant) {
-        queries.scheduleIdForMedication(medicationId).executeAsList().forEach { scheduleId ->
+    private fun writeActivation(medicationId: MedicationId, at: Instant) {
+        queries.scheduleIdForMedication(medicationId.value).executeAsList().forEach { scheduleId ->
             queries.activateSchedule(startedAt = at.toEpochMilliseconds(), id = scheduleId)
         }
     }
 
-    private fun writeStop(medicationId: String, at: Instant) {
-        queries.scheduleIdForMedication(medicationId).executeAsList().forEach { scheduleId ->
+    private fun writeStop(medicationId: MedicationId, at: Instant) {
+        queries.scheduleIdForMedication(medicationId.value).executeAsList().forEach { scheduleId ->
             queries.stopSchedule(stoppedAt = at.toEpochMilliseconds(), id = scheduleId)
         }
     }
 
     private fun writeDoseLog(log: StoredDoseLog) {
         queries.insertDoseLog(
-            id = log.id,
-            scheduleId = log.scheduleId,
+            id = log.id.value,
+            scheduleId = log.scheduleId.value,
             plannedAt = log.plannedAt.toEpochMilliseconds(),
             takenAt = log.takenAt?.toEpochMilliseconds(),
             status = log.status.name,
@@ -130,8 +133,8 @@ class SqlDelightMedicationRepository(
     override fun medications(): Flow<List<MedicationWithSchedule>> =
         queries.listMedications(::rowToMedicationWithSchedule).asFlow().mapToList(dispatcher)
 
-    override suspend fun getMedication(id: String): MedicationWithSchedule? = withContext(dispatcher) {
-        queries.getMedication(id, ::rowToMedicationWithSchedule).executeAsOneOrNull()
+    override suspend fun getMedication(id: MedicationId): MedicationWithSchedule? = withContext(dispatcher) {
+        queries.getMedication(id.value, ::rowToMedicationWithSchedule).executeAsOneOrNull()
     }
 
     /** Updates the editable medication fields; a missing id is a no-op. */
@@ -142,7 +145,7 @@ class SqlDelightMedicationRepository(
             activeIngredients = encodeIngredients(medication.activeIngredients),
             dosage = medication.dosage,
             form = medication.form,
-            id = medication.id,
+            id = medication.id.value,
         )
         notifyChanged()
     }
@@ -158,22 +161,22 @@ class SqlDelightMedicationRepository(
             frequencyType = schedule.frequency.typeColumn(),
             frequencyValue = schedule.frequency.valueColumn(),
             withFood = schedule.withFood.toDbBool(),
-            id = schedule.id,
+            id = schedule.id.value,
         )
         notifyChanged()
     }
 
-    override suspend fun delete(id: String) = withContext(dispatcher) {
-        queries.deleteMedication(id)
+    override suspend fun delete(id: MedicationId) = withContext(dispatcher) {
+        queries.deleteMedication(id.value)
         notifyChanged()
     }
 
-    override suspend fun activate(medicationId: String, at: Instant) = withContext(dispatcher) {
+    override suspend fun activate(medicationId: MedicationId, at: Instant) = withContext(dispatcher) {
         queries.transaction { writeActivation(medicationId, at) }
         notifyChanged()
     }
 
-    override suspend fun stop(medicationId: String, at: Instant) = withContext(dispatcher) {
+    override suspend fun stop(medicationId: MedicationId, at: Instant) = withContext(dispatcher) {
         queries.transaction { writeStop(medicationId, at) }
         notifyChanged()
     }
@@ -184,16 +187,16 @@ class SqlDelightMedicationRepository(
     }
 
     /** Removes a single dose log (undo of a just-recorded take); missing id is a no-op. */
-    override suspend fun deleteDoseLog(id: String) = withContext(dispatcher) {
-        queries.deleteDoseLog(id)
+    override suspend fun deleteDoseLog(id: DoseId) = withContext(dispatcher) {
+        queries.deleteDoseLog(id.value)
         notifyChanged()
     }
 
     /** Half-open range: plannedAt in [from, to). */
-    override suspend fun dosesInRange(scheduleId: String, from: Instant, to: Instant): List<StoredDoseLog> =
+    override suspend fun dosesInRange(scheduleId: ScheduleId, from: Instant, to: Instant): List<StoredDoseLog> =
         withContext(dispatcher) {
             queries.doseLogsForScheduleInRange(
-                scheduleId = scheduleId,
+                scheduleId = scheduleId.value,
                 fromMillis = from.toEpochMilliseconds(),
                 toMillis = to.toEpochMilliseconds(),
             ).executeAsList().map { it.toStored() }
@@ -203,9 +206,9 @@ class SqlDelightMedicationRepository(
      * The schedule's newest TAKEN dose by effective time (takenAt when
      * present, plannedAt otherwise); skipped and missed rows never shift it.
      */
-    override suspend fun latestTakenDose(scheduleId: String): StoredDoseLog? =
+    override suspend fun latestTakenDose(scheduleId: ScheduleId): StoredDoseLog? =
         withContext(dispatcher) {
-            queries.latestTakenDoseForSchedule(scheduleId).executeAsOneOrNull()?.toStored()
+            queries.latestTakenDoseForSchedule(scheduleId.value).executeAsOneOrNull()?.toStored()
         }
 
     /**
@@ -219,7 +222,7 @@ class SqlDelightMedicationRepository(
                 toMillis = to.toEpochMilliseconds(),
             ) { medicationId, drugName, takenAt ->
                 TakenDose(
-                    medicationId = medicationId,
+                    medicationId = MedicationId(medicationId),
                     drugName = drugName,
                     // Never null: the query filters on takenAt IS NOT NULL.
                     takenAt = Instant.fromEpochMilliseconds(takenAt!!),
@@ -228,9 +231,9 @@ class SqlDelightMedicationRepository(
         }
 
     /** The schedule's latest [limit] dose logs, any status, newest planned first. */
-    override suspend fun recentDoses(scheduleId: String, limit: Int): List<StoredDoseLog> =
+    override suspend fun recentDoses(scheduleId: ScheduleId, limit: Int): List<StoredDoseLog> =
         withContext(dispatcher) {
-            queries.recentDoseLogsForSchedule(scheduleId, limit.toLong())
+            queries.recentDoseLogsForSchedule(scheduleId.value, limit.toLong())
                 .executeAsList().map { it.toStored() }
         }
 
@@ -260,7 +263,7 @@ class SqlDelightMedicationRepository(
             toMillis = to.toEpochMilliseconds(),
         ) { medicationId, drugName, dosage, plannedAt, takenAt, status ->
             DoseLogWithMedication(
-                medicationId = medicationId,
+                medicationId = MedicationId(medicationId),
                 drugName = drugName,
                 dosage = dosage,
                 plannedAt = Instant.fromEpochMilliseconds(plannedAt),
@@ -313,8 +316,8 @@ private fun decodeIngredients(raw: String): List<String> =
     runCatching { Json.decodeFromString(ingredientListSerializer, raw) }.getOrElse { emptyList() }
 
 private fun DoseLog.toStored() = StoredDoseLog(
-    id = id,
-    scheduleId = scheduleId,
+    id = DoseId(id),
+    scheduleId = ScheduleId(scheduleId),
     plannedAt = Instant.fromEpochMilliseconds(plannedAt),
     takenAt = takenAt?.let(Instant::fromEpochMilliseconds),
     status = DoseStatus.valueOf(status),
@@ -338,7 +341,7 @@ private fun rowToMedicationWithSchedule(
     stoppedAt: Long?,
 ): MedicationWithSchedule = MedicationWithSchedule(
     medication = StoredMedication(
-        id = medicationId,
+        id = MedicationId(medicationId),
         drugName = drugName,
         label = label,
         activeIngredients = decodeIngredients(activeIngredients),
@@ -348,8 +351,8 @@ private fun rowToMedicationWithSchedule(
         createdAt = Instant.fromEpochMilliseconds(createdAt),
     ),
     schedule = StoredSchedule(
-        id = scheduleId,
-        medicationId = medicationId,
+        id = ScheduleId(scheduleId),
+        medicationId = MedicationId(medicationId),
         frequency = frequencyFrom(frequencyType, frequencyValue),
         withFood = withFood.fromDbBool(),
         startedAt = startedAt?.let(Instant::fromEpochMilliseconds),

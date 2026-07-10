@@ -1,5 +1,6 @@
 package com.healthguard.detail.state
 
+import com.healthguard.domain.model.DoseId
 import kotlinx.datetime.LocalDate
 
 /** Every user action the detail screen can raise, sent through [DetailViewModel.onIntent]. */
@@ -15,7 +16,7 @@ sealed interface DetailIntent {
     data object TakeNow : DetailIntent
     data object ConfirmTakeAnyway : DetailIntent
     data object DismissTakeConfirm : DetailIntent
-    data class UndoTake(val doseId: String) : DetailIntent
+    data class UndoTake(val doseId: DoseId) : DetailIntent
 
     data class SelectDay(val date: LocalDate) : DetailIntent
     data object DismissDayDetail : DetailIntent

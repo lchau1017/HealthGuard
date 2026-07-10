@@ -1,5 +1,7 @@
 package com.healthguard.domain.tracking
 
+import com.healthguard.domain.model.DoseId
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.domain.model.DoseStatus
 import com.healthguard.domain.model.StoredDoseLog
 import kotlin.time.Instant
@@ -15,8 +17,8 @@ class DoseHistoryTest {
         takenAt: String? = plannedAt,
         status: DoseStatus = DoseStatus.TAKEN,
     ): StoredDoseLog = StoredDoseLog(
-        id = "d-${doseCounter++}",
-        scheduleId = "sch-1",
+        id = DoseId("d-${doseCounter++}"),
+        scheduleId = ScheduleId("sch-1"),
         plannedAt = Instant.parse(plannedAt),
         takenAt = takenAt?.let(Instant::parse),
         status = status,

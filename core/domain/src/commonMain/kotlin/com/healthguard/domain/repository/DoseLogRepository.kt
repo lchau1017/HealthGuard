@@ -1,6 +1,8 @@
 package com.healthguard.domain.repository
 
+import com.healthguard.domain.model.DoseId
 import com.healthguard.domain.model.DoseLogWithMedication
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.model.TakenDose
 import kotlin.time.Instant
@@ -16,17 +18,17 @@ interface DoseLogRepository {
     suspend fun logDose(log: StoredDoseLog)
 
     /** Removes a single dose log (undo of a just-recorded take); missing id is a no-op. */
-    suspend fun deleteDoseLog(id: String)
+    suspend fun deleteDoseLog(id: DoseId)
 
     /** Half-open range: plannedAt in [from, to). */
-    suspend fun dosesInRange(scheduleId: String, from: Instant, to: Instant): List<StoredDoseLog>
+    suspend fun dosesInRange(scheduleId: ScheduleId, from: Instant, to: Instant): List<StoredDoseLog>
 
     /**
      * The schedule's newest TAKEN dose by effective time (takenAt when
      * present, plannedAt otherwise) — the "last taken" input to next-dose
      * calculations. Skipped and missed rows never shift it.
      */
-    suspend fun latestTakenDose(scheduleId: String): StoredDoseLog?
+    suspend fun latestTakenDose(scheduleId: ScheduleId): StoredDoseLog?
 
     /**
      * Every TAKEN dose across all schedules with takenAt in [from, to)
@@ -35,7 +37,7 @@ interface DoseLogRepository {
     suspend fun takenDosesInRange(from: Instant, to: Instant): List<TakenDose>
 
     /** The schedule's latest [limit] dose logs, any status, newest planned first. */
-    suspend fun recentDoses(scheduleId: String, limit: Int): List<StoredDoseLog>
+    suspend fun recentDoses(scheduleId: ScheduleId, limit: Int): List<StoredDoseLog>
 
     /**
      * Every dose log (any status) across all schedules whose effective time —

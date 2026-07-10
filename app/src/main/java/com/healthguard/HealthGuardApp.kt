@@ -26,6 +26,7 @@ import com.healthguard.detail.DetailViewModel
 import com.healthguard.detail.state.DetailFinished
 import com.healthguard.detail.state.DetailIntent
 import com.healthguard.detail.ui.DetailScreen
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.home.HomeViewModel
 import com.healthguard.home.ui.HomeScreen
 import org.koin.androidx.compose.koinViewModel
@@ -65,7 +66,10 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
     // detail's view model, and the form edits it holds, survive rotation.
     val detailStores: DetailStoreHolder = viewModel()
 
-    val openDetailId = detailMedicationId
+    // The SAVED form stays the raw string — a value class would need a custom
+    // Saver for no gain — and is wrapped back into [MedicationId] right here
+    // at the storage edge.
+    val openDetailId = detailMedicationId?.let(::MedicationId)
     if (openDetailId != null) {
         // The single "detail actually closed" path: releases the id's
         // retained store, so opening A → back → opening B → back leaves no
@@ -120,7 +124,7 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
             state = homeState,
             onIntent = homeViewModel::onIntent,
             effects = homeViewModel.effects,
-            onOpenDetail = { detailMedicationId = it },
+            onOpenDetail = { detailMedicationId = it.value },
             onOpenActivity = { selectedTab = AppTab.ACTIVITY },
             onTakePhoto = scanImageLauncher::takePhoto,
             onPickFromGallery = scanImageLauncher::pickFromGallery,

@@ -1,5 +1,6 @@
 package com.healthguard.domain.repository
 
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.domain.model.MedicationWithSchedule
 import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.model.StoredMedication
@@ -41,16 +42,16 @@ interface MedicationRepository {
     interface BatchWriter {
         fun insertMedication(medication: StoredMedication, schedule: StoredSchedule)
 
-        fun activate(medicationId: String, at: Instant)
+        fun activate(medicationId: MedicationId, at: Instant)
 
-        fun stop(medicationId: String, at: Instant)
+        fun stop(medicationId: MedicationId, at: Instant)
 
         fun logDose(log: StoredDoseLog)
     }
 
     fun medications(): Flow<List<MedicationWithSchedule>>
 
-    suspend fun getMedication(id: String): MedicationWithSchedule?
+    suspend fun getMedication(id: MedicationId): MedicationWithSchedule?
 
     /** Updates the editable medication fields; a missing id is a no-op. */
     suspend fun updateMedication(medication: StoredMedication)
@@ -63,9 +64,9 @@ interface MedicationRepository {
      */
     suspend fun updateSchedule(schedule: StoredSchedule)
 
-    suspend fun delete(id: String)
+    suspend fun delete(id: MedicationId)
 
-    suspend fun activate(medicationId: String, at: Instant)
+    suspend fun activate(medicationId: MedicationId, at: Instant)
 
-    suspend fun stop(medicationId: String, at: Instant)
+    suspend fun stop(medicationId: MedicationId, at: Instant)
 }

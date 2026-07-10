@@ -2,6 +2,9 @@
 
 package com.healthguard.activity
 
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.model.DoseId
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.activity.domain.ComputeActivityStateUseCase
 import com.healthguard.activity.domain.LoadActivityDayDetailUseCase
 import com.healthguard.activity.state.ActivityIntent
@@ -151,8 +154,8 @@ class ActivityViewModelTest {
     private suspend fun logSkipped(medicationId: String, plannedAt: Instant) {
         repository.logDose(
             StoredDoseLog(
-                id = "skip-$medicationId-${plannedAt.toEpochMilliseconds()}",
-                scheduleId = "sched-$medicationId",
+                id = DoseId("skip-$medicationId-${plannedAt.toEpochMilliseconds()}"),
+                scheduleId = ScheduleId("sched-$medicationId"),
                 plannedAt = plannedAt,
                 takenAt = null,
                 status = DoseStatus.SKIPPED,
@@ -344,7 +347,7 @@ class ActivityViewModelTest {
                 date = LocalDate(2024, 7, 2),
                 lines = listOf(
                     DayMedicineLine(
-                        medicationId = "a",
+                        medicationId = MedicationId("a"),
                         name = "Cetirizine",
                         takenTimes = listOf(LocalTime(9, 4)),
                         skipped = 0,
@@ -352,7 +355,7 @@ class ActivityViewModelTest {
                         notRecorded = 1,
                     ),
                     DayMedicineLine(
-                        medicationId = "b",
+                        medicationId = MedicationId("b"),
                         name = "Ibuprofen",
                         takenTimes = listOf(LocalTime(14, 0)),
                         skipped = 0,

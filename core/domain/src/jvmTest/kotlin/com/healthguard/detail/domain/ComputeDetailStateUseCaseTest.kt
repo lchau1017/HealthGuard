@@ -1,5 +1,7 @@
 package com.healthguard.detail.domain
 
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.model.DoseId
 import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.domain.tracking.HistoryEntry
@@ -140,8 +142,8 @@ class ComputeDetailStateUseCaseTest {
     }
 
     private fun skipped(scheduleId: String, plannedAt: String) = StoredDoseLog(
-        id = "skip-$scheduleId-$plannedAt",
-        scheduleId = scheduleId,
+        id = DoseId("skip-$scheduleId-$plannedAt"),
+        scheduleId = ScheduleId(scheduleId),
         plannedAt = Instant.parse(plannedAt),
         takenAt = null,
         status = DoseStatus.SKIPPED,

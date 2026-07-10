@@ -2,6 +2,8 @@
 
 package com.healthguard.home.state
 
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.home.MedicationPhase
 import com.healthguard.home.format.DoseRowStatus
 import kotlin.time.ExperimentalTime
@@ -12,8 +14,8 @@ import kotlin.time.Instant
  * strings plus the ids the intents carry back. No domain entities.
  */
 data class DoseCard(
-    val medicationId: String,
-    val scheduleId: String,
+    val medicationId: MedicationId,
+    val scheduleId: ScheduleId,
     /** Pre-joined primary line: "Ibuprofen 200 mg". */
     val title: String,
     /** Bare drug name for accessibility labels, dialogs and the record path. */
@@ -33,7 +35,7 @@ data class DoseCard(
 
 /** One "My cabinet" row: a dormant or stopped medication, as pure view data. */
 data class CabinetRow(
-    val medicationId: String,
+    val medicationId: MedicationId,
     /** Pre-joined primary line: "Ibuprofen 200 mg". */
     val title: String,
     /** Bare drug name for accessibility labels. */

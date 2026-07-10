@@ -3,7 +3,9 @@
 package com.healthguard.home.domain
 
 import com.healthguard.dose.RecordedTake
+import com.healthguard.domain.model.DoseId
 import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.model.StoredDoseLog
 import kotlin.time.Instant
@@ -21,12 +23,12 @@ class RecordDoseUseCase(
     private val clock: () -> Instant,
 ) {
     suspend operator fun invoke(
-        scheduleId: String,
+        scheduleId: ScheduleId,
         plannedAt: Instant?,
         drugName: String,
     ): RecordedTake {
         val now = clock()
-        val id = Uuid.random().toString()
+        val id = DoseId(Uuid.random().toString())
         repository.logDose(
             StoredDoseLog(
                 id = id,

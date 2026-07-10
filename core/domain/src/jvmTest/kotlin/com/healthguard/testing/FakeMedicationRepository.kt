@@ -1,10 +1,13 @@
 package com.healthguard.testing
 
+import com.healthguard.domain.model.DoseId
 import com.healthguard.domain.model.DoseLogWithMedication
 import com.healthguard.domain.model.DoseStatus
 import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.domain.model.MedicationWithSchedule
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.model.StoredMedication
 import com.healthguard.domain.model.StoredSchedule
@@ -33,10 +36,10 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
 
     /** Recorded mutation calls, so delegation tests can assert the arguments. */
     val loggedDoses = mutableListOf<StoredDoseLog>()
-    val deletedDoseIds = mutableListOf<String>()
-    val deletedMedicationIds = mutableListOf<String>()
-    val activations = mutableListOf<Pair<String, Instant>>()
-    val stops = mutableListOf<Pair<String, Instant>>()
+    val deletedDoseIds = mutableListOf<DoseId>()
+    val deletedMedicationIds = mutableListOf<MedicationId>()
+    val activations = mutableListOf<Pair<MedicationId, Instant>>()
+    val stops = mutableListOf<Pair<MedicationId, Instant>>()
     val updatedMedications = mutableListOf<StoredMedication>()
     val updatedSchedules = mutableListOf<StoredSchedule>()
 
@@ -57,7 +60,11 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
 
     // --- Test seeding helpers -------------------------------------------------
 
-    /** Seeds a medication + schedule. Newest-first ordering is the caller's job. */
+    /**
+     * Seeds a medication + schedule. Newest-first ordering is the caller's job.
+     * Takes the raw string for brevity and wraps it: the medication id is
+     * [MedicationId] of [id], the schedule id [ScheduleId] of `"sched-$id"`.
+     */
     fun seedMedication(
         id: String,
         drugName: String = "Ibuprofen",
@@ -68,7 +75,7 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
     ): MedicationWithSchedule {
         val item = MedicationWithSchedule(
             medication = StoredMedication(
-                id = id,
+                id = MedicationId(id),
                 drugName = drugName,
                 label = null,
                 activeIngredients = emptyList(),
@@ -78,8 +85,8 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
                 createdAt = createdAt,
             ),
             schedule = StoredSchedule(
-                id = "sched-$id",
-                medicationId = id,
+                id = ScheduleId("sched-$id"),
+                medicationId = MedicationId(id),
                 frequency = frequency,
                 withFood = true,
                 startedAt = startedAt,
@@ -91,11 +98,11 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
         return item
     }
 
-    /** Seeds a TAKEN dose log for a schedule. */
+    /** Seeds a TAKEN dose log for a schedule (raw string wrapped, like [seedMedication]). */
     fun seedDose(scheduleId: String, takenAt: Instant, plannedAt: Instant = takenAt) {
         doseLogs += StoredDoseLog(
-            id = "dose-$scheduleId-${takenAt.toEpochMilliseconds()}",
-            scheduleId = scheduleId,
+            id = DoseId("dose-$scheduleId-${takenAt.toEpochMilliseconds()}"),
+            scheduleId = ScheduleId(scheduleId),
             plannedAt = plannedAt,
             takenAt = takenAt,
             status = DoseStatus.TAKEN,
@@ -118,21 +125,21 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
 
     override fun medications(): Flow<List<MedicationWithSchedule>> = _medications
 
-    override suspend fun delete(id: String) {
+    override suspend fun delete(id: MedicationId) {
         deletedMedicationIds += id
         medications.removeAll { it.medication.id == id }
         publishMedications()
         _dataChanges.emit(Unit)
     }
 
-    override suspend fun activate(medicationId: String, at: Instant) {
+    override suspend fun activate(medicationId: MedicationId, at: Instant) {
         activations += medicationId to at
         replaceSchedule(medicationId) { it.copy(startedAt = at, stoppedAt = null) }
         publishMedications()
         _dataChanges.emit(Unit)
     }
 
-    override suspend fun stop(medicationId: String, at: Instant) {
+    override suspend fun stop(medicationId: MedicationId, at: Instant) {
         stops += medicationId to at
         replaceSchedule(medicationId) { it.copy(stoppedAt = at) }
         publishMedications()
@@ -145,7 +152,7 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
         _dataChanges.emit(Unit)
     }
 
-    override suspend fun deleteDoseLog(id: String) {
+    override suspend fun deleteDoseLog(id: DoseId) {
         deletedDoseIds += id
         doseLogs.removeAll { it.id == id }
         _dataChanges.emit(Unit)
@@ -156,7 +163,7 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
      * (takenAt when present, plannedAt otherwise); skipped and missed rows
      * never shift it.
      */
-    override suspend fun latestTakenDose(scheduleId: String): StoredDoseLog? =
+    override suspend fun latestTakenDose(scheduleId: ScheduleId): StoredDoseLog? =
         doseLogs
             .filter { it.scheduleId == scheduleId && it.status == DoseStatus.TAKEN }
             .maxByOrNull { it.takenAt ?: it.plannedAt }
@@ -166,7 +173,7 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
             .filter { (it.takenAt ?: it.plannedAt) in from..<to }
             .sortedBy { it.plannedAt }
 
-    override suspend fun getMedication(id: String): MedicationWithSchedule? =
+    override suspend fun getMedication(id: MedicationId): MedicationWithSchedule? =
         medications.firstOrNull { it.medication.id == id }
 
     /**
@@ -223,7 +230,7 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
     }
 
     override suspend fun dosesInRange(
-        scheduleId: String,
+        scheduleId: ScheduleId,
         from: Instant,
         to: Instant,
     ): List<StoredDoseLog> =
@@ -231,7 +238,7 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
             .filter { it.scheduleId == scheduleId && it.plannedAt in from..<to }
             .sortedBy { it.plannedAt }
 
-    override suspend fun recentDoses(scheduleId: String, limit: Int): List<StoredDoseLog> =
+    override suspend fun recentDoses(scheduleId: ScheduleId, limit: Int): List<StoredDoseLog> =
         doseLogs
             .filter { it.scheduleId == scheduleId }
             .sortedByDescending { it.plannedAt }
@@ -275,12 +282,12 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
                 medications += MedicationWithSchedule(medication, schedule)
             }
 
-            override fun activate(medicationId: String, at: Instant) {
+            override fun activate(medicationId: MedicationId, at: Instant) {
                 activations += medicationId to at
                 replaceSchedule(medicationId) { it.copy(startedAt = at, stoppedAt = null) }
             }
 
-            override fun stop(medicationId: String, at: Instant) {
+            override fun stop(medicationId: MedicationId, at: Instant) {
                 stops += medicationId to at
                 replaceSchedule(medicationId) { it.copy(stoppedAt = at) }
             }
@@ -322,7 +329,7 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
             }
 
     private fun replaceSchedule(
-        medicationId: String,
+        medicationId: MedicationId,
         transform: (StoredSchedule) -> StoredSchedule,
     ) {
         val index = medications.indexOfFirst { it.medication.id == medicationId }

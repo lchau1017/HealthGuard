@@ -25,6 +25,7 @@ import com.healthguard.home.domain.SeedDemoDataUseCase
 import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
 import com.healthguard.data.DriverFactory
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.domain.repository.DoseLogRepository
 import com.healthguard.domain.repository.MedicationRepository
 import com.healthguard.data.SqlDelightMedicationRepository
@@ -94,7 +95,7 @@ val appModule = module {
     viewModel { ConfirmViewModel(get(), get(), get()) }
     viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { ActivityViewModel(get(), get(), get()) }
-    viewModel { (medicationId: String) ->
+    viewModel { (medicationId: MedicationId) ->
         DetailViewModel(
             computeDetailState = get(),
             loadDayDetail = get(),

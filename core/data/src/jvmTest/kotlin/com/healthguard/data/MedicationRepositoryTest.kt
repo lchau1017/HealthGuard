@@ -2,6 +2,9 @@
 
 package com.healthguard.data
 
+import com.healthguard.domain.model.DoseId
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.data.db.HealthGuardDb
 import com.healthguard.domain.extraction.Frequency
 import com.healthguard.domain.model.DoseLogWithMedication
@@ -34,7 +37,7 @@ class MedicationRepositoryTest {
         label: String? = "Allergy",
         createdAtMillis: Long = 1_000,
     ) = StoredMedication(
-        id = id,
+        id = MedicationId(id),
         drugName = "Cetirizine Hydrochloride",
         label = label,
         activeIngredients = listOf("cetirizine hydrochloride", "lactose, spray-dried"),
@@ -50,8 +53,8 @@ class MedicationRepositoryTest {
         frequency: Frequency? = Frequency.TimesPerDay(2),
         withFood: Boolean? = true,
     ) = StoredSchedule(
-        id = id,
-        medicationId = medicationId,
+        id = ScheduleId(id),
+        medicationId = MedicationId(medicationId),
         frequency = frequency,
         withFood = withFood,
         startedAt = null,
@@ -60,8 +63,8 @@ class MedicationRepositoryTest {
 
     private fun dose(id: String, scheduleId: String = "sch-1", plannedAtMillis: Long) =
         StoredDoseLog(
-            id = id,
-            scheduleId = scheduleId,
+            id = DoseId(id),
+            scheduleId = ScheduleId(scheduleId),
             plannedAt = Instant.fromEpochMilliseconds(plannedAtMillis),
             takenAt = null,
             status = DoseStatus.MISSED,
@@ -89,8 +92,8 @@ class MedicationRepositoryTest {
             schedule(id = "sch-b", medicationId = "med-b", frequency = null),
         )
 
-        assertEquals(Frequency.EveryHours(6), repo.getMedication("med-a")?.schedule?.frequency)
-        assertNull(repo.getMedication("med-b")?.schedule?.frequency)
+        assertEquals(Frequency.EveryHours(6), repo.getMedication(MedicationId("med-a"))?.schedule?.frequency)
+        assertNull(repo.getMedication(MedicationId("med-b"))?.schedule?.frequency)
     }
 
     @Test
@@ -102,9 +105,9 @@ class MedicationRepositoryTest {
                 schedule(id = "sch-$suffix", medicationId = "med-$suffix", withFood = value),
             )
         }
-        assertEquals(true, repo.getMedication("med-t")?.schedule?.withFood)
-        assertEquals(false, repo.getMedication("med-f")?.schedule?.withFood)
-        assertNull(repo.getMedication("med-n")?.schedule?.withFood)
+        assertEquals(true, repo.getMedication(MedicationId("med-t"))?.schedule?.withFood)
+        assertEquals(false, repo.getMedication(MedicationId("med-f"))?.schedule?.withFood)
+        assertNull(repo.getMedication(MedicationId("med-n"))?.schedule?.withFood)
     }
 
     @Test
@@ -113,11 +116,11 @@ class MedicationRepositoryTest {
         repo.insertMedication(medication(), schedule())
         repo.logDose(dose("dose-1", plannedAtMillis = 5_000))
 
-        repo.delete("med-1")
+        repo.delete(MedicationId("med-1"))
 
         assertTrue(repo.medications().first().isEmpty())
-        assertTrue(repo.recentDoses("sch-1", limit = 5).isEmpty())
-        assertTrue(repo.dosesInRange("sch-1", Instant.fromEpochMilliseconds(0), Instant.fromEpochMilliseconds(10_000)).isEmpty())
+        assertTrue(repo.recentDoses(ScheduleId("sch-1"), limit = 5).isEmpty())
+        assertTrue(repo.dosesInRange(ScheduleId("sch-1"), Instant.fromEpochMilliseconds(0), Instant.fromEpochMilliseconds(10_000)).isEmpty())
     }
 
     @Test
@@ -125,16 +128,16 @@ class MedicationRepositoryTest {
         val repo = repository()
         repo.insertMedication(medication(), schedule())
 
-        repo.activate("med-1", Instant.fromEpochMilliseconds(2_000))
+        repo.activate(MedicationId("med-1"), Instant.fromEpochMilliseconds(2_000))
         assertEquals(
             Instant.fromEpochMilliseconds(2_000),
-            repo.getMedication("med-1")?.schedule?.startedAt,
+            repo.getMedication(MedicationId("med-1"))?.schedule?.startedAt,
         )
 
-        repo.stop("med-1", Instant.fromEpochMilliseconds(3_000))
+        repo.stop(MedicationId("med-1"), Instant.fromEpochMilliseconds(3_000))
         assertEquals(
             Instant.fromEpochMilliseconds(3_000),
-            repo.getMedication("med-1")?.schedule?.stoppedAt,
+            repo.getMedication(MedicationId("med-1"))?.schedule?.stoppedAt,
         )
     }
 
@@ -142,12 +145,12 @@ class MedicationRepositoryTest {
     fun `reactivating a stopped medication clears stoppedAt`() = runTest {
         val repo = repository()
         repo.insertMedication(medication(), schedule())
-        repo.activate("med-1", Instant.fromEpochMilliseconds(2_000))
-        repo.stop("med-1", Instant.fromEpochMilliseconds(3_000))
+        repo.activate(MedicationId("med-1"), Instant.fromEpochMilliseconds(2_000))
+        repo.stop(MedicationId("med-1"), Instant.fromEpochMilliseconds(3_000))
 
-        repo.activate("med-1", Instant.fromEpochMilliseconds(4_000))
+        repo.activate(MedicationId("med-1"), Instant.fromEpochMilliseconds(4_000))
 
-        val schedule = repo.getMedication("med-1")?.schedule
+        val schedule = repo.getMedication(MedicationId("med-1"))?.schedule
         assertEquals(Instant.fromEpochMilliseconds(4_000), schedule?.startedAt)
         assertNull(schedule?.stoppedAt)
     }
@@ -162,11 +165,11 @@ class MedicationRepositoryTest {
         repo.logDose(dose("d-to", plannedAtMillis = 2_000))
 
         val inRange = repo.dosesInRange(
-            "sch-1",
+            ScheduleId("sch-1"),
             from = Instant.fromEpochMilliseconds(1_000),
             to = Instant.fromEpochMilliseconds(2_000),
         )
-        assertEquals(listOf("d-from", "d-mid"), inRange.map { it.id })
+        assertEquals(listOf("d-from", "d-mid"), inRange.map { it.id.value })
     }
 
     @Test
@@ -179,7 +182,7 @@ class MedicationRepositoryTest {
         repo.logDose(dose("d-skipped", plannedAtMillis = 3_000).copy(status = DoseStatus.SKIPPED))
         repo.logDose(dose("d-missed", plannedAtMillis = 4_000).copy(status = DoseStatus.MISSED))
 
-        assertEquals("d-new", repo.latestTakenDose("sch-1")?.id)
+        assertEquals("d-new", repo.latestTakenDose(ScheduleId("sch-1"))?.id?.value)
     }
 
     @Test
@@ -192,15 +195,15 @@ class MedicationRepositoryTest {
         // TAKEN without a takenAt (written by other paths): plannedAt stands in.
         repo.logDose(
             StoredDoseLog(
-                id = "d-no-taken-at",
-                scheduleId = "sch-1",
+                id = DoseId("d-no-taken-at"),
+                scheduleId = ScheduleId("sch-1"),
                 plannedAt = Instant.fromEpochMilliseconds(3_000),
                 takenAt = null,
                 status = DoseStatus.TAKEN,
             ),
         )
 
-        assertEquals("d-late", repo.latestTakenDose("sch-1")?.id)
+        assertEquals("d-late", repo.latestTakenDose(ScheduleId("sch-1"))?.id?.value)
     }
 
     @Test
@@ -209,13 +212,13 @@ class MedicationRepositoryTest {
         repo.insertMedication(medication(), schedule())
         repo.logTaken("d-1", takenAtMillis = 1_000)
         repo.logTaken("d-2", takenAtMillis = 2_000)
-        assertEquals("d-2", repo.latestTakenDose("sch-1")?.id)
+        assertEquals("d-2", repo.latestTakenDose(ScheduleId("sch-1"))?.id?.value)
 
-        repo.deleteDoseLog("d-2")
+        repo.deleteDoseLog(DoseId("d-2"))
 
-        assertEquals("d-1", repo.latestTakenDose("sch-1")?.id)
-        repo.deleteDoseLog("d-1")
-        assertNull(repo.latestTakenDose("sch-1"))
+        assertEquals("d-1", repo.latestTakenDose(ScheduleId("sch-1"))?.id?.value)
+        repo.deleteDoseLog(DoseId("d-1"))
+        assertNull(repo.latestTakenDose(ScheduleId("sch-1")))
     }
 
     @Test
@@ -224,9 +227,9 @@ class MedicationRepositoryTest {
         repo.insertMedication(medication(), schedule())
         repo.logDose(dose("d-1", plannedAtMillis = 1_000))
 
-        repo.deleteDoseLog("d-ghost")
+        repo.deleteDoseLog(DoseId("d-ghost"))
 
-        assertEquals(listOf("d-1"), repo.recentDoses("sch-1", limit = 5).map { it.id })
+        assertEquals(listOf("d-1"), repo.recentDoses(ScheduleId("sch-1"), limit = 5).map { it.id.value })
     }
 
     @Test
@@ -243,7 +246,7 @@ class MedicationRepositoryTest {
         )
         repo.updateMedication(updated)
 
-        assertEquals(updated, repo.getMedication("med-1")?.medication)
+        assertEquals(updated, repo.getMedication(MedicationId("med-1"))?.medication)
     }
 
     @Test
@@ -259,7 +262,7 @@ class MedicationRepositoryTest {
         )
         repo.updateMedication(cleared)
 
-        assertEquals(cleared, repo.getMedication("med-1")?.medication)
+        assertEquals(cleared, repo.getMedication(MedicationId("med-1"))?.medication)
     }
 
     @Test
@@ -268,12 +271,12 @@ class MedicationRepositoryTest {
         repo.insertMedication(medication(), schedule(frequency = Frequency.TimesPerDay(2)))
 
         repo.updateSchedule(schedule().copy(frequency = Frequency.EveryHours(8), withFood = false))
-        var stored = repo.getMedication("med-1")?.schedule
+        var stored = repo.getMedication(MedicationId("med-1"))?.schedule
         assertEquals(Frequency.EveryHours(8), stored?.frequency)
         assertEquals(false, stored?.withFood)
 
         repo.updateSchedule(schedule().copy(frequency = null, withFood = null))
-        stored = repo.getMedication("med-1")?.schedule
+        stored = repo.getMedication(MedicationId("med-1"))?.schedule
         assertNull(stored?.frequency)
         assertNull(stored?.withFood)
     }
@@ -282,8 +285,8 @@ class MedicationRepositoryTest {
     fun `updateSchedule preserves startedAt and stoppedAt`() = runTest {
         val repo = repository()
         repo.insertMedication(medication(), schedule())
-        repo.activate("med-1", Instant.fromEpochMilliseconds(2_000))
-        repo.stop("med-1", Instant.fromEpochMilliseconds(3_000))
+        repo.activate(MedicationId("med-1"), Instant.fromEpochMilliseconds(2_000))
+        repo.stop(MedicationId("med-1"), Instant.fromEpochMilliseconds(3_000))
 
         // The passed-in schedule claims different activation state; update
         // must ignore it — activation changes go through activate/stop.
@@ -295,7 +298,7 @@ class MedicationRepositoryTest {
             ),
         )
 
-        val stored = repo.getMedication("med-1")?.schedule
+        val stored = repo.getMedication(MedicationId("med-1"))?.schedule
         assertEquals(Frequency.EveryHours(6), stored?.frequency)
         assertEquals(Instant.fromEpochMilliseconds(2_000), stored?.startedAt)
         assertEquals(Instant.fromEpochMilliseconds(3_000), stored?.stoppedAt)
@@ -326,8 +329,8 @@ class MedicationRepositoryTest {
         plannedAtMillis: Long = takenAtMillis,
     ) = logDose(
         StoredDoseLog(
-            id = id,
-            scheduleId = scheduleId,
+            id = DoseId(id),
+            scheduleId = ScheduleId(scheduleId),
             plannedAt = Instant.fromEpochMilliseconds(plannedAtMillis),
             takenAt = Instant.fromEpochMilliseconds(takenAtMillis),
             status = DoseStatus.TAKEN,
@@ -366,8 +369,8 @@ class MedicationRepositoryTest {
         // MISSED row that oddly carries a takenAt: status must still exclude it.
         repo.logDose(
             StoredDoseLog(
-                id = "d-missed",
-                scheduleId = "sch-1",
+                id = DoseId("d-missed"),
+                scheduleId = ScheduleId("sch-1"),
                 plannedAt = Instant.fromEpochMilliseconds(1_300),
                 takenAt = Instant.fromEpochMilliseconds(1_300),
                 status = DoseStatus.MISSED,
@@ -398,8 +401,8 @@ class MedicationRepositoryTest {
         )
         assertEquals(
             listOf(
-                TakenDose("med-a", "Cetirizine Hydrochloride", Instant.fromEpochMilliseconds(1_000)),
-                TakenDose("med-b", "Loratadine", Instant.fromEpochMilliseconds(2_000)),
+                TakenDose(MedicationId("med-a"), "Cetirizine Hydrochloride", Instant.fromEpochMilliseconds(1_000)),
+                TakenDose(MedicationId("med-b"), "Loratadine", Instant.fromEpochMilliseconds(2_000)),
             ),
             inRange,
         )
@@ -416,9 +419,9 @@ class MedicationRepositoryTest {
 
         assertEquals(
             listOf("d-4", "d-3", "d-2"),
-            repo.recentDoses("sch-1", limit = 3).map { it.id },
+            repo.recentDoses(ScheduleId("sch-1"), limit = 3).map { it.id.value },
         )
-        assertEquals(4, repo.recentDoses("sch-1", limit = 10).size)
+        assertEquals(4, repo.recentDoses(ScheduleId("sch-1"), limit = 10).size)
     }
 
     @Test
@@ -445,7 +448,7 @@ class MedicationRepositoryTest {
             from = Instant.fromEpochMilliseconds(1_000),
             to = Instant.fromEpochMilliseconds(2_000),
         )
-        assertEquals(setOf("d-taken", "d-missed", "d-late"), inRange.map { it.id }.toSet())
+        assertEquals(setOf("d-taken", "d-missed", "d-late"), inRange.map { it.id.value }.toSet())
     }
 
     @Test
@@ -469,7 +472,7 @@ class MedicationRepositoryTest {
         assertEquals(
             listOf(
                 DoseLogWithMedication(
-                    medicationId = "med-a",
+                    medicationId = MedicationId("med-a"),
                     drugName = "Cetirizine Hydrochloride",
                     dosage = "10 mg",
                     plannedAt = Instant.fromEpochMilliseconds(1_000),
@@ -477,7 +480,7 @@ class MedicationRepositoryTest {
                     status = DoseStatus.TAKEN,
                 ),
                 DoseLogWithMedication(
-                    medicationId = "med-b",
+                    medicationId = MedicationId("med-b"),
                     drugName = "Loratadine",
                     dosage = null,
                     plannedAt = Instant.fromEpochMilliseconds(1_500),
@@ -514,7 +517,7 @@ class MedicationRepositoryTest {
     fun `recentDoses of an unknown schedule is empty`() = runTest {
         val repo = repository()
         repo.insertMedication(medication(), schedule())
-        assertTrue(repo.recentDoses("sch-ghost", limit = 5).isEmpty())
+        assertTrue(repo.recentDoses(ScheduleId("sch-ghost"), limit = 5).isEmpty())
     }
 
     @Test
@@ -531,7 +534,7 @@ class MedicationRepositoryTest {
 
         assertEquals(
             listOf("med-new", "med-old"),
-            repo.medications().first().map { it.medication.id },
+            repo.medications().first().map { it.medication.id.value },
         )
     }
 
@@ -544,13 +547,13 @@ class MedicationRepositoryTest {
         }
 
         repo.insertMedication(medication(), schedule())
-        repo.activate("med-1", Instant.fromEpochMilliseconds(1_000))
+        repo.activate(MedicationId("med-1"), Instant.fromEpochMilliseconds(1_000))
         repo.logDose(dose("d-1", plannedAtMillis = 1_000))
-        repo.deleteDoseLog("d-1")
-        repo.stop("med-1", Instant.fromEpochMilliseconds(2_000))
+        repo.deleteDoseLog(DoseId("d-1"))
+        repo.stop(MedicationId("med-1"), Instant.fromEpochMilliseconds(2_000))
         repo.updateMedication(medication())
         repo.updateSchedule(schedule())
-        repo.delete("med-1")
+        repo.delete(MedicationId("med-1"))
 
         assertEquals(8, events.size)
         job.cancel()
@@ -566,16 +569,16 @@ class MedicationRepositoryTest {
 
         repo.batch {
             insertMedication(medication(), schedule())
-            activate("med-1", Instant.fromEpochMilliseconds(1_000))
+            activate(MedicationId("med-1"), Instant.fromEpochMilliseconds(1_000))
             logDose(dose("d-1", plannedAtMillis = 1_000))
         }
 
         assertEquals(1, events.size)
         // All three writes landed.
         val row = repo.medications().first().single()
-        assertEquals("med-1", row.medication.id)
+        assertEquals("med-1", row.medication.id.value)
         assertEquals(Instant.fromEpochMilliseconds(1_000), row.schedule.startedAt)
-        assertEquals(listOf("d-1"), repo.recentDoses("sch-1", limit = 5).map { it.id })
+        assertEquals(listOf("d-1"), repo.recentDoses(ScheduleId("sch-1"), limit = 5).map { it.id.value })
         job.cancel()
     }
 

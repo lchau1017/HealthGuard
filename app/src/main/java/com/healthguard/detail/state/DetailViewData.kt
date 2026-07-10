@@ -9,7 +9,10 @@ enum class HistoryRowKind { TAKEN, MISSED, LOGGED, NOT_RECORDED }
 
 /** One render-ready row of the detail history list — no domain entities. */
 data class HistoryRowData(
-    /** Log id, or a synthetic slot key for derived "Not recorded" rows. */
+    /**
+     * Raw log id, or a synthetic `"slot-<instant>"` key for derived
+     * "Not recorded" rows — a mixed view key, so deliberately not a [com.healthguard.domain.model.DoseId].
+     */
     val id: String,
     /** Pre-formatted primary line: "Today, 8:02 AM". */
     val title: String,

@@ -1,5 +1,7 @@
 package com.healthguard.activity.domain
 
+import com.healthguard.domain.model.DoseId
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.activity.ActivityFilter
 import com.healthguard.home.MedicationPhase
 import com.healthguard.domain.model.DoseStatus
@@ -44,8 +46,8 @@ class ComputeActivityStateUseCaseTest {
     private suspend fun FakeMedicationRepository.logSkipped(medicationId: String, plannedAt: Instant) =
         logDose(
             StoredDoseLog(
-                id = "skip-$medicationId-${plannedAt.toEpochMilliseconds()}",
-                scheduleId = "sched-$medicationId",
+                id = DoseId("skip-$medicationId-${plannedAt.toEpochMilliseconds()}"),
+                scheduleId = ScheduleId("sched-$medicationId"),
                 plannedAt = plannedAt,
                 takenAt = null,
                 status = DoseStatus.SKIPPED,

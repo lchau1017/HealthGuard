@@ -2,6 +2,8 @@
 
 package com.healthguard.confirm.domain
 
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.domain.repository.MedicationRepository
 import com.healthguard.domain.model.StoredMedication
 import com.healthguard.domain.model.StoredSchedule
@@ -36,8 +38,8 @@ class SaveNewMedicationUseCase(
     private val repository: MedicationRepository,
     private val clock: () -> Instant,
 ) {
-    suspend operator fun invoke(medication: NewMedication): String {
-        val medicationId = Uuid.random().toString()
+    suspend operator fun invoke(medication: NewMedication): MedicationId {
+        val medicationId = MedicationId(Uuid.random().toString())
         repository.insertMedication(
             StoredMedication(
                 id = medicationId,
@@ -50,7 +52,7 @@ class SaveNewMedicationUseCase(
                 createdAt = clock(),
             ),
             StoredSchedule(
-                id = Uuid.random().toString(),
+                id = ScheduleId(Uuid.random().toString()),
                 medicationId = medicationId,
                 frequency = medication.frequency,
                 withFood = medication.withFood,

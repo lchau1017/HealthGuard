@@ -2,6 +2,8 @@
 
 package com.healthguard.common.format
 
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.domain.model.StoredSchedule
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -20,8 +22,8 @@ class PhaseFormatTest {
         startedAt: Instant? = null,
         stoppedAt: Instant? = null,
     ) = StoredSchedule(
-        id = "sch-1",
-        medicationId = "med-1",
+        id = ScheduleId("sch-1"),
+        medicationId = MedicationId("med-1"),
         frequency = null,
         withFood = null,
         startedAt = startedAt,

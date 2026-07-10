@@ -43,6 +43,7 @@ import com.healthguard.common.theme.Spacing
 import com.healthguard.common.ui.DoubleDoseDialog
 import com.healthguard.common.ui.semanticsLabel
 import com.healthguard.common.ui.showUndoTakeSnackbar
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.home.state.HomeEffect
 import com.healthguard.home.state.HomeIntent
 import com.healthguard.home.state.HomeUiState
@@ -62,7 +63,7 @@ fun HomeScreen(
     state: HomeUiState,
     onIntent: (HomeIntent) -> Unit,
     effects: Flow<HomeEffect>,
-    onOpenDetail: (String) -> Unit,
+    onOpenDetail: (MedicationId) -> Unit,
     onOpenActivity: () -> Unit,
     onTakePhoto: () -> Unit,
     onPickFromGallery: () -> Unit,
@@ -187,7 +188,7 @@ fun HomeScreen(
                         )
                     }
                 } else {
-                    items(state.taking, key = { "taking-${it.medicationId}" }) { card ->
+                    items(state.taking, key = { "taking-${it.medicationId.value}" }) { card ->
                         TakingRow(
                             card = card,
                             onTakeNow = { onIntent(HomeIntent.TakeNow(card.scheduleId)) },
@@ -202,7 +203,7 @@ fun HomeScreen(
                         SectionEmptyText("Everything you scanned is in use.")
                     }
                 } else {
-                    items(state.cabinet, key = { "cabinet-${it.medicationId}" }) { row ->
+                    items(state.cabinet, key = { "cabinet-${it.medicationId.value}" }) { row ->
                         CabinetRowCard(
                             row = row,
                             onPlay = { onIntent(HomeIntent.Play(row.medicationId)) },

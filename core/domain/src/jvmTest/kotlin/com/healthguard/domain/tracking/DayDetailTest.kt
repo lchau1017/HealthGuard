@@ -1,6 +1,7 @@
 package com.healthguard.domain.tracking
 
 import com.healthguard.domain.model.DoseLogWithMedication
+import com.healthguard.domain.model.MedicationId
 import com.healthguard.domain.model.DoseStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,7 +23,7 @@ class DayDetailTest {
         takenAt: String? = plannedAt,
         status: DoseStatus = DoseStatus.TAKEN,
     ) = DoseLogWithMedication(
-        medicationId = medicationId,
+        medicationId = MedicationId(medicationId),
         drugName = drugName,
         dosage = dosage,
         plannedAt = Instant.parse(plannedAt),
@@ -53,7 +54,7 @@ class DayDetailTest {
         assertEquals(
             listOf(
                 DayMedicineLine(
-                    medicationId = "med-a",
+                    medicationId = MedicationId("med-a"),
                     name = "Cetirizine 10 mg",
                     takenTimes = listOf(LocalTime(9, 4), LocalTime(21, 12)),
                     skipped = 0,
@@ -61,7 +62,7 @@ class DayDetailTest {
                     notRecorded = 0,
                 ),
                 DayMedicineLine(
-                    medicationId = "med-b",
+                    medicationId = MedicationId("med-b"),
                     name = "Vitamin D3 1000 IU",
                     takenTimes = listOf(LocalTime(9, 30)),
                     skipped = 0,
@@ -94,7 +95,7 @@ class DayDetailTest {
             // Four slots owed; 09:00, 15:00 and 21:00 are answered by logs,
             // the 12:00 slot by nothing -> 1 not recorded.
             expectedByMedication = mapOf(
-                "med-a" to listOf(
+                MedicationId("med-a") to listOf(
                     Instant.parse("2024-07-02T09:00:00Z"),
                     Instant.parse("2024-07-02T12:00:00Z"),
                     Instant.parse("2024-07-02T15:00:00Z"),
@@ -117,8 +118,8 @@ class DayDetailTest {
             date = date,
             logs = listOf(log(plannedAt = "2024-07-02T09:00:00Z")),
             expectedByMedication = mapOf(
-                "med-a" to listOf(Instant.parse("2024-07-02T09:00:00Z")),
-                "med-c" to listOf(
+                MedicationId("med-a") to listOf(Instant.parse("2024-07-02T09:00:00Z")),
+                MedicationId("med-c") to listOf(
                     Instant.parse("2024-07-02T09:00:00Z"),
                     Instant.parse("2024-07-02T21:00:00Z"),
                 ),
@@ -128,7 +129,7 @@ class DayDetailTest {
 
         // med-c gets no line — nothing was recorded for it — but its two
         // silent slots surface in the aggregate.
-        assertEquals(listOf("med-a"), detail.lines.map { it.medicationId })
+        assertEquals(listOf(MedicationId("med-a")), detail.lines.map { it.medicationId })
         assertEquals(2, detail.expectedNotRecorded)
     }
 
@@ -138,7 +139,7 @@ class DayDetailTest {
             date = date,
             logs = emptyList(),
             expectedByMedication = mapOf(
-                "med-a" to listOf(
+                MedicationId("med-a") to listOf(
                     Instant.parse("2024-07-02T09:00:00Z"),
                     Instant.parse("2024-07-02T21:00:00Z"),
                 ),

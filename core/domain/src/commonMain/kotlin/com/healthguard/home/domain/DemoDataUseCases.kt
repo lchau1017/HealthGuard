@@ -1,6 +1,9 @@
 package com.healthguard.home.domain
 
+import com.healthguard.domain.model.DoseId
 import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.domain.repository.MedicationRepository
 import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.model.StoredMedication
@@ -35,8 +38,8 @@ private val DEMO_STOP_TIME = LocalTime(12, 0)
  * same relative distance from now).
  */
 private data class Demo(
-    val medId: String,
-    val schedId: String,
+    val medId: MedicationId,
+    val schedId: ScheduleId,
     val name: String,
     val dosage: String,
     val label: String,
@@ -60,38 +63,38 @@ private data class Demo(
 /** The one place the demo dataset is declared; ids and history derive from it. */
 private val demoCatalog = listOf(
     Demo(
-        "demo-med-1", "demo-sch-1", "Vitamin D3", "1000 IU", "Supplement",
+        MedicationId("demo-med-1"), ScheduleId("demo-sch-1"), "Vitamin D3", "1000 IU", "Supplement",
         listOf("colecalciferol"), Frequency.TimesPerDay(1),
         listOf(LocalTime(9, 0)), startedDaysAgo = HISTORY_DAYS,
     ),
     Demo(
-        "demo-med-2", "demo-sch-2", "Cetirizine", "10 mg", "Allergy",
+        MedicationId("demo-med-2"), ScheduleId("demo-sch-2"), "Cetirizine", "10 mg", "Allergy",
         listOf("cetirizine hydrochloride"), Frequency.TimesPerDay(2),
         // Matches the 2x/day meal-aligned anchors (09:00, 21:00) so
         // seeded history lines up with computed next-dose slots.
         listOf(LocalTime(9, 0), LocalTime(21, 0)), startedDaysAgo = HISTORY_DAYS,
     ),
     Demo(
-        "demo-med-3", "demo-sch-3", "Ibuprofen", "200 mg", "Pain relief",
+        MedicationId("demo-med-3"), ScheduleId("demo-sch-3"), "Ibuprofen", "200 mg", "Pain relief",
         listOf("ibuprofen"), Frequency.EveryHours(6),
         listOf(LocalTime(8, 0), LocalTime(14, 0), LocalTime(20, 0)), startedDaysAgo = 10,
     ),
     Demo(
-        "demo-med-4", "demo-sch-4", "Amoxicillin", "500 mg", "Other",
+        MedicationId("demo-med-4"), ScheduleId("demo-sch-4"), "Amoxicillin", "500 mg", "Other",
         listOf("amoxicillin trihydrate"), Frequency.TimesPerDay(3),
         emptyList(), startedDaysAgo = null,
     ),
     // Started 8 weeks ago, stopped 2 weeks ago: exercises the "Stopped"
     // phase chip and the out-of-treatment trailing blanks on its heat map.
     Demo(
-        "demo-med-5", "demo-sch-5", "Loratadine", "10 mg", "Allergy",
+        MedicationId("demo-med-5"), ScheduleId("demo-sch-5"), "Loratadine", "10 mg", "Allergy",
         listOf("loratadine"), Frequency.TimesPerDay(1),
         listOf(LocalTime(9, 0)), startedDaysAgo = 56, stoppedDaysAgo = 14,
     ),
 )
 
 /** Ids of the demo medications the seeder writes (and [RemoveDemoDataUseCase] clears). */
-val demoMedicationIds: List<String> = demoCatalog.map { it.medId }
+val demoMedicationIds: List<MedicationId> = demoCatalog.map { it.medId }
 
 /**
  * Debug-only demo content: a few realistic medications plus ~10 weeks of dose
@@ -134,7 +137,7 @@ class SeedDemoDataUseCase(
                         id = demo.schedId,
                         medicationId = demo.medId,
                         frequency = demo.frequency,
-                        withFood = demo.medId == "demo-med-3",
+                        withFood = demo.medId == MedicationId("demo-med-3"),
                         startedAt = null,
                         stoppedAt = null,
                     ),
@@ -171,7 +174,7 @@ private fun MedicationRepository.BatchWriter.seedHistory(
             // A whole deliberately skipped day five days ago (both of
             // Cetirizine's doses logged SKIPPED): the dash "skipped by
             // choice" state is always demonstrable, whatever the RNG does.
-            val forcedSkipDay = demo.medId == "demo-med-2" && daysFromToday == 5L
+            val forcedSkipDay = demo.medId == MedicationId("demo-med-2") && daysFromToday == 5L
             // Guaranteed streak: the last 4 days are never silent.
             val skipDay = !forcedSkipDay && daysFromToday > 4 &&
                 random.nextDouble() < SKIP_DAY_CHANCE
@@ -181,7 +184,7 @@ private fun MedicationRepository.BatchWriter.seedHistory(
                     // dose is never logged): the week circles show a
                     // non-full day and the detail history shows a
                     // "Not recorded" row, whatever the RNG does.
-                    if (demo.medId == "demo-med-2" && daysFromToday == 2L && slot.hour == 21) {
+                    if (demo.medId == MedicationId("demo-med-2") && daysFromToday == 2L && slot.hour == 21) {
                         return@forEach
                     }
                     val jitter = random.nextInt(0, 20)
@@ -203,7 +206,7 @@ private fun MedicationRepository.BatchWriter.seedHistory(
                         }
                         logDose(
                             StoredDoseLog(
-                                id = "demo-dose-${doseCounter++}",
+                                id = DoseId("demo-dose-${doseCounter++}"),
                                 scheduleId = demo.schedId,
                                 plannedAt = planned,
                                 takenAt = if (status == DoseStatus.TAKEN) {
