@@ -31,10 +31,10 @@ fun hourLabel(hour: Int): String = when {
 fun todayLabel(date: LocalDate): String =
     "${date.dayOfWeek.titleCase()}, ${date.day} ${date.month.titleCase()}"
 
-internal fun LocalDate.shortDayName(): String = dayOfWeek.titleCase().take(3)
+fun LocalDate.shortDayName(): String = dayOfWeek.titleCase().take(3)
 
 /** Three-letter month name — "Jul" — shared by every short date label. */
-internal fun Month.shortName(): String = titleCase().take(3)
+fun Month.shortName(): String = titleCase().take(3)
 
 internal fun Enum<*>.titleCase(): String =
     name.lowercase().replaceFirstChar { it.uppercase() }
