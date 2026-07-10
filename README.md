@@ -66,12 +66,16 @@ presentation layer.
 ```
 ┌───────────────────────────── :app (Android) ─────────────────────────────┐
 │  Package-by-feature: home / detail / confirm / activity                  │
-│  Each feature owns its MVI set:                                          │
+│  Each feature owns its MVI set (composables under <feature>/ui):         │
 │    Intent (sealed) ─► ViewModel.onIntent ─► UiState / Effect ─► Screen   │
 │    + UiStateMapper (domain content → view state)                         │
-└───────────────────────────────────┬───────────────────────────────────────┘
-                    depends on use cases only
-┌───────────────────────────────────▼───────────────────────────────┐
+└──────────────┬────────────────────┬───────────────────────────────────────┘
+               │                    │ depends on use cases only
+┌──────────────▼───────────────┐    │
+│  :core:ui — shared theme,    │    │
+│  components, formatters      │    │
+└──────────────┬───────────────┘    │
+┌──────────────▼────────────────────▼───────────────────────────────┐
 │  :core:domain — Kotlin Multiplatform, pure                        │
 │  entities · use cases · repository interface · dose/adherence     │
 │  maths · extraction contracts                                     │
@@ -137,7 +141,8 @@ Cross-cutting choices:
 
 | Module | What it is |
 |---|---|
-| `app/` | Android presentation — Compose screens, MVI ViewModels, mappers, Koin composition root |
+| `app/` | Android presentation — feature packages with MVI ViewModels, mappers, and screens, plus the Koin composition root |
+| `core/ui/` | Shared presentation library — theme, reusable Compose components (heat maps, chips, dialogs), shared formatters, previews |
 | `core/domain/` | Pure Kotlin Multiplatform — entities, use cases, repository interface, dose scheduling and adherence maths |
 | `core/data/` | KMP data layer — SQLDelight repository implementation, vision-extraction client and parser |
 | `backend/server/` | Small Ktor server with one endpoint. It exists so the API key never ships inside the app |

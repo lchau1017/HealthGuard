@@ -2,6 +2,7 @@
 
 package com.healthguard.home
 
+import com.healthguard.activity.DAYS_PER_WEEK
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.activity.doseDayStatus
 import com.healthguard.shared.data.DoseStatus
@@ -22,8 +23,6 @@ import kotlinx.datetime.toLocalDateTime
 /** One circle of the home "This week" card. */
 data class WeekDay(val date: LocalDate, val state: DoseDayStatus)
 
-private const val WEEK_DAYS = 7
-
 /**
  * The last seven days ending today, each measured against what every
  * schedule with wall-clock slots (times-per-day) owed that day, combined:
@@ -40,7 +39,7 @@ fun weekDayStates(
     zone: TimeZone,
 ): List<WeekDay> {
     val today = now.toLocalDateTime(zone).date
-    val weekFrom = today.minus(WEEK_DAYS - 1, DateTimeUnit.DAY).atStartOfDayIn(zone)
+    val weekFrom = today.minus(DAYS_PER_WEEK - 1, DateTimeUnit.DAY).atStartOfDayIn(zone)
 
     val expectedByDay = schedules
         .flatMap { expectedDoseTimes(it, weekFrom, now, zone) }
@@ -59,7 +58,7 @@ fun weekDayStates(
         .groupingBy { it.plannedAt.toLocalDateTime(zone).date }
         .eachCount()
 
-    return (WEEK_DAYS - 1 downTo 0).map { back ->
+    return (DAYS_PER_WEEK - 1 downTo 0).map { back ->
         val date = today.minus(back, DateTimeUnit.DAY)
         WeekDay(
             date = date,

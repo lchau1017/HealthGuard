@@ -4,33 +4,30 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
-import com.healthguard.activity.ActivityScreen
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.healthguard.activity.ActivityViewModel
+import com.healthguard.activity.ui.ActivityScreen
 import com.healthguard.common.ui.AppNavBar
 import com.healthguard.common.ui.AppTab
-import com.healthguard.confirm.ConfirmFlowHost
 import com.healthguard.confirm.ConfirmIntent
 import com.healthguard.confirm.ConfirmViewModel
-import com.healthguard.confirm.rememberScanImageLauncher
+import com.healthguard.confirm.ui.ConfirmFlowHost
+import com.healthguard.confirm.ui.rememberScanImageLauncher
 import com.healthguard.detail.DetailFinished
 import com.healthguard.detail.DetailIntent
-import com.healthguard.detail.DetailScreen
 import com.healthguard.detail.DetailViewModel
-import com.healthguard.home.HomeScreen
+import com.healthguard.detail.ui.DetailScreen
 import com.healthguard.home.HomeViewModel
+import com.healthguard.home.ui.HomeScreen
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -59,30 +56,35 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
         confirmViewModel.onIntent(ConfirmIntent.ImagePicked(uri.toString()))
     }
 
+    // Scope the detail view model to the detail "destination" instead of the
+    // Activity: resolving it against the Activity's ViewModelStore with a
+    // per-id key would retain one DetailViewModel for every medication ever
+    // visited until the Activity dies. The per-id child stores live in
+    // [DetailStoreHolder] — itself an Activity-retained ViewModel (resolved
+    // with plain androidx `viewModel()`, deliberately not Koin) — so the open
+    // detail's view model, and the form edits it holds, survive rotation.
+    val detailStores: DetailStoreHolder = viewModel()
+
     val openDetailId = detailMedicationId
     if (openDetailId != null) {
-        // Scope the detail view model to the detail "destination" instead of
-        // the Activity: resolving it against the Activity's ViewModelStore
-        // with a per-id key would retain one DetailViewModel for every
-        // medication ever visited until the Activity dies. This child owner
-        // lives exactly as long as the detail is open for this id — the
-        // DisposableEffect clears its store when the detail closes (or the id
-        // changes), releasing the view model. Opening A → back → opening B →
-        // back therefore leaves no retained detail view models.
-        val detailStoreOwner = remember(openDetailId) {
-            object : ViewModelStoreOwner {
-                override val viewModelStore = ViewModelStore()
-            }
+        // The single "detail actually closed" path: releases the id's
+        // retained store, so opening A → back → opening B → back leaves no
+        // retained detail view models. Deliberately NOT a DisposableEffect
+        // onDispose — that would also fire on configuration change, which is
+        // exactly the recreation the retained holder exists to survive. (The
+        // shell can never jump from detail A straight to detail B — the only
+        // opener, Home's onOpenDetail, is unreachable while a detail shows —
+        // so close-time clearing covers every id transition.)
+        val closeDetail = {
+            detailMedicationId = null
+            detailStores.clear(openDetailId)
         }
-        DisposableEffect(detailStoreOwner) {
-            onDispose { detailStoreOwner.viewModelStore.clear() }
-        }
-        CompositionLocalProvider(LocalViewModelStoreOwner provides detailStoreOwner) {
+        CompositionLocalProvider(LocalViewModelStoreOwner provides detailStores.ownerFor(openDetailId)) {
             val detailViewModel: DetailViewModel = koinViewModel(
                 parameters = { parametersOf(openDetailId) },
             )
             val detailState by detailViewModel.state.collectAsStateWithLifecycle()
-            BackHandler { detailMedicationId = null }
+            BackHandler(onBack = closeDetail)
             // Dose logs alone don't retrigger the medications query; refresh on
             // entry so a retained view model catches up on takes from elsewhere.
             LaunchedEffect(Unit) { detailViewModel.onIntent(DetailIntent.Refresh) }
@@ -90,7 +92,7 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
                 state = detailState,
                 onIntent = detailViewModel::onIntent,
                 effects = detailViewModel.effects,
-                onBack = { detailMedicationId = null },
+                onBack = closeDetail,
                 onFinished = { result ->
                     when (result) {
                         DetailFinished.SAVED ->
@@ -98,7 +100,7 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
                         DetailFinished.DELETED ->
                             Toast.makeText(context, "Medication deleted", Toast.LENGTH_SHORT).show()
                     }
-                    detailMedicationId = null
+                    closeDetail()
                 },
                 modifier = modifier,
             )
