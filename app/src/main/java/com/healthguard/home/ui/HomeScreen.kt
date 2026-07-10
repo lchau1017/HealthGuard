@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class)
 
-package com.healthguard.home
+package com.healthguard.home.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -63,12 +63,22 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.common.format.phaseChipText
 import com.healthguard.common.format.todayLabel
-import com.healthguard.shared.data.MedicationWithSchedule
+import com.healthguard.common.theme.heatRamp
 import com.healthguard.common.ui.CategoryChip
 import com.healthguard.common.ui.DoubleDoseDialog
 import com.healthguard.common.ui.StatusChip
 import com.healthguard.common.ui.showUndoTakeSnackbar
-import com.healthguard.common.theme.heatRamp
+import com.healthguard.home.DoseCard
+import com.healthguard.home.DoseRowStatus
+import com.healthguard.home.DueAlert
+import com.healthguard.home.HomeEffect
+import com.healthguard.home.HomeIntent
+import com.healthguard.home.HomeUiState
+import com.healthguard.home.MedicationPhase
+import com.healthguard.home.WeekDay
+import com.healthguard.home.phase
+import com.healthguard.home.takeByText
+import com.healthguard.shared.data.MedicationWithSchedule
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow

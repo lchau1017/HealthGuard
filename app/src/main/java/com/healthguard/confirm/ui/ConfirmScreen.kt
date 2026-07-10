@@ -1,4 +1,4 @@
-package com.healthguard.confirm
+package com.healthguard.confirm.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,6 +26,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.healthguard.common.ui.CategoryLabelInput
+import com.healthguard.confirm.ConfirmIntent
+import com.healthguard.confirm.ConfirmUiState
+import com.healthguard.confirm.ReviewField
 
 /**
  * The import/confirm flow, presented as a full-width dialog card over the

@@ -1,4 +1,4 @@
-package com.healthguard.confirm
+package com.healthguard.confirm.ui
 
 import android.content.Intent
 import android.content.pm.PackageManager

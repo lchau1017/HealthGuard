@@ -14,20 +14,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.healthguard.activity.ActivityScreen
 import com.healthguard.activity.ActivityViewModel
+import com.healthguard.activity.ui.ActivityScreen
 import com.healthguard.common.ui.AppNavBar
 import com.healthguard.common.ui.AppTab
-import com.healthguard.confirm.ConfirmFlowHost
 import com.healthguard.confirm.ConfirmIntent
 import com.healthguard.confirm.ConfirmViewModel
-import com.healthguard.confirm.rememberScanImageLauncher
+import com.healthguard.confirm.ui.ConfirmFlowHost
+import com.healthguard.confirm.ui.rememberScanImageLauncher
 import com.healthguard.detail.DetailFinished
 import com.healthguard.detail.DetailIntent
-import com.healthguard.detail.DetailScreen
 import com.healthguard.detail.DetailViewModel
-import com.healthguard.home.HomeScreen
+import com.healthguard.detail.ui.DetailScreen
 import com.healthguard.home.HomeViewModel
+import com.healthguard.home.ui.HomeScreen
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 

@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class)
 
-package com.healthguard.detail
+package com.healthguard.detail.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -49,6 +49,13 @@ import com.healthguard.common.ui.DayDetailSheet
 import com.healthguard.common.ui.DoubleDoseDialog
 import com.healthguard.common.ui.StatusChip
 import com.healthguard.common.ui.showUndoTakeSnackbar
+import com.healthguard.detail.DetailEffect
+import com.healthguard.detail.DetailFinished
+import com.healthguard.detail.DetailIntent
+import com.healthguard.detail.DetailUiState
+import com.healthguard.detail.countdownTextSeconds
+import com.healthguard.detail.lastTakenLabel
+import com.healthguard.detail.mediumDateLabel
 import com.healthguard.home.MedicationPhase
 import com.healthguard.shared.domain.doseSlots
 import com.healthguard.shared.extraction.Frequency

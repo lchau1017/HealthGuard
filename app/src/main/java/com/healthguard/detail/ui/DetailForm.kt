@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package com.healthguard.detail
+package com.healthguard.detail.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,6 +20,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.healthguard.common.ui.CategoryLabelInput
+import com.healthguard.detail.DetailIntent
+import com.healthguard.detail.DetailUiState
 
 /**
  * The editable "Details" section: the six text fields, the with-food

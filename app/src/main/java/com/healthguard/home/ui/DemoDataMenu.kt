@@ -1,4 +1,4 @@
-package com.healthguard.home
+package com.healthguard.home.ui
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.healthguard.BuildConfig
+import com.healthguard.home.HomeIntent
 
 /**
  * The top-bar overflow menu that loads and removes demo data. Demo data

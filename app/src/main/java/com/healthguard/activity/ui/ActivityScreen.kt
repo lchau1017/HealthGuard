@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class)
 
-package com.healthguard.activity
+package com.healthguard.activity.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -35,6 +35,17 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.healthguard.activity.ActivityFilter
+import com.healthguard.activity.ActivityIntent
+import com.healthguard.activity.ActivityStats
+import com.healthguard.activity.ActivityUiState
+import com.healthguard.activity.AdherenceResult
+import com.healthguard.activity.DayCount
+import com.healthguard.activity.MedicationAdherence
+import com.healthguard.activity.adherenceRowDescription
+import com.healthguard.activity.adherenceRowFigure
+import com.healthguard.activity.windowChipLabel
+import com.healthguard.activity.windowHeading
 import com.healthguard.common.format.hourLabel
 import com.healthguard.common.format.targetCaption
 import com.healthguard.common.ui.ActivityHeatMap

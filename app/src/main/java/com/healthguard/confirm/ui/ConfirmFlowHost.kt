@@ -1,4 +1,4 @@
-package com.healthguard.confirm
+package com.healthguard.confirm.ui
 
 import android.widget.Toast
 import androidx.compose.runtime.Composable
@@ -9,6 +9,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import com.healthguard.confirm.ConfirmEffect
+import com.healthguard.confirm.ConfirmUiState
+import com.healthguard.confirm.ConfirmViewModel
 import org.koin.androidx.compose.koinViewModel
 
 /**
