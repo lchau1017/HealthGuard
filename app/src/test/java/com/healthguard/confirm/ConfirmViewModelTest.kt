@@ -2,7 +2,6 @@
 
 package com.healthguard.confirm
 
-import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.healthguard.confirm.domain.ExtractMedicationUseCase
 import com.healthguard.confirm.domain.SaveNewMedicationUseCase
 import com.healthguard.shared.data.MedicationRepository
@@ -16,7 +15,8 @@ import com.healthguard.shared.extraction.ExtractionResult
 import com.healthguard.shared.extraction.Frequency
 import com.healthguard.shared.extraction.MedicationExtraction
 import com.healthguard.shared.extraction.VisionExtractor
-import java.util.Properties
+import com.healthguard.testing.inMemoryDriver
+import com.healthguard.testing.inMemoryRepository
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.CompletableDeferred
@@ -47,12 +47,7 @@ class ConfirmViewModelTest {
     fun setUp() {
         dispatcher = StandardTestDispatcher()
         Dispatchers.setMain(dispatcher)
-        val driver = JdbcSqliteDriver(
-            JdbcSqliteDriver.IN_MEMORY,
-            Properties().apply { put("foreign_keys", "true") },
-        )
-        HealthGuardDb.Schema.create(driver)
-        repository = SqlDelightMedicationRepository(HealthGuardDb(driver), dispatcher)
+        repository = inMemoryRepository(dispatcher)
     }
 
     @After
@@ -581,9 +576,9 @@ class ConfirmViewModelTest {
         assertTrue(storedMedications().isEmpty())
     }
 
+    /** A repository whose driver is already closed: every write throws. */
     private fun failingRepository(): MedicationRepository {
-        val deadDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-        HealthGuardDb.Schema.create(deadDriver)
+        val deadDriver = inMemoryDriver()
         val repository = SqlDelightMedicationRepository(HealthGuardDb(deadDriver), dispatcher)
         deadDriver.close()
         return repository

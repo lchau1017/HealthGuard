@@ -2,20 +2,17 @@
 
 package com.healthguard.activity
 
-import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.healthguard.activity.domain.ComputeActivityStateUseCase
 import com.healthguard.activity.domain.LoadActivityDayDetailUseCase
 import com.healthguard.home.MedicationPhase
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.SqlDelightMedicationRepository
 import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.data.StoredMedication
-import com.healthguard.shared.data.StoredSchedule
-import com.healthguard.shared.db.HealthGuardDb
 import com.healthguard.shared.domain.ObserveDataChangesUseCase
 import com.healthguard.shared.extraction.Frequency
-import java.util.Properties
+import com.healthguard.testing.inMemoryRepository
+import com.healthguard.testing.logTaken
+import com.healthguard.testing.seedMedication
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.ExperimentalTime
@@ -51,12 +48,7 @@ class ActivityViewModelTest {
     fun setUp() {
         dispatcher = StandardTestDispatcher()
         Dispatchers.setMain(dispatcher)
-        val driver = JdbcSqliteDriver(
-            JdbcSqliteDriver.IN_MEMORY,
-            Properties().apply { put("foreign_keys", "true") },
-        )
-        HealthGuardDb.Schema.create(driver)
-        repository = SqlDelightMedicationRepository(HealthGuardDb(driver), dispatcher)
+        repository = inMemoryRepository(dispatcher)
     }
 
     @After
@@ -80,46 +72,19 @@ class ActivityViewModelTest {
         frequency: Frequency? = null,
         startedAt: Instant? = null,
         stoppedAt: Instant? = null,
-    ) {
-        repository.insertMedication(
-            StoredMedication(
-                id = id,
-                drugName = drugName,
-                label = null,
-                activeIngredients = emptyList(),
-                dosage = null,
-                form = null,
-                extractionConfidence = 1.0,
-                createdAt = Instant.fromEpochMilliseconds(1_000),
-            ),
-            StoredSchedule(
-                id = "sched-$id",
-                medicationId = id,
-                frequency = frequency,
-                withFood = null,
-                startedAt = startedAt,
-                stoppedAt = stoppedAt,
-            ),
-        )
-    }
-
-    private suspend fun logTaken(medicationId: String, takenAt: Instant) {
-        repository.logDose(
-            StoredDoseLog(
-                id = "dose-$medicationId-${takenAt.toEpochMilliseconds()}",
-                scheduleId = "sched-$medicationId",
-                plannedAt = takenAt,
-                takenAt = takenAt,
-                status = DoseStatus.TAKEN,
-            ),
-        )
-    }
+    ) = repository.seedMedication(
+        id = id,
+        drugName = drugName,
+        frequency = frequency,
+        startedAt = startedAt,
+        stoppedAt = stoppedAt,
+    )
 
     @Test
     fun `thirty days is the default window`() = runTest(dispatcher) {
         insert("a", "Ibuprofen")
-        logTaken("a", fixedNow - 31.days)
-        logTaken("a", fixedNow - 15.days)
+        repository.logTaken("a", fixedNow - 31.days)
+        repository.logTaken("a", fixedNow - 15.days)
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -134,9 +99,9 @@ class ActivityViewModelTest {
     @Test
     fun `twelve month filter loads a year of takes`() = runTest(dispatcher) {
         insert("a", "Ibuprofen")
-        logTaken("a", fixedNow - 370.days) // outside the 12-month window
-        logTaken("a", fixedNow - 300.days)
-        logTaken("a", fixedNow - 1.hours)
+        repository.logTaken("a", fixedNow - 370.days) // outside the 12-month window
+        repository.logTaken("a", fixedNow - 300.days)
+        repository.logTaken("a", fixedNow - 1.hours)
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -154,9 +119,9 @@ class ActivityViewModelTest {
     @Test
     fun `seven day filter narrows the window`() = runTest(dispatcher) {
         insert("a", "Ibuprofen")
-        logTaken("a", fixedNow - 8.days)
-        logTaken("a", fixedNow - 2.days)
-        logTaken("a", fixedNow - 1.hours)
+        repository.logTaken("a", fixedNow - 8.days)
+        repository.logTaken("a", fixedNow - 2.days)
+        repository.logTaken("a", fixedNow - 1.hours)
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
         assertEquals(3, vm.state.value.stats.totalEvents)
@@ -189,13 +154,13 @@ class ActivityViewModelTest {
         // Ibuprofen 1x/day since 2024-06-30: slots 09:00 on 6/30..7/3 = 4
         // expected. 2 taken, 1 skipped, 7/3 never recorded -> 2/(4-1) = 67%.
         insert("a", "Ibuprofen", Frequency.TimesPerDay(1), Instant.parse("2024-06-30T00:00:00Z"))
-        logTaken("a", Instant.parse("2024-06-30T09:00:00Z"))
-        logTaken("a", Instant.parse("2024-07-01T09:00:00Z"))
+        repository.logTaken("a", Instant.parse("2024-06-30T09:00:00Z"))
+        repository.logTaken("a", Instant.parse("2024-07-01T09:00:00Z"))
         logSkipped("a", Instant.parse("2024-07-02T09:00:00Z"))
         // Cetirizine 1x/day since 2024-07-02: both slots taken -> 100%.
         insert("b", "Cetirizine", Frequency.TimesPerDay(1), Instant.parse("2024-07-02T00:00:00Z"))
-        logTaken("b", Instant.parse("2024-07-02T09:00:00Z"))
-        logTaken("b", Instant.parse("2024-07-03T09:00:00Z"))
+        repository.logTaken("b", Instant.parse("2024-07-02T09:00:00Z"))
+        repository.logTaken("b", Instant.parse("2024-07-03T09:00:00Z"))
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -213,8 +178,8 @@ class ActivityViewModelTest {
         // 2x/day since 2024-07-01, only 7/1 fully logged; 7/2 has no rows at
         // all and 7/3's 09:00 passed silently: 2 taken of 5 expected = 40%.
         insert("a", "Ibuprofen", Frequency.TimesPerDay(2), Instant.parse("2024-07-01T00:00:00Z"))
-        logTaken("a", Instant.parse("2024-07-01T09:00:00Z"))
-        logTaken("a", Instant.parse("2024-07-01T21:00:00Z"))
+        repository.logTaken("a", Instant.parse("2024-07-01T09:00:00Z"))
+        repository.logTaken("a", Instant.parse("2024-07-01T21:00:00Z"))
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -229,11 +194,11 @@ class ActivityViewModelTest {
         runTest(dispatcher) {
             // Taking + scheduled: a percent row.
             insert("a", "Cetirizine", Frequency.TimesPerDay(1), Instant.parse("2024-07-02T00:00:00Z"))
-            logTaken("a", Instant.parse("2024-07-02T09:00:00Z"))
-            logTaken("a", Instant.parse("2024-07-03T09:00:00Z"))
+            repository.logTaken("a", Instant.parse("2024-07-02T09:00:00Z"))
+            repository.logTaken("a", Instant.parse("2024-07-03T09:00:00Z"))
             // Taking + interval with takes: an as-needed count row.
             insert("b", "Ibuprofen", Frequency.EveryHours(6), Instant.parse("2024-07-01T00:00:00Z"))
-            logTaken("b", fixedNow - 3.hours)
+            repository.logTaken("b", fixedNow - 3.hours)
             // Never activated: phase noise, not activity — no row. The phase
             // still lives on the home cabinet chip and the detail header.
             insert("c", "Amoxicillin", Frequency.TimesPerDay(3))
@@ -244,8 +209,8 @@ class ActivityViewModelTest {
                 startedAt = Instant.parse("2024-06-30T00:00:00Z"),
                 stoppedAt = Instant.parse("2024-07-02T12:00:00Z"),
             )
-            logTaken("d", Instant.parse("2024-06-30T09:00:00Z"))
-            logTaken("d", Instant.parse("2024-07-01T09:00:00Z"))
+            repository.logTaken("d", Instant.parse("2024-06-30T09:00:00Z"))
+            repository.logTaken("d", Instant.parse("2024-07-01T09:00:00Z"))
             val vm = viewModel()
             dispatcher.scheduler.advanceUntilIdle()
 
@@ -275,15 +240,15 @@ class ActivityViewModelTest {
         // hidden. Only the medicine with in-window activity keeps a row.
         insert("a", "Ibuprofen")
         insert("b", "Cetirizine", Frequency.EveryHours(6), fixedNow - 30.days)
-        logTaken("b", fixedNow - 10.days)
+        repository.logTaken("b", fixedNow - 10.days)
         insert(
             "d", "Paracetamol", Frequency.TimesPerDay(1),
             startedAt = fixedNow - 30.days,
             stoppedAt = fixedNow - 20.days,
         )
-        logTaken("d", fixedNow - 25.days)
+        repository.logTaken("d", fixedNow - 25.days)
         insert("c", "Loratadine", Frequency.TimesPerDay(1), Instant.parse("2024-07-02T00:00:00Z"))
-        logTaken("c", Instant.parse("2024-07-02T09:00:00Z"))
+        repository.logTaken("c", Instant.parse("2024-07-02T09:00:00Z"))
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -304,7 +269,7 @@ class ActivityViewModelTest {
                 startedAt = fixedNow - 30.days,
                 stoppedAt = fixedNow - 20.days,
             )
-            logTaken("d", fixedNow - 25.days)
+            repository.logTaken("d", fixedNow - 25.days)
             val vm = viewModel()
             dispatcher.scheduler.advanceUntilIdle()
 
@@ -353,10 +318,10 @@ class ActivityViewModelTest {
         // Cetirizine 2x/day (09:00/21:00): the 09:04 take answers the morning
         // slot, the evening slot goes unanswered -> 1 not recorded.
         insert("a", "Cetirizine", Frequency.TimesPerDay(2), Instant.parse("2024-07-01T00:00:00Z"))
-        logTaken("a", Instant.parse("2024-07-02T09:04:00Z"))
+        repository.logTaken("a", Instant.parse("2024-07-02T09:04:00Z"))
         // As-needed the same day: a count line, never a not-recorded count.
         insert("b", "Ibuprofen", Frequency.EveryHours(6), Instant.parse("2024-07-01T00:00:00Z"))
-        logTaken("b", Instant.parse("2024-07-02T14:00:00Z"))
+        repository.logTaken("b", Instant.parse("2024-07-02T14:00:00Z"))
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -433,7 +398,7 @@ class ActivityViewModelTest {
 
         // The repository's data-change signal is the only freshness trigger:
         // the host raises nothing on (re)entry.
-        logTaken("a", fixedNow - 1.hours)
+        repository.logTaken("a", fixedNow - 1.hours)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(1, vm.state.value.stats.totalEvents)
@@ -442,7 +407,7 @@ class ActivityViewModelTest {
     @Test
     fun `a background reload keeps the open day sheet`() = runTest(dispatcher) {
         insert("a", "Cetirizine", Frequency.TimesPerDay(2), Instant.parse("2024-07-01T00:00:00Z"))
-        logTaken("a", Instant.parse("2024-07-02T09:04:00Z"))
+        repository.logTaken("a", Instant.parse("2024-07-02T09:04:00Z"))
         val vm = viewModel()
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -453,7 +418,7 @@ class ActivityViewModelTest {
 
         // A write anywhere re-queries the window in the background; the sheet
         // the user is reading must survive that, while the tiles refresh.
-        logTaken("a", fixedNow - 1.hours)
+        repository.logTaken("a", fixedNow - 1.hours)
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(openSheet, vm.state.value.dayDetail)
@@ -475,8 +440,8 @@ class ActivityViewModelTest {
     @Test
     fun `a superseded filter load is cancelled and cannot clobber the later one`() = runTest(dispatcher) {
         insert("a", "Ibuprofen")
-        logTaken("a", fixedNow - 300.days) // only the 12-month window sees this
-        logTaken("a", fixedNow - 1.hours)
+        repository.logTaken("a", fixedNow - 300.days) // only the 12-month window sees this
+        repository.logTaken("a", fixedNow - 1.hours)
         val gated = GatedWindowRepository(repository)
         val vm = viewModel(gated)
         dispatcher.scheduler.runCurrent()
