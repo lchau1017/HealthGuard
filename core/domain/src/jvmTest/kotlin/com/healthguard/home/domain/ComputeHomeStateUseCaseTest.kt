@@ -3,7 +3,9 @@
 package com.healthguard.home.domain
 
 import com.healthguard.activity.DoseDayStatus
+import com.healthguard.domain.model.DoseStatus
 import com.healthguard.domain.model.MedicationWithSchedule
+import com.healthguard.domain.model.StoredDoseLog
 import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.FakeMedicationRepository
 import kotlin.test.Test
@@ -106,6 +108,31 @@ class ComputeHomeStateUseCaseTest {
         val content = useCase(repo)(repo.rows())
 
         assertFalse(content.todayPending)
+    }
+
+    @Test
+    fun `a newer skipped log never shifts lastTaken or the next dose`() = runTest {
+        val repo = FakeMedicationRepository()
+        repo.seedMedication("a", frequency = Frequency.EveryHours(6), startedAt = now - 10.hours)
+        repo.seedDose("sched-a", takenAt = now - 4.hours)
+        // A skipped dose logged after the last take (demo data seeds these):
+        // it must not delay the next dose or read as a recent take that could
+        // trip the double-dose guard.
+        repo.logDose(
+            StoredDoseLog(
+                id = "skip-1",
+                scheduleId = "sched-a",
+                plannedAt = now - 1.hours,
+                takenAt = null,
+                status = DoseStatus.SKIPPED,
+            ),
+        )
+
+        val card = useCase(repo)(repo.rows()).taking.single()
+
+        assertEquals(now - 4.hours, card.lastTaken)
+        assertEquals(now + 2.hours, card.nextDoseAt)
+        assertFalse(card.isDue)
     }
 
     @Test

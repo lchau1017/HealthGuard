@@ -94,6 +94,27 @@ class ComputeDetailStateUseCaseTest {
         )
     }
 
+    @Test
+    fun `a newer skipped log never shifts lastTakenAt or the next dose`() = runTest {
+        val repo = FakeMedicationRepository()
+        // Every 6 hours since 07-03 00:00; taken 06:00, then a dose skipped
+        // at 09:00 — the newest log by time, but not a take.
+        val item = repo.seedMedication(
+            "c",
+            frequency = Frequency.EveryHours(6),
+            startedAt = Instant.parse("2024-07-03T00:00:00Z"),
+        )
+        repo.seedDose("sched-c", takenAt = Instant.parse("2024-07-03T06:00:00Z"))
+        repo.logDose(skipped("sched-c", "2024-07-03T09:00:00Z"))
+
+        val content = useCase(repo)(item)
+
+        // The skipped row must not read as a take: the last take stays at
+        // 06:00 and the next dose at 12:00 (not 15:00 = skipped + 6h).
+        assertEquals(Instant.parse("2024-07-03T06:00:00Z"), content.lastTakenAt)
+        assertEquals(Instant.parse("2024-07-03T12:00:00Z"), content.nextDoseAt)
+    }
+
     private fun skipped(scheduleId: String, plannedAt: String) = StoredDoseLog(
         id = "skip-$scheduleId-$plannedAt",
         scheduleId = scheduleId,

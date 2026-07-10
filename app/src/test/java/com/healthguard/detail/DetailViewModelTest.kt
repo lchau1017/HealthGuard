@@ -525,7 +525,7 @@ class DetailViewModelTest {
         vm.onIntent(DetailIntent.TakeNow)
         dispatcher.scheduler.advanceUntilIdle()
 
-        val logged = repository.latestDose("sch-1")!!
+        val logged = repository.latestTakenDose("sch-1")!!
         assertEquals(DoseStatus.TAKEN, logged.status)
         assertEquals(fixedNow, logged.takenAt)
         assertEquals(fixedNow - 2.hours, logged.plannedAt)
@@ -551,7 +551,7 @@ class DetailViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(20L, vm.state.value.takeConfirm)
-        assertEquals("d-1", repository.latestDose("sch-1")?.id)
+        assertEquals("d-1", repository.latestTakenDose("sch-1")?.id)
         assertTrue(effects.filterIsInstance<DetailEffect.ShowUndoSnackbar>().isEmpty())
     }
 
@@ -566,7 +566,7 @@ class DetailViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
         vm.onIntent(DetailIntent.DismissTakeConfirm)
         assertNull(vm.state.value.takeConfirm)
-        assertEquals("d-1", repository.latestDose("sch-1")?.id)
+        assertEquals("d-1", repository.latestTakenDose("sch-1")?.id)
 
         vm.onIntent(DetailIntent.TakeNow)
         dispatcher.scheduler.advanceUntilIdle()
@@ -574,7 +574,7 @@ class DetailViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(vm.state.value.takeConfirm)
-        assertEquals(fixedNow, repository.latestDose("sch-1")?.takenAt)
+        assertEquals(fixedNow, repository.latestTakenDose("sch-1")?.takenAt)
     }
 
     @Test
@@ -591,7 +591,7 @@ class DetailViewModelTest {
         vm.onIntent(DetailIntent.UndoTake(doseId))
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertNull(repository.latestDose("sch-1"))
+        assertNull(repository.latestTakenDose("sch-1"))
         assertEquals(fixedNow - 2.hours, vm.state.value.nextDoseAt)
     }
 

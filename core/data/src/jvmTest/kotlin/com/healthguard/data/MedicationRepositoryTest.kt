@@ -117,7 +117,7 @@ class MedicationRepositoryTest {
         repo.delete("med-1")
 
         assertTrue(repo.medications().first().isEmpty())
-        assertNull(repo.latestDose("sch-1"))
+        assertTrue(repo.recentDoses("sch-1", limit = 5).isEmpty())
         assertTrue(repo.dosesInRange("sch-1", Instant.fromEpochMilliseconds(0), Instant.fromEpochMilliseconds(10_000)).isEmpty())
     }
 
@@ -171,29 +171,52 @@ class MedicationRepositoryTest {
     }
 
     @Test
-    fun `latestDose picks max plannedAt`() = runTest {
+    fun `latestTakenDose returns the newest TAKEN dose only`() = runTest {
         val repo = repository()
         repo.insertMedication(medication(), schedule())
-        repo.logDose(dose("d-1", plannedAtMillis = 1_000))
-        repo.logDose(dose("d-3", plannedAtMillis = 3_000))
-        repo.logDose(dose("d-2", plannedAtMillis = 2_000))
+        repo.logTaken("d-old", takenAtMillis = 1_000)
+        repo.logTaken("d-new", takenAtMillis = 2_000)
+        // Newer SKIPPED and MISSED rows must never shift the last take.
+        repo.logDose(dose("d-skipped", plannedAtMillis = 3_000).copy(status = DoseStatus.SKIPPED))
+        repo.logDose(dose("d-missed", plannedAtMillis = 4_000).copy(status = DoseStatus.MISSED))
 
-        assertEquals("d-3", repo.latestDose("sch-1")?.id)
+        assertEquals("d-new", repo.latestTakenDose("sch-1")?.id)
     }
 
     @Test
-    fun `deleteDoseLog removes the dose and latestDose falls back`() = runTest {
+    fun `latestTakenDose orders by effective time not plannedAt`() = runTest {
         val repo = repository()
         repo.insertMedication(medication(), schedule())
-        repo.logDose(dose("d-1", plannedAtMillis = 1_000))
-        repo.logDose(dose("d-2", plannedAtMillis = 2_000))
-        assertEquals("d-2", repo.latestDose("sch-1")?.id)
+        // Planned earlier but taken later: the effective time (takenAt) wins.
+        repo.logTaken("d-late", takenAtMillis = 5_000, plannedAtMillis = 1_000)
+        repo.logTaken("d-on-time", takenAtMillis = 2_000, plannedAtMillis = 2_000)
+        // TAKEN without a takenAt (written by other paths): plannedAt stands in.
+        repo.logDose(
+            StoredDoseLog(
+                id = "d-no-taken-at",
+                scheduleId = "sch-1",
+                plannedAt = Instant.fromEpochMilliseconds(3_000),
+                takenAt = null,
+                status = DoseStatus.TAKEN,
+            ),
+        )
+
+        assertEquals("d-late", repo.latestTakenDose("sch-1")?.id)
+    }
+
+    @Test
+    fun `deleteDoseLog removes the dose and latestTakenDose falls back`() = runTest {
+        val repo = repository()
+        repo.insertMedication(medication(), schedule())
+        repo.logTaken("d-1", takenAtMillis = 1_000)
+        repo.logTaken("d-2", takenAtMillis = 2_000)
+        assertEquals("d-2", repo.latestTakenDose("sch-1")?.id)
 
         repo.deleteDoseLog("d-2")
 
-        assertEquals("d-1", repo.latestDose("sch-1")?.id)
+        assertEquals("d-1", repo.latestTakenDose("sch-1")?.id)
         repo.deleteDoseLog("d-1")
-        assertNull(repo.latestDose("sch-1"))
+        assertNull(repo.latestTakenDose("sch-1"))
     }
 
     @Test
@@ -204,7 +227,7 @@ class MedicationRepositoryTest {
 
         repo.deleteDoseLog("d-ghost")
 
-        assertEquals("d-1", repo.latestDose("sch-1")?.id)
+        assertEquals(listOf("d-1"), repo.recentDoses("sch-1", limit = 5).map { it.id })
     }
 
     @Test
@@ -553,7 +576,7 @@ class MedicationRepositoryTest {
         val row = repo.medications().first().single()
         assertEquals("med-1", row.medication.id)
         assertEquals(Instant.fromEpochMilliseconds(1_000), row.schedule.startedAt)
-        assertEquals("d-1", repo.latestDose("sch-1")?.id)
+        assertEquals(listOf("d-1"), repo.recentDoses("sch-1", limit = 5).map { it.id })
         job.cancel()
     }
 

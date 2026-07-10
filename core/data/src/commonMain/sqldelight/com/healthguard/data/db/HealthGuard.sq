@@ -114,10 +114,13 @@ WHERE scheduleId = :scheduleId
 ORDER BY plannedAt DESC
 LIMIT :limit;
 
-latestDoseLogForSchedule:
+-- The schedule's newest TAKEN dose by effective time (takenAt when present,
+-- plannedAt otherwise): the "last taken" input to next-dose calculations.
+-- Skipped and missed rows never shift it.
+latestTakenDoseForSchedule:
 SELECT * FROM doseLog
-WHERE scheduleId = :scheduleId
-ORDER BY plannedAt DESC
+WHERE scheduleId = :scheduleId AND status = 'TAKEN'
+ORDER BY COALESCE(takenAt, plannedAt) DESC
 LIMIT 1;
 
 -- Every dose log (any status) across all schedules whose effective time —

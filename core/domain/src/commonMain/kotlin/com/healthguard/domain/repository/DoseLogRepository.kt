@@ -24,7 +24,12 @@ interface DoseLogRepository {
     /** Half-open range: plannedAt in [from, to). */
     suspend fun dosesInRange(scheduleId: String, from: Instant, to: Instant): List<StoredDoseLog>
 
-    suspend fun latestDose(scheduleId: String): StoredDoseLog?
+    /**
+     * The schedule's newest TAKEN dose by effective time (takenAt when
+     * present, plannedAt otherwise) — the "last taken" input to next-dose
+     * calculations. Skipped and missed rows never shift it.
+     */
+    suspend fun latestTakenDose(scheduleId: String): StoredDoseLog?
 
     /**
      * Every TAKEN dose across all schedules with takenAt in [from, to)

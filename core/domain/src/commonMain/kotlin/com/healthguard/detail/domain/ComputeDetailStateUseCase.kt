@@ -82,7 +82,9 @@ class ComputeDetailStateUseCase(
     private val zone: TimeZone,
 ) {
     suspend operator fun invoke(item: MedicationWithSchedule): DetailContent {
-        val latest = repository.latestDose(item.schedule.id)
+        // Last take = the newest TAKEN log by effective time. Skipped and
+        // missed rows must never delay the next dose or read as a take.
+        val latest = repository.latestTakenDose(item.schedule.id)
         val lastTaken = latest?.let { it.takenAt ?: it.plannedAt }
         // One wall-clock reading keeps every derived instant on the same "now".
         val now = clock()

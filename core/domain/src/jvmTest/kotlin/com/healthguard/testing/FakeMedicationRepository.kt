@@ -154,8 +154,15 @@ class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
         _dataChanges.emit(Unit)
     }
 
-    override suspend fun latestDose(scheduleId: String): StoredDoseLog? =
-        doseLogs.filter { it.scheduleId == scheduleId }.maxByOrNull { it.plannedAt }
+    /**
+     * Mirrors the SQL: the schedule's newest TAKEN dose by effective time
+     * (takenAt when present, plannedAt otherwise); skipped and missed rows
+     * never shift it.
+     */
+    override suspend fun latestTakenDose(scheduleId: String): StoredDoseLog? =
+        doseLogs
+            .filter { it.scheduleId == scheduleId && it.status == DoseStatus.TAKEN }
+            .maxByOrNull { it.takenAt ?: it.plannedAt }
 
     override suspend fun doseLogsInRange(from: Instant, to: Instant): List<StoredDoseLog> =
         doseLogs

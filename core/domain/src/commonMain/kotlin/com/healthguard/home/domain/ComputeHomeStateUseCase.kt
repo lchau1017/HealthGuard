@@ -73,10 +73,11 @@ class ComputeHomeStateUseCase(
         val today = now.toLocalDateTime(zone).date
         val taking = rows.filter { it.isActive }
             .map { row ->
-                // Only TAKEN doses are ever logged in this slice, so the latest
-                // log is the last take; takenAt can only be null on rows written
-                // by other paths — plannedAt is the best stand-in.
-                val latest = repository.latestDose(row.schedule.id)
+                // Last take = the newest TAKEN log by effective time. Skipped
+                // and missed rows (demo data seeds them) must never delay the
+                // next dose or trip the double-dose guard. takenAt can only be
+                // null on rows written by other paths — plannedAt stands in.
+                val latest = repository.latestTakenDose(row.schedule.id)
                 val lastTaken = latest?.let { it.takenAt ?: it.plannedAt }
                 val nextDoseAt = nextDose(row.schedule, lastTaken, now, zone)
                 val isDue = nextDoseAt != null && nextDoseAt - now < 1.minutes

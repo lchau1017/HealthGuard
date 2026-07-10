@@ -202,9 +202,14 @@ class SqlDelightMedicationRepository(
             ).executeAsList().map { it.toStored() }
         }
 
-    override suspend fun latestDose(scheduleId: String): StoredDoseLog? = withContext(dispatcher) {
-        queries.latestDoseLogForSchedule(scheduleId).executeAsOneOrNull()?.toStored()
-    }
+    /**
+     * The schedule's newest TAKEN dose by effective time (takenAt when
+     * present, plannedAt otherwise); skipped and missed rows never shift it.
+     */
+    override suspend fun latestTakenDose(scheduleId: String): StoredDoseLog? =
+        withContext(dispatcher) {
+            queries.latestTakenDoseForSchedule(scheduleId).executeAsOneOrNull()?.toStored()
+        }
 
     /**
      * Every TAKEN dose across all schedules with takenAt in [from, to)
