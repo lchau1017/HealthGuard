@@ -1,10 +1,7 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.activity
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 

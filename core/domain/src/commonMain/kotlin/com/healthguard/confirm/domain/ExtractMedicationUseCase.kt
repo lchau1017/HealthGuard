@@ -1,7 +1,7 @@
 package com.healthguard.confirm.domain
 
-import com.healthguard.shared.extraction.ExtractionResult
-import com.healthguard.shared.extraction.VisionExtractor
+import com.healthguard.domain.extraction.ExtractionResult
+import com.healthguard.domain.extraction.VisionExtractor
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 

@@ -1,15 +1,15 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.activity
 
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.data.StoredSchedule
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseId
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.model.StoredSchedule
+import com.healthguard.domain.extraction.Frequency
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 
@@ -81,8 +81,8 @@ class AdherenceTest {
         frequency: Frequency? = Frequency.TimesPerDay(2),
         startedAt: Instant? = Instant.parse("2026-06-01T00:00:00Z"),
     ) = StoredSchedule(
-        id = "sch-1",
-        medicationId = "med-1",
+        id = ScheduleId("sch-1"),
+        medicationId = MedicationId("med-1"),
         frequency = frequency,
         withFood = null,
         startedAt = startedAt,
@@ -94,8 +94,8 @@ class AdherenceTest {
     private fun log(at: String, status: DoseStatus = DoseStatus.TAKEN): StoredDoseLog {
         val instant = Instant.parse(at)
         return StoredDoseLog(
-            id = "d-${doseCounter++}",
-            scheduleId = "sch-1",
+            id = DoseId("d-${doseCounter++}"),
+            scheduleId = ScheduleId("sch-1"),
             plannedAt = instant,
             takenAt = if (status == DoseStatus.TAKEN) instant else null,
             status = status,

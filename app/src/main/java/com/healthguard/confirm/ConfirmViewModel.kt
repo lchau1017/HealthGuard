@@ -2,10 +2,18 @@ package com.healthguard.confirm
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.healthguard.common.format.parseFrequency
+import com.healthguard.domain.extraction.parseFrequency
 import com.healthguard.confirm.domain.ExtractMedicationUseCase
 import com.healthguard.confirm.domain.NewMedication
 import com.healthguard.confirm.domain.SaveNewMedicationUseCase
+import com.healthguard.confirm.format.parseWithFood
+import com.healthguard.confirm.state.ConfirmEffect
+import com.healthguard.confirm.state.ConfirmIntent
+import com.healthguard.confirm.state.ConfirmMessages
+import com.healthguard.confirm.state.ConfirmUiState
+import com.healthguard.confirm.state.ReviewField
+import com.healthguard.confirm.state.ReviewFieldKey
+import com.healthguard.confirm.state.toUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -91,24 +99,34 @@ class ConfirmViewModel(
         }
     }
 
-    private fun fieldEdited(key: String, newValue: String) {
-        updateField(key) { field ->
-            if (newValue.isBlank()) {
-                // A blank value can never stand in for a reviewed one: typing
-                // (or clearing to) whitespace must not unlock Accept.
-                field.copy(value = newValue, userConfirmed = false, needsReview = true)
-            } else {
-                field.copy(value = newValue, userConfirmed = true, needsReview = false)
-            }
-        }
-        // Keep the typed values in sync with what the user now sees: a stale
-        // typed frequency must never silently override an edited display text.
+    private fun fieldEdited(key: ReviewFieldKey, newValue: String) {
         _state.update { current ->
             if (current !is ConfirmUiState.Review) return@update current
+            val edited = current.copy(
+                fields = current.fields.map { field ->
+                    when {
+                        field.key != key -> field
+                        // A blank value can never stand in for a reviewed one:
+                        // typing (or clearing to) whitespace must not unlock
+                        // Accept.
+                        newValue.isBlank() ->
+                            field.copy(value = newValue, userConfirmed = false, needsReview = true)
+                        else ->
+                            field.copy(value = newValue, userConfirmed = true, needsReview = false)
+                    }
+                },
+            )
+            // Keep the typed values in sync with what the user now sees: a
+            // stale typed frequency must never silently override an edited
+            // display text.
             when (key) {
-                KEY_FREQUENCY -> current.copy(frequency = parseFrequency(newValue))
-                KEY_WITH_FOOD -> current.copy(withFood = parseWithFood(newValue))
-                else -> current
+                ReviewFieldKey.FREQUENCY -> edited.copy(frequency = parseFrequency(newValue))
+                ReviewFieldKey.WITH_FOOD -> edited.copy(withFood = parseWithFood(newValue))
+                ReviewFieldKey.DRUG_NAME,
+                ReviewFieldKey.DOSAGE,
+                ReviewFieldKey.FORM,
+                ReviewFieldKey.INGREDIENTS,
+                -> edited
             }
         }
     }
@@ -123,19 +141,19 @@ class ConfirmViewModel(
         saving = true
 
         val byKey = review.fields.associateBy { it.key }
-        fun value(key: String): String? =
+        fun value(key: ReviewFieldKey): String? =
             byKey[key]?.value?.trim()?.takeUnless { it.isEmpty() }
 
         val medication = NewMedication(
-            drugName = value(KEY_DRUG_NAME).orEmpty(),
+            drugName = value(ReviewFieldKey.DRUG_NAME).orEmpty(),
             label = review.label.trim().takeUnless { it.isEmpty() },
-            activeIngredients = value(KEY_INGREDIENTS)
+            activeIngredients = value(ReviewFieldKey.INGREDIENTS)
                 ?.split(",")
                 ?.map { it.trim() }
                 ?.filter { it.isNotEmpty() }
                 .orEmpty(),
-            dosage = value(KEY_DOSAGE),
-            form = value(KEY_FORM),
+            dosage = value(ReviewFieldKey.DOSAGE),
+            form = value(ReviewFieldKey.FORM),
             extractionConfidence = review.fields.minOfOrNull { it.confidence } ?: 0.0,
             frequency = review.frequency,
             withFood = review.withFood,
@@ -159,7 +177,7 @@ class ConfirmViewModel(
                 val current = _state.value as? ConfirmUiState.Review
                 if (current != null) {
                     reviewAwaitingSaveRetry = current
-                    _state.value = ConfirmUiState.Error(MESSAGE_SAVE_FAILED, retriable = true)
+                    _state.value = ConfirmUiState.Error(ConfirmMessages.SAVE_FAILED, retriable = true)
                 }
             } finally {
                 saving = false
@@ -200,7 +218,7 @@ class ConfirmViewModel(
         workJob = viewModelScope.launch {
             val base64 = imageEncoder.encode(uri)
             if (base64 == null) {
-                applyIfExtracting(ConfirmUiState.Error(MESSAGE_IMAGE_LOAD_FAILED, retriable = false))
+                applyIfExtracting(ConfirmUiState.Error(ConfirmMessages.IMAGE_LOAD_FAILED, retriable = false))
             } else {
                 lastImageBase64 = base64
                 applyIfExtracting(extractMedication(base64).toUiState())
@@ -226,26 +244,12 @@ class ConfirmViewModel(
         if (_state.value is ConfirmUiState.Extracting) _state.value = result
     }
 
-    private fun updateField(key: String, transform: (ReviewField) -> ReviewField) {
+    private fun updateField(key: ReviewFieldKey, transform: (ReviewField) -> ReviewField) {
         _state.update { current ->
             if (current !is ConfirmUiState.Review) return@update current
             current.copy(
                 fields = current.fields.map { if (it.key == key) transform(it) else it },
             )
         }
-    }
-
-    companion object {
-        const val KEY_DRUG_NAME = "drugName"
-        const val KEY_DOSAGE = "dosage"
-        const val KEY_FORM = "form"
-        const val KEY_FREQUENCY = "frequency"
-        const val KEY_WITH_FOOD = "withFood"
-        const val KEY_INGREDIENTS = "ingredients"
-
-        const val MESSAGE_IMAGE_LOAD_FAILED = "Couldn't load that image"
-        const val MESSAGE_MALFORMED = "Couldn't read the label — try another photo"
-        const val MESSAGE_UNAVAILABLE = "Service unavailable — check connection"
-        const val MESSAGE_SAVE_FAILED = "Couldn't save — try again"
     }
 }

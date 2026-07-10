@@ -1,17 +1,17 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.detail.domain
 
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.model.DoseId
 import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DoseDayStatus
-import com.healthguard.detail.HistoryEntry
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.tracking.HistoryEntry
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.FakeMedicationRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.time.ExperimentalTime
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
@@ -94,9 +94,56 @@ class ComputeDetailStateUseCaseTest {
         )
     }
 
+    @Test
+    fun `a take just before the gap cutoff answers a slot just after it`() = runTest {
+        // Gap rows reach back 14 days; the matching window is ±90 minutes.
+        // A dose 30 minutes BEFORE the cutoff must still answer a slot 30
+        // minutes AFTER it — no phantom "Not recorded" row at the boundary.
+        val boundaryNow = Instant.parse("2024-07-03T20:30:00Z")
+        val cutoffSlot = Instant.parse("2024-06-19T21:00:00Z") // cutoff + 30 min
+        val repo = FakeMedicationRepository()
+        val item = repo.seedMedication(
+            "d",
+            frequency = Frequency.TimesPerDay(2),
+            startedAt = Instant.parse("2024-06-01T08:00:00Z"),
+        )
+        // 30 min before the cutoff (2024-06-19T20:30Z), 60 min before the slot.
+        repo.seedDose("sched-d", takenAt = Instant.parse("2024-06-19T20:00:00Z"))
+
+        val content = ComputeDetailStateUseCase(repo, clock = { boundaryNow }, zone = TimeZone.UTC)(item)
+
+        val gaps = content.history.filterIsInstance<HistoryEntry.NotRecorded>()
+        assertTrue(gaps.isNotEmpty(), "later unanswered slots still surface as gaps")
+        assertTrue(
+            gaps.none { it.slotAt == cutoffSlot },
+            "the answered boundary slot must not read as a gap: $gaps",
+        )
+    }
+
+    @Test
+    fun `a newer skipped log never shifts lastTakenAt or the next dose`() = runTest {
+        val repo = FakeMedicationRepository()
+        // Every 6 hours since 07-03 00:00; taken 06:00, then a dose skipped
+        // at 09:00 — the newest log by time, but not a take.
+        val item = repo.seedMedication(
+            "c",
+            frequency = Frequency.EveryHours(6),
+            startedAt = Instant.parse("2024-07-03T00:00:00Z"),
+        )
+        repo.seedDose("sched-c", takenAt = Instant.parse("2024-07-03T06:00:00Z"))
+        repo.logDose(skipped("sched-c", "2024-07-03T09:00:00Z"))
+
+        val content = useCase(repo)(item)
+
+        // The skipped row must not read as a take: the last take stays at
+        // 06:00 and the next dose at 12:00 (not 15:00 = skipped + 6h).
+        assertEquals(Instant.parse("2024-07-03T06:00:00Z"), content.lastTakenAt)
+        assertEquals(Instant.parse("2024-07-03T12:00:00Z"), content.nextDoseAt)
+    }
+
     private fun skipped(scheduleId: String, plannedAt: String) = StoredDoseLog(
-        id = "skip-$scheduleId-$plannedAt",
-        scheduleId = scheduleId,
+        id = DoseId("skip-$scheduleId-$plannedAt"),
+        scheduleId = ScheduleId(scheduleId),
         plannedAt = Instant.parse(plannedAt),
         takenAt = null,
         status = DoseStatus.SKIPPED,

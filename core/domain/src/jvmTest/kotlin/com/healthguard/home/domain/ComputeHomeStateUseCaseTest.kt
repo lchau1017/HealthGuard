@@ -1,10 +1,12 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.home.domain
 
+import com.healthguard.domain.model.DoseId
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.activity.DoseDayStatus
-import com.healthguard.shared.data.MedicationWithSchedule
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.MedicationWithSchedule
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.FakeMedicationRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,7 +15,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.TimeZone
@@ -42,7 +43,7 @@ class ComputeHomeStateUseCaseTest {
 
         val content = useCase(repo)(repo.rows())
 
-        assertEquals(listOf("od2", "od1", "fut", "nofreq"), content.taking.map { it.item.medication.id })
+        assertEquals(listOf("od2", "od1", "fut", "nofreq"), content.taking.map { it.item.medication.id.value })
         assertEquals(now - 3.hours, content.taking[0].nextDoseAt)
         assertEquals(now + 4.hours, content.taking[2].nextDoseAt)
         assertNull(content.taking[3].nextDoseAt)
@@ -61,7 +62,7 @@ class ComputeHomeStateUseCaseTest {
         val content = useCase(repo)(repo.rows())
 
         assertEquals(2, content.dueCount)
-        val byId = content.taking.associateBy { it.item.medication.id }
+        val byId = content.taking.associateBy { it.item.medication.id.value }
         assertTrue(byId.getValue("overdue").isDue)
         assertTrue(byId.getValue("due-now").isDue)
         assertFalse(byId.getValue("later").isDue)
@@ -109,6 +110,31 @@ class ComputeHomeStateUseCaseTest {
     }
 
     @Test
+    fun `a newer skipped log never shifts lastTaken or the next dose`() = runTest {
+        val repo = FakeMedicationRepository()
+        repo.seedMedication("a", frequency = Frequency.EveryHours(6), startedAt = now - 10.hours)
+        repo.seedDose("sched-a", takenAt = now - 4.hours)
+        // A skipped dose logged after the last take (demo data seeds these):
+        // it must not delay the next dose or read as a recent take that could
+        // trip the double-dose guard.
+        repo.logDose(
+            StoredDoseLog(
+                id = DoseId("skip-1"),
+                scheduleId = ScheduleId("sched-a"),
+                plannedAt = now - 1.hours,
+                takenAt = null,
+                status = DoseStatus.SKIPPED,
+            ),
+        )
+
+        val card = useCase(repo)(repo.rows()).taking.single()
+
+        assertEquals(now - 4.hours, card.lastTaken)
+        assertEquals(now + 2.hours, card.nextDoseAt)
+        assertFalse(card.isDue)
+    }
+
+    @Test
     fun `dormant and stopped items are in the cabinet newest first and never in taking`() = runTest {
         val repo = FakeMedicationRepository()
         repo.seedMedication("older-dormant", createdAt = Instant.fromEpochMilliseconds(1_000))
@@ -129,8 +155,8 @@ class ComputeHomeStateUseCaseTest {
 
         assertEquals(
             listOf("stopped", "newer-dormant", "older-dormant"),
-            content.cabinet.map { it.medication.id },
+            content.cabinet.map { it.medication.id.value },
         )
-        assertEquals(listOf("active"), content.taking.map { it.item.medication.id })
+        assertEquals(listOf("active"), content.taking.map { it.item.medication.id.value })
     }
 }

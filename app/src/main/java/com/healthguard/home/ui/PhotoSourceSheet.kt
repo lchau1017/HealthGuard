@@ -15,7 +15,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import com.healthguard.common.theme.Spacing
 
 /** The scan-flow source chooser: take a photo, or pick one from the gallery. */
 @Composable
@@ -26,12 +26,12 @@ fun PhotoSourceSheet(
     modifier: Modifier = Modifier,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, modifier = modifier) {
-        Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
+        Column(modifier = Modifier.padding(horizontal = Spacing.xxl, vertical = Spacing.sm)) {
             Text(
                 text = "Add a medication label photo",
                 style = MaterialTheme.typography.titleMedium,
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(Spacing.lg))
             Button(
                 onClick = {
                     onDismiss()
@@ -41,7 +41,7 @@ fun PhotoSourceSheet(
             ) {
                 Text("Take photo")
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             OutlinedButton(
                 onClick = {
                     onDismiss()
@@ -51,7 +51,7 @@ fun PhotoSourceSheet(
             ) {
                 Text("Choose from gallery")
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(Spacing.xxl))
         }
     }
 }

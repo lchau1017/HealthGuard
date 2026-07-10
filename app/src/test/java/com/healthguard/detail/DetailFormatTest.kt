@@ -2,7 +2,11 @@
 
 package com.healthguard.detail
 
-import com.healthguard.shared.data.DoseStatus
+import com.healthguard.detail.format.dayTimeLabel
+import com.healthguard.detail.format.doseAnnotation
+import com.healthguard.detail.format.lastTakenLabel
+import com.healthguard.detail.format.mediumDateLabel
+import com.healthguard.domain.model.DoseStatus
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -74,9 +78,8 @@ class DetailFormatTest {
     }
 
     @Test
-    fun `missed skipped and pending are plain labels`() {
+    fun `missed and skipped are plain labels`() {
         assertEquals("Missed", doseAnnotation(DoseStatus.MISSED, planned, null))
         assertEquals("Skipped", doseAnnotation(DoseStatus.SKIPPED, planned, null))
-        assertEquals("Pending", doseAnnotation(DoseStatus.PENDING, planned, null))
     }
 }

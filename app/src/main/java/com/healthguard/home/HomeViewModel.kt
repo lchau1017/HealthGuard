@@ -4,7 +4,7 @@ package com.healthguard.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.healthguard.dose.isDoubleDose
+import com.healthguard.dose.minutesSinceLastTake
 import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.ComputeHomeStateUseCase
 import com.healthguard.home.domain.HomeContent
@@ -12,7 +12,14 @@ import com.healthguard.home.domain.RecordDoseUseCase
 import com.healthguard.home.domain.RemoveDemoDataUseCase
 import com.healthguard.home.domain.SeedDemoDataUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
-import com.healthguard.shared.domain.ObserveMedicationsUseCase
+import com.healthguard.home.state.DoseCard
+import com.healthguard.home.state.HomeEffect
+import com.healthguard.home.state.HomeIntent
+import com.healthguard.home.state.HomeUiState
+import com.healthguard.home.state.TakeConfirmation
+import com.healthguard.home.state.toUiState
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.usecase.ObserveMedicationsUseCase
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.channels.Channel
@@ -85,7 +92,7 @@ class HomeViewModel(
     /** The single MVI entry point: each branch delegates to a use case or a state edit. */
     fun onIntent(intent: HomeIntent) {
         when (intent) {
-            is HomeIntent.TakeNow -> takeNow(intent.card)
+            is HomeIntent.TakeNow -> takeNow(intent.scheduleId)
             HomeIntent.ConfirmTakeAnyway -> confirmTakeAnyway()
             HomeIntent.DismissTakeConfirm -> _state.update { it.copy(takeConfirm = null) }
             is HomeIntent.UndoTake -> launchRefreshing { undoDose(intent.doseId) }
@@ -98,20 +105,15 @@ class HomeViewModel(
     /**
      * Records the dose as taken now — unless the last take was within the
      * double-dose window, in which case a confirmation is raised into state
-     * and nothing is logged until [confirmTakeAnyway].
+     * and nothing is logged until [confirmTakeAnyway]. The intent carries only
+     * the schedule id; the card is looked up in the CURRENT state, so a stale
+     * snapshot from the screen can never be recorded against.
      */
-    private fun takeNow(card: DoseCard) {
-        val now = clock()
-        val lastTaken = card.lastTaken
-        if (isDoubleDose(lastTaken, now)) {
-            _state.update {
-                it.copy(
-                    takeConfirm = TakeConfirmation(card, (now - lastTaken!!).inWholeMinutes),
-                )
-            }
-            return
-        }
-        record(card)
+    private fun takeNow(scheduleId: ScheduleId) {
+        val card = _state.value.taking.firstOrNull { it.scheduleId == scheduleId } ?: return
+        minutesSinceLastTake(card.lastTaken, clock())?.let { minutes ->
+            _state.update { it.copy(takeConfirm = TakeConfirmation(card, minutes)) }
+        } ?: record(card)
     }
 
     /** User accepted the double-dose warning: record it after all. */
@@ -124,9 +126,9 @@ class HomeViewModel(
     private fun record(card: DoseCard) {
         viewModelScope.launch {
             val take = recordDose(
-                card.item.schedule.id,
+                card.scheduleId,
                 card.nextDoseAt,
-                card.item.medication.drugName,
+                card.drugName,
             )
             _effects.send(HomeEffect.ShowUndoSnackbar(take))
             refresh.update { it + 1 }

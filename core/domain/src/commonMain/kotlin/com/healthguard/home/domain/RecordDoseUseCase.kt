@@ -1,12 +1,13 @@
-@file:OptIn(ExperimentalTime::class, ExperimentalUuidApi::class)
+@file:OptIn(ExperimentalUuidApi::class)
 
 package com.healthguard.home.domain
 
 import com.healthguard.dose.RecordedTake
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.StoredDoseLog
-import kotlin.time.ExperimentalTime
+import com.healthguard.domain.model.DoseId
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.repository.DoseLogRepository
+import com.healthguard.domain.model.StoredDoseLog
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -18,16 +19,16 @@ import kotlin.uuid.Uuid
  * has a stable handle; [kotlin.uuid.Uuid] keeps this KMP-safe (no java.util).
  */
 class RecordDoseUseCase(
-    private val repository: MedicationRepository,
+    private val repository: DoseLogRepository,
     private val clock: () -> Instant,
 ) {
     suspend operator fun invoke(
-        scheduleId: String,
+        scheduleId: ScheduleId,
         plannedAt: Instant?,
         drugName: String,
     ): RecordedTake {
         val now = clock()
-        val id = Uuid.random().toString()
+        val id = DoseId(Uuid.random().toString())
         repository.logDose(
             StoredDoseLog(
                 id = id,

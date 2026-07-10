@@ -2,6 +2,9 @@
 
 package com.healthguard.home
 
+import com.healthguard.home.format.DoseRowStatus
+import com.healthguard.home.format.doseRowStatus
+import com.healthguard.home.format.takeByText
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes

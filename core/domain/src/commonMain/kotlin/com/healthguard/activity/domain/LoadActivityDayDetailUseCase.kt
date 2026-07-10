@@ -1,13 +1,11 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.activity.domain
 
-import com.healthguard.activity.DayDetail
-import com.healthguard.activity.dayDetail
-import com.healthguard.detail.SLOT_MATCH_WINDOW
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.domain.expectedDoseTimes
-import kotlin.time.ExperimentalTime
+import com.healthguard.domain.tracking.DayDetail
+import com.healthguard.domain.tracking.dayDetail
+import com.healthguard.domain.tracking.SLOT_MATCH_WINDOW
+import com.healthguard.domain.repository.DoseLogRepository
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.schedule.expectedDoseTimes
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.DateTimeUnit
@@ -26,7 +24,8 @@ import kotlinx.datetime.plus
  * answer window are not "not recorded" yet).
  */
 class LoadActivityDayDetailUseCase(
-    private val repository: MedicationRepository,
+    private val medicationRepository: MedicationRepository,
+    private val doseLogRepository: DoseLogRepository,
     private val clock: () -> Instant,
     private val zone: TimeZone,
 ) {
@@ -34,8 +33,8 @@ class LoadActivityDayDetailUseCase(
         val now = clock()
         val dayStart = date.atStartOfDayIn(zone)
         val dayEnd = date.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone)
-        val logs = repository.doseLogsWithMedicationInRange(dayStart, dayEnd)
-        val expectedByMedication = repository.medications().first()
+        val logs = doseLogRepository.doseLogsWithMedicationInRange(dayStart, dayEnd)
+        val expectedByMedication = medicationRepository.medications().first()
             .associate { row ->
                 row.medication.id to expectedDoseTimes(
                     row.schedule,

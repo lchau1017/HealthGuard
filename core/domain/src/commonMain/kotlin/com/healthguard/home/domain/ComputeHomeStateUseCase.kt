@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.home.domain
 
 import com.healthguard.activity.DAYS_PER_WEEK
@@ -7,11 +5,10 @@ import com.healthguard.home.WeekDay
 import com.healthguard.home.isActive
 import com.healthguard.home.todayHasPendingSlots
 import com.healthguard.home.weekDayStates
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.MedicationWithSchedule
-import com.healthguard.shared.domain.nextDose
+import com.healthguard.domain.repository.DoseLogRepository
+import com.healthguard.domain.model.MedicationWithSchedule
+import com.healthguard.domain.schedule.nextDose
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
@@ -62,7 +59,7 @@ data class HomeContent(
  * strip and today-pending flag come from every schedule's owed slots.
  */
 class ComputeHomeStateUseCase(
-    private val repository: MedicationRepository,
+    private val repository: DoseLogRepository,
     private val clock: () -> Instant,
     private val zone: TimeZone,
 ) {
@@ -73,10 +70,11 @@ class ComputeHomeStateUseCase(
         val today = now.toLocalDateTime(zone).date
         val taking = rows.filter { it.isActive }
             .map { row ->
-                // Only TAKEN doses are ever logged in this slice, so the latest
-                // log is the last take; takenAt can only be null on rows written
-                // by other paths — plannedAt is the best stand-in.
-                val latest = repository.latestDose(row.schedule.id)
+                // Last take = the newest TAKEN log by effective time. Skipped
+                // and missed rows (demo data seeds them) must never delay the
+                // next dose or trip the double-dose guard. takenAt can only be
+                // null on rows written by other paths — plannedAt stands in.
+                val latest = repository.latestTakenDose(row.schedule.id)
                 val lastTaken = latest?.let { it.takenAt ?: it.plannedAt }
                 val nextDoseAt = nextDose(row.schedule, lastTaken, now, zone)
                 val isDue = nextDoseAt != null && nextDoseAt - now < 1.minutes

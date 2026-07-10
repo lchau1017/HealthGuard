@@ -118,9 +118,12 @@ Cross-cutting choices:
   is how DST transitions and half-hour timezones got real tests.
 - Dose times are meal-aligned (9 AM, 9 PM, …) — never between 22:00 and
   08:00.
-- Every write goes through one repository that broadcasts changes; the
+- Every write goes through role-segregated repository interfaces
+  (`MedicationRepository` / `DoseLogRepository`) that broadcast changes; the
   `ObserveMedicationsUseCase` folds that signal into the medication stream so
   every screen updates after every action.
+- Ids are value classes (`MedicationId`, `ScheduleId`, `DoseId`) — passing
+  the wrong id to a repository or use case does not compile.
 
 ## Tech stack
 
@@ -162,7 +165,7 @@ Cross-cutting choices:
 
 ## Testing
 
-- 360+ tests across the four modules, written test-first.
+- 380+ tests across the five modules, written test-first.
 - Highest-value suites:
   - parser boundary tests — the LLM is an adversary as far as the parser is
     concerned
@@ -334,10 +337,11 @@ threshold commonly used in clinical adherence research.
 ## Running the tests
 
 ```bash
-./gradlew :core:domain:jvmTest       # use cases, dose calculator, adherence maths
-./gradlew :core:data:jvmTest         # repository (real SQL), extraction parser
-./gradlew :app:testDebugUnitTest     # MVI view models (against a real in-memory DB)
-./gradlew :backend:server:test       # proxy contract tests (stubbed upstream)
+./gradlew :core:domain:jvmTest         # use cases, dose calculator, adherence maths
+./gradlew :core:data:jvmTest           # repository (real SQL), extraction parser
+./gradlew :core:ui:testDebugUnitTest   # shared formatters and heat-map maths
+./gradlew :app:testDebugUnitTest       # MVI view models (against a real in-memory DB)
+./gradlew :backend:server:test         # proxy contract tests (stubbed upstream)
 ```
 
 CI (GitHub Actions) runs all of the above plus lint and an APK assembly on

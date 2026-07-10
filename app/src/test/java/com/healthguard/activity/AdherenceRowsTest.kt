@@ -1,5 +1,8 @@
 package com.healthguard.activity
 
+import com.healthguard.activity.format.adherenceRowDescription
+import com.healthguard.activity.format.adherenceRowFigure
+import com.healthguard.activity.state.MedicationAdherence
 import com.healthguard.home.MedicationPhase
 import org.junit.Assert.assertEquals
 import org.junit.Test

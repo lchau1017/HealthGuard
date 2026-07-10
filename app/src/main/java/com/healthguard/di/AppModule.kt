@@ -24,14 +24,16 @@ import com.healthguard.home.domain.RemoveDemoDataUseCase
 import com.healthguard.home.domain.SeedDemoDataUseCase
 import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
-import com.healthguard.shared.data.DriverFactory
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.SqlDelightMedicationRepository
-import com.healthguard.shared.db.HealthGuardDb
-import com.healthguard.shared.domain.ObserveDataChangesUseCase
-import com.healthguard.shared.domain.ObserveMedicationsUseCase
-import com.healthguard.shared.extraction.ProxyVisionExtractor
-import com.healthguard.shared.extraction.VisionExtractor
+import com.healthguard.data.DriverFactory
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.repository.DoseLogRepository
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.data.SqlDelightMedicationRepository
+import com.healthguard.data.db.HealthGuardDb
+import com.healthguard.domain.usecase.ObserveDataChangesUseCase
+import com.healthguard.domain.usecase.ObserveMedicationsUseCase
+import com.healthguard.data.ProxyVisionExtractor
+import com.healthguard.domain.extraction.VisionExtractor
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -42,6 +44,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.TimeZone
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
+import org.koin.dsl.binds
 import org.koin.dsl.module
 
 val appModule = module {
@@ -60,7 +63,9 @@ val appModule = module {
 
     single { DriverFactory(androidContext()) }
     single { HealthGuardDb(get<DriverFactory>().createDriver()) }
-    single<MedicationRepository> { SqlDelightMedicationRepository(get(), Dispatchers.IO) }
+    // One store implements both repository roles; bind each interface to it.
+    single { SqlDelightMedicationRepository(get(), Dispatchers.IO) } binds
+        arrayOf(MedicationRepository::class, DoseLogRepository::class)
 
     single<() -> Instant> { { Clock.System.now() } }
 
@@ -80,8 +85,8 @@ val appModule = module {
     factory { LoadDayDetailUseCase(get(), get(), TimeZone.currentSystemDefault()) }
     factory { SaveMedicationUseCase(get()) }
 
-    factory { ComputeActivityStateUseCase(get(), get(), TimeZone.currentSystemDefault()) }
-    factory { LoadActivityDayDetailUseCase(get(), get(), TimeZone.currentSystemDefault()) }
+    factory { ComputeActivityStateUseCase(get(), get(), get(), TimeZone.currentSystemDefault()) }
+    factory { LoadActivityDayDetailUseCase(get(), get(), get(), TimeZone.currentSystemDefault()) }
 
     factory { ExtractMedicationUseCase(get(), Dispatchers.IO) }
     factory { SaveNewMedicationUseCase(get(), get()) }
@@ -90,7 +95,7 @@ val appModule = module {
     viewModel { ConfirmViewModel(get(), get(), get()) }
     viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { ActivityViewModel(get(), get(), get()) }
-    viewModel { (medicationId: String) ->
+    viewModel { (medicationId: MedicationId) ->
         DetailViewModel(
             computeDetailState = get(),
             loadDayDetail = get(),

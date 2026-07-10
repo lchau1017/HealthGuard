@@ -1,19 +1,18 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.activity.domain
 
+import com.healthguard.domain.model.DoseId
+import com.healthguard.domain.model.ScheduleId
 import com.healthguard.activity.ActivityFilter
 import com.healthguard.home.MedicationPhase
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.FakeMedicationRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
@@ -25,7 +24,7 @@ class ComputeActivityStateUseCaseTest {
     private val now = Instant.parse("2024-07-03T10:00:00Z")
 
     private fun useCase(repo: FakeMedicationRepository) =
-        ComputeActivityStateUseCase(repo, clock = { now }, zone = TimeZone.UTC)
+        ComputeActivityStateUseCase(repo, repo, clock = { now }, zone = TimeZone.UTC)
 
     private fun FakeMedicationRepository.insert(
         id: String,
@@ -47,8 +46,8 @@ class ComputeActivityStateUseCaseTest {
     private suspend fun FakeMedicationRepository.logSkipped(medicationId: String, plannedAt: Instant) =
         logDose(
             StoredDoseLog(
-                id = "skip-$medicationId-${plannedAt.toEpochMilliseconds()}",
-                scheduleId = "sched-$medicationId",
+                id = DoseId("skip-$medicationId-${plannedAt.toEpochMilliseconds()}"),
+                scheduleId = ScheduleId("sched-$medicationId"),
                 plannedAt = plannedAt,
                 takenAt = null,
                 status = DoseStatus.SKIPPED,

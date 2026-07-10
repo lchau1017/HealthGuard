@@ -70,8 +70,8 @@ internal fun monthLabels(weekStarts: List<LocalDate>): List<String?> =
         }
     }
 
-/** Single-letter weekday mark under the 7-day row: M T W T F S S. */
-internal fun weekdayInitial(date: LocalDate): String = date.dayOfWeek.name.take(1)
+/** Single-letter weekday mark for a day cell or circle: M T W T F S S. */
+fun weekdayInitial(date: LocalDate): String = date.dayOfWeek.name.take(1)
 
 private const val HEAT_LEVELS = 4
 

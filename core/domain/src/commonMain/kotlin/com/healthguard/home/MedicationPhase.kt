@@ -1,9 +1,6 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.home
 
-import com.healthguard.shared.data.StoredSchedule
-import kotlin.time.ExperimentalTime
+import com.healthguard.domain.model.StoredSchedule
 
 /**
  * Where a medication stands in its treatment lifecycle — the initiation and

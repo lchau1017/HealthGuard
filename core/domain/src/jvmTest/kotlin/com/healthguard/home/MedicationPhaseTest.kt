@@ -1,11 +1,10 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.home
 
-import com.healthguard.shared.data.StoredSchedule
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.model.StoredSchedule
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 class MedicationPhaseTest {
@@ -14,8 +13,8 @@ class MedicationPhaseTest {
         startedAt: Instant? = null,
         stoppedAt: Instant? = null,
     ) = StoredSchedule(
-        id = "sch-1",
-        medicationId = "med-1",
+        id = ScheduleId("sch-1"),
+        medicationId = MedicationId("med-1"),
         frequency = null,
         withFood = null,
         startedAt = startedAt,

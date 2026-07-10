@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.detail.domain
 
 import com.healthguard.activity.AdherenceResult
@@ -8,19 +6,18 @@ import com.healthguard.activity.DoseDayStatus
 import com.healthguard.activity.dayCounts
 import com.healthguard.activity.doseDayStatusByDay
 import com.healthguard.activity.mondayOf
-import com.healthguard.detail.HistoryEntry
-import com.healthguard.detail.SLOT_MATCH_WINDOW
-import com.healthguard.detail.historyWithGaps
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.MedicationWithSchedule
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.data.StoredSchedule
-import com.healthguard.shared.domain.expectedDoseTimes
-import com.healthguard.shared.domain.nextDose
+import com.healthguard.domain.tracking.HistoryEntry
+import com.healthguard.domain.tracking.SLOT_MATCH_WINDOW
+import com.healthguard.domain.tracking.historyWithGaps
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.repository.DoseLogRepository
+import com.healthguard.domain.model.MedicationWithSchedule
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.model.StoredSchedule
+import com.healthguard.domain.schedule.expectedDoseTimes
+import com.healthguard.domain.schedule.nextDose
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
@@ -77,12 +74,14 @@ data class DetailContent(
  * the 16-week window.
  */
 class ComputeDetailStateUseCase(
-    private val repository: MedicationRepository,
+    private val repository: DoseLogRepository,
     private val clock: () -> Instant,
     private val zone: TimeZone,
 ) {
     suspend operator fun invoke(item: MedicationWithSchedule): DetailContent {
-        val latest = repository.latestDose(item.schedule.id)
+        // Last take = the newest TAKEN log by effective time. Skipped and
+        // missed rows must never delay the next dose or read as a take.
+        val latest = repository.latestTakenDose(item.schedule.id)
         val lastTaken = latest?.let { it.takenAt ?: it.plannedAt }
         // One wall-clock reading keeps every derived instant on the same "now".
         val now = clock()
@@ -122,9 +121,11 @@ class ComputeDetailStateUseCase(
 
     /**
      * The recent-list rows, newest first, capped at [HISTORY_LIMIT]: the last
-     * 14 days' logs interleaved with derived "Not recorded" slots (matched
-     * against the complete window logs, so a capped recent query can never
-     * fake a gap), then older logs from the capped recent query.
+     * 14 days' logs interleaved with derived "Not recorded" slots, then older
+     * logs from the capped recent query. Gap slots are matched against the
+     * complete window logs, not just the displayed recent ones: a dose up to
+     * [SLOT_MATCH_WINDOW] before the 14-day cutoff can answer a slot just
+     * after it and must not leave a phantom gap row at the boundary.
      */
     private suspend fun historyEntries(
         schedule: StoredSchedule,
@@ -137,6 +138,7 @@ class ComputeDetailStateUseCase(
         val older = repository.recentDoses(schedule.id, HISTORY_LIMIT)
             .filter { (it.takenAt ?: it.plannedAt) < cutoff }
             .map { HistoryEntry.Logged(it) }
-        return (historyWithGaps(recentLogs, gapSlots) + older).take(HISTORY_LIMIT)
+        return (historyWithGaps(recentLogs, gapSlots, matchLogs = windowLogs) + older)
+            .take(HISTORY_LIMIT)
     }
 }

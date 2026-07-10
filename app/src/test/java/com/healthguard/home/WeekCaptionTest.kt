@@ -1,6 +1,7 @@
 package com.healthguard.home
 
 import com.healthguard.activity.DoseDayStatus
+import com.healthguard.home.format.weekCaption
 import kotlinx.datetime.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Test

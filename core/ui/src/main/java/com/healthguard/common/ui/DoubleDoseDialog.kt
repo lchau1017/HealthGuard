@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 
 /**
  * The one double-dose confirmation used everywhere a dose can be recorded
@@ -18,10 +19,12 @@ fun DoubleDoseDialog(
     minutesAgo: Long,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val ago = if (minutesAgo < 1) "moments ago" else "$minutesAgo minutes ago"
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = modifier,
         title = { Text("Record another dose?") },
         text = {
             Text(

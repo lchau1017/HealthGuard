@@ -1,17 +1,18 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.testing
 
-import com.healthguard.shared.data.DoseLogWithMedication
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.MedicationWithSchedule
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.data.StoredMedication
-import com.healthguard.shared.data.StoredSchedule
-import com.healthguard.shared.data.TakenDose
-import com.healthguard.shared.extraction.Frequency
-import kotlin.time.ExperimentalTime
+import com.healthguard.domain.model.DoseId
+import com.healthguard.domain.model.DoseLogWithMedication
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.repository.DoseLogRepository
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.model.MedicationWithSchedule
+import com.healthguard.domain.model.ScheduleId
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.model.StoredMedication
+import com.healthguard.domain.model.StoredSchedule
+import com.healthguard.domain.model.TakenDose
+import com.healthguard.domain.extraction.Frequency
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -23,22 +24,22 @@ import kotlinx.coroutines.flow.SharedFlow
  * test source set cannot depend on `:core:data` (that would close a project
  * dependency cycle), so the real SQLDelight repository is unavailable here.
  *
- * Only the methods the Home, Detail and Activity use cases actually touch are
- * implemented against simple collections; every other interface member throws
- * so an accidental reliance surfaces loudly rather than silently returning
- * empty data.
+ * Every interface member is implemented against simple collections, each
+ * mirroring the real SQL's semantics (half-open ranges, effective-time
+ * COALESCE, editable-columns-only updates) so use-case tests exercise
+ * production behaviour rather than a convenient fiction.
  */
-class FakeMedicationRepository : MedicationRepository {
+class FakeMedicationRepository : MedicationRepository, DoseLogRepository {
 
     private val medications = mutableListOf<MedicationWithSchedule>()
     private val doseLogs = mutableListOf<StoredDoseLog>()
 
     /** Recorded mutation calls, so delegation tests can assert the arguments. */
     val loggedDoses = mutableListOf<StoredDoseLog>()
-    val deletedDoseIds = mutableListOf<String>()
-    val deletedMedicationIds = mutableListOf<String>()
-    val activations = mutableListOf<Pair<String, Instant>>()
-    val stops = mutableListOf<Pair<String, Instant>>()
+    val deletedDoseIds = mutableListOf<DoseId>()
+    val deletedMedicationIds = mutableListOf<MedicationId>()
+    val activations = mutableListOf<Pair<MedicationId, Instant>>()
+    val stops = mutableListOf<Pair<MedicationId, Instant>>()
     val updatedMedications = mutableListOf<StoredMedication>()
     val updatedSchedules = mutableListOf<StoredSchedule>()
 
@@ -59,7 +60,11 @@ class FakeMedicationRepository : MedicationRepository {
 
     // --- Test seeding helpers -------------------------------------------------
 
-    /** Seeds a medication + schedule. Newest-first ordering is the caller's job. */
+    /**
+     * Seeds a medication + schedule. Newest-first ordering is the caller's job.
+     * Takes the raw string for brevity and wraps it: the medication id is
+     * [MedicationId] of [id], the schedule id [ScheduleId] of `"sched-$id"`.
+     */
     fun seedMedication(
         id: String,
         drugName: String = "Ibuprofen",
@@ -70,7 +75,7 @@ class FakeMedicationRepository : MedicationRepository {
     ): MedicationWithSchedule {
         val item = MedicationWithSchedule(
             medication = StoredMedication(
-                id = id,
+                id = MedicationId(id),
                 drugName = drugName,
                 label = null,
                 activeIngredients = emptyList(),
@@ -80,8 +85,8 @@ class FakeMedicationRepository : MedicationRepository {
                 createdAt = createdAt,
             ),
             schedule = StoredSchedule(
-                id = "sched-$id",
-                medicationId = id,
+                id = ScheduleId("sched-$id"),
+                medicationId = MedicationId(id),
                 frequency = frequency,
                 withFood = true,
                 startedAt = startedAt,
@@ -93,11 +98,11 @@ class FakeMedicationRepository : MedicationRepository {
         return item
     }
 
-    /** Seeds a TAKEN dose log for a schedule. */
+    /** Seeds a TAKEN dose log for a schedule (raw string wrapped, like [seedMedication]). */
     fun seedDose(scheduleId: String, takenAt: Instant, plannedAt: Instant = takenAt) {
         doseLogs += StoredDoseLog(
-            id = "dose-$scheduleId-${takenAt.toEpochMilliseconds()}",
-            scheduleId = scheduleId,
+            id = DoseId("dose-$scheduleId-${takenAt.toEpochMilliseconds()}"),
+            scheduleId = ScheduleId(scheduleId),
             plannedAt = plannedAt,
             takenAt = takenAt,
             status = DoseStatus.TAKEN,
@@ -120,21 +125,21 @@ class FakeMedicationRepository : MedicationRepository {
 
     override fun medications(): Flow<List<MedicationWithSchedule>> = _medications
 
-    override suspend fun delete(id: String) {
+    override suspend fun delete(id: MedicationId) {
         deletedMedicationIds += id
         medications.removeAll { it.medication.id == id }
         publishMedications()
         _dataChanges.emit(Unit)
     }
 
-    override suspend fun activate(medicationId: String, at: Instant) {
+    override suspend fun activate(medicationId: MedicationId, at: Instant) {
         activations += medicationId to at
         replaceSchedule(medicationId) { it.copy(startedAt = at, stoppedAt = null) }
         publishMedications()
         _dataChanges.emit(Unit)
     }
 
-    override suspend fun stop(medicationId: String, at: Instant) {
+    override suspend fun stop(medicationId: MedicationId, at: Instant) {
         stops += medicationId to at
         replaceSchedule(medicationId) { it.copy(stoppedAt = at) }
         publishMedications()
@@ -147,21 +152,28 @@ class FakeMedicationRepository : MedicationRepository {
         _dataChanges.emit(Unit)
     }
 
-    override suspend fun deleteDoseLog(id: String) {
+    override suspend fun deleteDoseLog(id: DoseId) {
         deletedDoseIds += id
         doseLogs.removeAll { it.id == id }
         _dataChanges.emit(Unit)
     }
 
-    override suspend fun latestDose(scheduleId: String): StoredDoseLog? =
-        doseLogs.filter { it.scheduleId == scheduleId }.maxByOrNull { it.plannedAt }
+    /**
+     * Mirrors the SQL: the schedule's newest TAKEN dose by effective time
+     * (takenAt when present, plannedAt otherwise); skipped and missed rows
+     * never shift it.
+     */
+    override suspend fun latestTakenDose(scheduleId: ScheduleId): StoredDoseLog? =
+        doseLogs
+            .filter { it.scheduleId == scheduleId && it.status == DoseStatus.TAKEN }
+            .maxByOrNull { it.takenAt ?: it.plannedAt }
 
     override suspend fun doseLogsInRange(from: Instant, to: Instant): List<StoredDoseLog> =
         doseLogs
             .filter { (it.takenAt ?: it.plannedAt) in from..<to }
             .sortedBy { it.plannedAt }
 
-    override suspend fun getMedication(id: String): MedicationWithSchedule? =
+    override suspend fun getMedication(id: MedicationId): MedicationWithSchedule? =
         medications.firstOrNull { it.medication.id == id }
 
     /**
@@ -171,7 +183,12 @@ class FakeMedicationRepository : MedicationRepository {
      */
     override suspend fun updateMedication(medication: StoredMedication) {
         val index = medications.indexOfFirst { it.medication.id == medication.id }
-        if (index < 0) return
+        if (index < 0) {
+            // Parity with the real repository: it signals a data change even
+            // when the UPDATE matched no row.
+            _dataChanges.emit(Unit)
+            return
+        }
         updatedMedications += medication
         val current = medications[index].medication
         medications[index] = medications[index].copy(
@@ -194,7 +211,12 @@ class FakeMedicationRepository : MedicationRepository {
      */
     override suspend fun updateSchedule(schedule: StoredSchedule) {
         val index = medications.indexOfFirst { it.schedule.id == schedule.id }
-        if (index < 0) return
+        if (index < 0) {
+            // Parity with the real repository: it signals a data change even
+            // when the UPDATE matched no row.
+            _dataChanges.emit(Unit)
+            return
+        }
         updatedSchedules += schedule
         val current = medications[index].schedule
         medications[index] = medications[index].copy(
@@ -208,7 +230,7 @@ class FakeMedicationRepository : MedicationRepository {
     }
 
     override suspend fun dosesInRange(
-        scheduleId: String,
+        scheduleId: ScheduleId,
         from: Instant,
         to: Instant,
     ): List<StoredDoseLog> =
@@ -216,7 +238,7 @@ class FakeMedicationRepository : MedicationRepository {
             .filter { it.scheduleId == scheduleId && it.plannedAt in from..<to }
             .sortedBy { it.plannedAt }
 
-    override suspend fun recentDoses(scheduleId: String, limit: Int): List<StoredDoseLog> =
+    override suspend fun recentDoses(scheduleId: ScheduleId, limit: Int): List<StoredDoseLog> =
         doseLogs
             .filter { it.scheduleId == scheduleId }
             .sortedByDescending { it.plannedAt }
@@ -260,12 +282,12 @@ class FakeMedicationRepository : MedicationRepository {
                 medications += MedicationWithSchedule(medication, schedule)
             }
 
-            override fun activate(medicationId: String, at: Instant) {
+            override fun activate(medicationId: MedicationId, at: Instant) {
                 activations += medicationId to at
                 replaceSchedule(medicationId) { it.copy(startedAt = at, stoppedAt = null) }
             }
 
-            override fun stop(medicationId: String, at: Instant) {
+            override fun stop(medicationId: MedicationId, at: Instant) {
                 stops += medicationId to at
                 replaceSchedule(medicationId) { it.copy(stoppedAt = at) }
             }
@@ -307,7 +329,7 @@ class FakeMedicationRepository : MedicationRepository {
             }
 
     private fun replaceSchedule(
-        medicationId: String,
+        medicationId: MedicationId,
         transform: (StoredSchedule) -> StoredSchedule,
     ) {
         val index = medications.indexOfFirst { it.medication.id == medicationId }

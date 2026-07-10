@@ -1,14 +1,11 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.detail.domain
 
-import com.healthguard.activity.DayDetail
-import com.healthguard.activity.dayDetail
-import com.healthguard.detail.SLOT_MATCH_WINDOW
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.MedicationWithSchedule
-import com.healthguard.shared.domain.expectedDoseTimes
-import kotlin.time.ExperimentalTime
+import com.healthguard.domain.tracking.DayDetail
+import com.healthguard.domain.tracking.dayDetail
+import com.healthguard.domain.tracking.SLOT_MATCH_WINDOW
+import com.healthguard.domain.repository.DoseLogRepository
+import com.healthguard.domain.model.MedicationWithSchedule
+import com.healthguard.domain.schedule.expectedDoseTimes
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
@@ -23,7 +20,7 @@ import kotlinx.datetime.plus
  * still inside the 90-minute answer window are not "not recorded" yet).
  */
 class LoadDayDetailUseCase(
-    private val repository: MedicationRepository,
+    private val repository: DoseLogRepository,
     private val clock: () -> Instant,
     private val zone: TimeZone,
 ) {

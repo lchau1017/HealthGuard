@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
 import android.net.Uri
+import androidx.core.graphics.scale
 import android.os.Build
 import android.util.Base64
 import java.io.ByteArrayOutputStream
@@ -31,7 +32,7 @@ private fun Bitmap.downscaleToMaxEdge(maxEdgePx: Int): Bitmap {
     val scale = maxEdgePx.toFloat() / longest
     val targetWidth = (width * scale).toInt().coerceAtLeast(1)
     val targetHeight = (height * scale).toInt().coerceAtLeast(1)
-    return Bitmap.createScaledBitmap(this, targetWidth, targetHeight, true)
+    return scale(targetWidth, targetHeight)
 }
 
 /**

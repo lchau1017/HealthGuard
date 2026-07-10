@@ -15,11 +15,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.healthguard.activity.DayDetail
+import com.healthguard.domain.tracking.DayDetail
 import com.healthguard.common.format.dayLineAnnotations
 import com.healthguard.common.format.dayLineTitle
 import com.healthguard.common.format.expectedNotRecordedText
 import com.healthguard.common.format.todayLabel
+import com.healthguard.common.theme.Spacing
 
 /**
  * The tapped-day bottom sheet behind every heat-map cell: the day's doses
@@ -39,7 +40,7 @@ fun DayDetailSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
+                .padding(horizontal = Spacing.xxl)
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {

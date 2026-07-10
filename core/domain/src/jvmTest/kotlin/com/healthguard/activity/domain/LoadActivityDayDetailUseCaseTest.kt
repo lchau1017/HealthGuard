@@ -1,14 +1,12 @@
-@file:OptIn(ExperimentalTime::class)
-
 package com.healthguard.activity.domain
 
-import com.healthguard.activity.DayDetail
-import com.healthguard.activity.DayMedicineLine
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.MedicationId
+import com.healthguard.domain.tracking.DayDetail
+import com.healthguard.domain.tracking.DayMedicineLine
+import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.FakeMedicationRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
@@ -21,7 +19,7 @@ class LoadActivityDayDetailUseCaseTest {
     private val now = Instant.parse("2024-07-03T10:00:00Z")
 
     private fun useCase(repo: FakeMedicationRepository) =
-        LoadActivityDayDetailUseCase(repo, clock = { now }, zone = TimeZone.UTC)
+        LoadActivityDayDetailUseCase(repo, repo, clock = { now }, zone = TimeZone.UTC)
 
     @Test
     fun `selecting a day builds its detail sheet across all medicines`() = runTest {
@@ -49,7 +47,7 @@ class LoadActivityDayDetailUseCaseTest {
                 date = LocalDate(2024, 7, 2),
                 lines = listOf(
                     DayMedicineLine(
-                        medicationId = "a",
+                        medicationId = MedicationId("a"),
                         name = "Cetirizine 200 mg",
                         takenTimes = listOf(LocalTime(9, 4)),
                         skipped = 0,
@@ -57,7 +55,7 @@ class LoadActivityDayDetailUseCaseTest {
                         notRecorded = 1,
                     ),
                     DayMedicineLine(
-                        medicationId = "b",
+                        medicationId = MedicationId("b"),
                         name = "Ibuprofen 200 mg",
                         takenTimes = listOf(LocalTime(14, 0)),
                         skipped = 0,

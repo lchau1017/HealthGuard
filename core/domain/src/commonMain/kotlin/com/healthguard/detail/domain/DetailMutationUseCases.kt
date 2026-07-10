@@ -1,8 +1,8 @@
 package com.healthguard.detail.domain
 
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.StoredMedication
-import com.healthguard.shared.data.StoredSchedule
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.model.StoredMedication
+import com.healthguard.domain.model.StoredSchedule
 
 /**
  * Persists the edited medication and schedule. Ports `DetailViewModel.save`'s
