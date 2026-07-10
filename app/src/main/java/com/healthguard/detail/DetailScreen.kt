@@ -56,11 +56,11 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DayCount
 import com.healthguard.activity.DoseDayStatus
+import com.healthguard.common.format.phaseChipText
 import com.healthguard.common.format.targetCaption
 import com.healthguard.common.format.timeLabel
 import com.healthguard.common.format.toHumanText
 import com.healthguard.home.MedicationPhase
-import com.healthguard.home.phaseChipText
 import com.healthguard.shared.data.DoseStatus
 import com.healthguard.shared.data.StoredDoseLog
 import com.healthguard.shared.domain.doseSlots

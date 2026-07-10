@@ -68,6 +68,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.healthguard.BuildConfig
 import com.healthguard.activity.DoseDayStatus
+import com.healthguard.common.format.phaseChipText
 import com.healthguard.common.format.todayLabel
 import com.healthguard.shared.data.MedicationWithSchedule
 import com.healthguard.common.ui.CategoryChip

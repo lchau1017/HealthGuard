@@ -4,7 +4,7 @@ package com.healthguard.activity
 
 import com.healthguard.activity.domain.ActivityContent
 import com.healthguard.activity.domain.MedicationAdherenceContent
-import com.healthguard.home.stoppedLabel
+import com.healthguard.common.format.stoppedLabel
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
