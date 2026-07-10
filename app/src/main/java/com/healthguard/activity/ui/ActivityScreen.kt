@@ -48,6 +48,7 @@ import com.healthguard.activity.state.ActivityUiState
 import com.healthguard.activity.state.MedicationAdherence
 import com.healthguard.common.format.hourLabel
 import com.healthguard.common.format.targetCaption
+import com.healthguard.common.theme.Spacing
 import com.healthguard.common.ui.ActivityHeatMap
 import com.healthguard.common.ui.DayDetailSheet
 import com.healthguard.common.ui.DayRowHeatMap
@@ -89,8 +90,8 @@ fun ActivityScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = Spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             FilterRow(
                 selected = state.filter,
@@ -114,7 +115,7 @@ fun ActivityScreen(
 
                 BreakdownList(rows = state.breakdown)
             }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(Spacing.xl))
         }
     }
 
@@ -168,7 +169,7 @@ private fun RecordSection(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
         when (filter) {
             ActivityFilter.DAYS_7 -> DayRowHeatMap(
                 dayCounts = dayCounts,
@@ -237,9 +238,9 @@ private fun statTiles(stats: ActivityStats): List<Tile> {
 private fun StatTiles(stats: ActivityStats, modifier: Modifier = Modifier) {
     // The tiles are pure string formatting; recompute only when the stats change.
     val tiles = remember(stats) { statTiles(stats) }
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
         tiles.chunked(2).forEach { rowTiles ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 rowTiles.forEach { tile ->
                     StatTile(
                         label = tile.label,
@@ -261,7 +262,7 @@ private fun StatTile(
     modifier: Modifier = Modifier,
 ) {
     Card(modifier = modifier.semantics { contentDescription = description }) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(Spacing.lg)) {
             Text(
                 text = value,
                 style = MaterialTheme.typography.headlineMedium,
@@ -299,7 +300,7 @@ private fun BreakdownList(rows: List<MedicationAdherence>, modifier: Modifier = 
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
         if (rows.isEmpty()) {
             Text(
                 text = "No medicines with activity in this range.",
@@ -335,7 +336,7 @@ private fun BreakdownRow(row: MedicationAdherence, modifier: Modifier = Modifier
                 modifier = Modifier.weight(1f, fill = false),
                 maxLines = 1,
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(Spacing.md))
             Text(
                 text = adherenceRowFigure(row),
                 style = MaterialTheme.typography.bodyMedium,
@@ -343,12 +344,12 @@ private fun BreakdownRow(row: MedicationAdherence, modifier: Modifier = Modifier
             )
         }
         row.percent?.let { percent ->
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(Spacing.xs))
             TargetTickedBar(percent = percent)
         }
         if (row.phase == MedicationPhase.TAKING) {
             row.meetsTarget?.let { meets ->
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(Spacing.xs))
                 TargetCaption(meets = meets)
             }
         }
@@ -420,7 +421,7 @@ private fun TargetCaption(meets: Boolean, modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
             }
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(Spacing.xs))
         }
         Text(
             text = targetCaption(meets),
@@ -447,7 +448,7 @@ private fun EmptyState(modifier: Modifier = Modifier) {
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
         Text(
             text = "Take a dose from the home screen and your history will build up here.",
             style = MaterialTheme.typography.bodyMedium,

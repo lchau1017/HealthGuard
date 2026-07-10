@@ -63,6 +63,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.common.format.phaseChipText
 import com.healthguard.common.format.todayLabel
+import com.healthguard.common.theme.Spacing
 import com.healthguard.common.theme.heatRamp
 import com.healthguard.common.ui.CategoryChip
 import com.healthguard.common.ui.DoubleDoseDialog
@@ -165,8 +166,8 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = Spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             item(key = "today-header") {
                 Column {
@@ -179,7 +180,7 @@ fun HomeScreen(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(Spacing.xs))
                     Text(
                         text = "For your records only — always consult your " +
                             "doctor or pharmacist.",
@@ -298,10 +299,10 @@ private fun DueAlertCard(
             .fillMaxWidth()
             .semanticsLabel("Dose due: ${medication.drugName}, open details"),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(Spacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 DueBadge()
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(Spacing.md))
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = listOfNotNull(medication.drugName, medication.dosage)
@@ -327,7 +328,7 @@ private fun DueAlertCard(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
             Button(
                 onClick = onTakeNow,
                 modifier = Modifier
@@ -373,7 +374,7 @@ private fun ThisWeekCard(
     modifier: Modifier = Modifier,
 ) {
     Card(modifier = modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(Spacing.lg)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -390,7 +391,7 @@ private fun ThisWeekCard(
                     Text("Full history →")
                 }
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(Spacing.xs))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -401,7 +402,7 @@ private fun ThisWeekCard(
                             state = day.state,
                             isToday = index == weekDays.lastIndex,
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(Spacing.xs))
                         Text(
                             text = day.date.dayOfWeek.name.take(1),
                             style = MaterialTheme.typography.labelSmall,
@@ -410,7 +411,7 @@ private fun ThisWeekCard(
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             Text(
                 text = caption,
                 style = MaterialTheme.typography.bodyMedium,
@@ -497,11 +498,11 @@ private fun TakingRow(
             .semanticsLabel("${medication.drugName}, open details"),
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(Spacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PillAvatar(label = medication.label)
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(Spacing.md))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = listOfNotNull(medication.drugName, medication.dosage)
@@ -527,7 +528,7 @@ private fun TakingRow(
                     }
                 }
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(Spacing.md))
             when (val status = card.status) {
                 DoseRowStatus.Due -> FilledTonalButton(
                     onClick = onTakeNow,
@@ -576,11 +577,11 @@ private fun CabinetRow(
             .semanticsLabel("${medication.drugName}, open details"),
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(Spacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PillAvatar(label = medication.label)
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(Spacing.md))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = listOfNotNull(medication.drugName, medication.dosage)
@@ -633,7 +634,7 @@ private fun SectionHeader(text: String, modifier: Modifier = Modifier) {
         text = text,
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.primary,
-        modifier = modifier.padding(top = 8.dp),
+        modifier = modifier.padding(top = Spacing.sm),
     )
 }
 
@@ -659,7 +660,7 @@ private fun OverallEmptyState(modifier: Modifier = Modifier) {
             text = "Scan your first medication",
             style = MaterialTheme.typography.titleMedium,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
         Text(
             text = "Take a photo of a medication label and it will show up here.",
             style = MaterialTheme.typography.bodyMedium,

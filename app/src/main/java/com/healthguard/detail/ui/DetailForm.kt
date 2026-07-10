@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.healthguard.common.theme.Spacing
 import com.healthguard.common.ui.CategoryLabelInput
 import com.healthguard.detail.state.DetailIntent
 import com.healthguard.detail.state.DetailUiState
@@ -37,7 +38,7 @@ fun DetailForm(
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         SectionTitle("Details")
         OutlinedTextField(
@@ -106,7 +107,7 @@ fun DetailForm(
             onSelect = { onIntent(DetailIntent.WithFoodChanged(it)) },
         )
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.xs))
         Button(
             onClick = { onIntent(DetailIntent.Save) },
             enabled = state.canSave,

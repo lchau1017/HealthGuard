@@ -28,6 +28,7 @@ import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DayCount
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.common.format.targetCaption
+import com.healthguard.common.theme.Spacing
 import com.healthguard.common.theme.heatRamp
 import com.healthguard.common.ui.ActivityHeatMap
 import com.healthguard.common.ui.HeatMapGrid
@@ -94,7 +95,7 @@ fun HistorySection(
             }
         }
         if (history.isEmpty()) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             Text(
                 text = "No doses recorded yet.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -103,7 +104,7 @@ fun HistorySection(
             return@Column
         }
         historyFrom?.let { from ->
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             if (isAsNeeded) {
                 // No dose is ever owed: intensity is honest, completeness is not.
                 ActivityHeatMap(
@@ -121,7 +122,7 @@ fun HistorySection(
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
         history.forEach { entry ->
             when (entry) {
                 is HistoryEntry.Logged -> HistoryRow(log = entry.log, now = now, zone = zone)
@@ -189,7 +190,7 @@ private fun DayStatusHeatMap(
         Spacer(Modifier.height(6.dp))
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             LegendChip(color = ramp[4], text = "All taken")
             LegendChip(color = ramp[2], text = "Some")
@@ -232,7 +233,7 @@ private fun LegendChip(
                 )
             }
         }
-        Spacer(Modifier.width(4.dp))
+        Spacer(Modifier.width(Spacing.xs))
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,

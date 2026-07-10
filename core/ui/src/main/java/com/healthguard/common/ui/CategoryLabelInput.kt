@@ -15,8 +15,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.healthguard.common.theme.CATEGORY_PRESETS
+import com.healthguard.common.theme.Spacing
 
 /**
  * Label picker: preset category chips plus a free-text override, all writing
@@ -39,7 +39,7 @@ fun CategoryLabelInput(
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             CATEGORY_PRESETS.forEach { preset ->
                 val selected = trimmed == preset
                 FilterChip(
@@ -49,7 +49,7 @@ fun CategoryLabelInput(
                 )
             }
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.xs))
         OutlinedTextField(
             value = if (isPreset) "" else label,
             onValueChange = onLabelChange,

@@ -44,6 +44,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.healthguard.common.format.phaseChipText
 import com.healthguard.common.format.timeLabel
 import com.healthguard.common.format.toHumanText
+import com.healthguard.common.theme.Spacing
 import com.healthguard.common.ui.CategoryChip
 import com.healthguard.common.ui.DayDetailSheet
 import com.healthguard.common.ui.DoubleDoseDialog
@@ -145,8 +146,8 @@ fun DetailScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = Spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             HeaderBlock(state = state, now = state.now, zone = zone)
 
@@ -174,7 +175,7 @@ fun DetailScreen(
                 onDayClick = { onIntent(DetailIntent.SelectDay(it)) },
             )
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             if (state.isActive) {
                 OutlinedButton(
                     onClick = { onIntent(DetailIntent.ToggleTaking) },
@@ -200,7 +201,7 @@ fun DetailScreen(
                     )
                 }
             }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(Spacing.xl))
         }
     }
 
@@ -290,7 +291,7 @@ private fun StatusCard(
     modifier: Modifier = Modifier,
 ) {
     Card(modifier = modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(Spacing.lg)) {
             if (state.nextDoseAt != null) {
                 Text(
                     text = "Next dose",
@@ -300,14 +301,14 @@ private fun StatusCard(
                 LiveCountdown(nextDoseAt = state.nextDoseAt, zone = zone)
             }
             state.lastTakenAt?.let { lastTaken ->
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(Spacing.xs))
                 Text(
                     text = lastTakenLabel(lastTaken, state.now, zone),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
             Button(
                 onClick = onTakeNow,
                 modifier = Modifier
@@ -373,8 +374,8 @@ private fun ScheduleCard(
 
     Card(modifier = modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             timesText?.let { ScheduleRow(label = "Times", value = it) }
             startedText?.let { ScheduleRow(label = "Started", value = it) }
@@ -405,7 +406,7 @@ internal fun SectionTitle(text: String, modifier: Modifier = Modifier) {
         text = text,
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.primary,
-        modifier = modifier.padding(top = 8.dp),
+        modifier = modifier.padding(top = Spacing.sm),
     )
 }
 
