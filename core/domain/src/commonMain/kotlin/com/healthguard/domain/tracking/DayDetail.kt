@@ -53,9 +53,7 @@ fun dayDetail(
     expectedByMedication: Map<String, List<Instant>>,
     zone: TimeZone,
 ): DayDetail {
-    val byMedication = logs
-        .filter { it.status != DoseStatus.PENDING }
-        .groupBy { it.medicationId }
+    val byMedication = logs.groupBy { it.medicationId }
     val lines = byMedication.map { (medicationId, medLogs) ->
         val first = medLogs.first()
         DayMedicineLine(

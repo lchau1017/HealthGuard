@@ -55,7 +55,6 @@ fun doseAnnotation(status: DoseStatus, plannedAt: Instant, takenAt: Instant?): S
     when (status) {
         DoseStatus.MISSED -> "Missed"
         DoseStatus.SKIPPED -> "Skipped"
-        DoseStatus.PENDING -> "Pending"
         DoseStatus.TAKEN -> {
             val offset = takenAt?.minus(plannedAt)
             when {

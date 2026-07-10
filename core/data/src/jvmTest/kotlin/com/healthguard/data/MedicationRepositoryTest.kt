@@ -64,7 +64,7 @@ class MedicationRepositoryTest {
             scheduleId = scheduleId,
             plannedAt = Instant.fromEpochMilliseconds(plannedAtMillis),
             takenAt = null,
-            status = DoseStatus.PENDING,
+            status = DoseStatus.MISSED,
         )
 
     @Test
@@ -358,8 +358,8 @@ class MedicationRepositoryTest {
         val repo = repository()
         repo.insertMedication(medication(), schedule())
         repo.logTaken("d-taken", takenAtMillis = 1_000)
-        // PENDING with null takenAt.
-        repo.logDose(dose("d-pending", plannedAtMillis = 1_100))
+        // MISSED with null takenAt.
+        repo.logDose(dose("d-missed-null", plannedAtMillis = 1_100))
         repo.logDose(
             dose("d-skipped", plannedAtMillis = 1_200).copy(status = DoseStatus.SKIPPED),
         )

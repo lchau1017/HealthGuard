@@ -40,7 +40,7 @@ data class MedicationWithSchedule(
     val schedule: StoredSchedule,
 )
 
-enum class DoseStatus { TAKEN, MISSED, SKIPPED, PENDING }
+enum class DoseStatus { TAKEN, MISSED, SKIPPED }
 
 /** One recorded take, resolved to its medication: an activity-history event. */
 data class TakenDose(

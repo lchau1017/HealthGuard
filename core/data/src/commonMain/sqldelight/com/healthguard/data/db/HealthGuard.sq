@@ -30,7 +30,7 @@ CREATE TABLE doseLog (
     scheduleId TEXT NOT NULL REFERENCES schedule(id) ON DELETE CASCADE,
     plannedAt INTEGER NOT NULL,
     takenAt INTEGER,
-    -- TAKEN | MISSED | SKIPPED | PENDING
+    -- TAKEN | MISSED | SKIPPED
     status TEXT NOT NULL
 );
 

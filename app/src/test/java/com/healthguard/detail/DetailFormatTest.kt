@@ -78,9 +78,8 @@ class DetailFormatTest {
     }
 
     @Test
-    fun `missed skipped and pending are plain labels`() {
+    fun `missed and skipped are plain labels`() {
         assertEquals("Missed", doseAnnotation(DoseStatus.MISSED, planned, null))
         assertEquals("Skipped", doseAnnotation(DoseStatus.SKIPPED, planned, null))
-        assertEquals("Pending", doseAnnotation(DoseStatus.PENDING, planned, null))
     }
 }
