@@ -2,8 +2,8 @@
 
 package com.healthguard.activity
 
-import com.healthguard.shared.data.DoseLogWithMedication
-import com.healthguard.shared.data.DoseStatus
+import com.healthguard.domain.model.DoseLogWithMedication
+import com.healthguard.domain.model.DoseStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.ExperimentalTime

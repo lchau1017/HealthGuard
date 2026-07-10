@@ -4,7 +4,7 @@ package com.healthguard.common.format
 
 import com.healthguard.home.MedicationPhase
 import com.healthguard.home.phase
-import com.healthguard.shared.data.StoredSchedule
+import com.healthguard.domain.model.StoredSchedule
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit

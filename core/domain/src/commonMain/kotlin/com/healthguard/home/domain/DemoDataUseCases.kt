@@ -2,12 +2,12 @@
 
 package com.healthguard.home.domain
 
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.data.StoredMedication
-import com.healthguard.shared.data.StoredSchedule
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.model.StoredMedication
+import com.healthguard.domain.model.StoredSchedule
+import com.healthguard.domain.extraction.Frequency
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime

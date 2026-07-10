@@ -21,8 +21,8 @@ import com.healthguard.home.domain.DeleteMedicationUseCase
 import com.healthguard.home.domain.RecordDoseUseCase
 import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
-import com.healthguard.shared.data.MedicationWithSchedule
-import com.healthguard.shared.domain.ObserveMedicationsUseCase
+import com.healthguard.domain.model.MedicationWithSchedule
+import com.healthguard.domain.usecase.ObserveMedicationsUseCase
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.channels.Channel

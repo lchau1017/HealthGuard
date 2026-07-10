@@ -1,6 +1,6 @@
 package com.healthguard.common.format
 
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.extraction.Frequency
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

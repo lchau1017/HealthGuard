@@ -19,11 +19,11 @@ import com.healthguard.home.domain.DeleteMedicationUseCase
 import com.healthguard.home.domain.RecordDoseUseCase
 import com.healthguard.home.domain.StopMedicationUseCase
 import com.healthguard.home.domain.UndoDoseUseCase
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.domain.ObserveMedicationsUseCase
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.usecase.ObserveMedicationsUseCase
+import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.collectEffects
 import com.healthguard.testing.collectState
 import com.healthguard.testing.inMemoryRepository

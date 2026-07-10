@@ -2,9 +2,9 @@ package com.healthguard.confirm.state
 
 import com.healthguard.common.format.toHumanText
 import com.healthguard.confirm.ConfirmViewModel
-import com.healthguard.shared.extraction.ExtractedField
-import com.healthguard.shared.extraction.ExtractionResult
-import com.healthguard.shared.extraction.MedicationExtraction
+import com.healthguard.domain.extraction.ExtractedField
+import com.healthguard.domain.extraction.ExtractionResult
+import com.healthguard.domain.extraction.MedicationExtraction
 
 /**
  * Folds an [ExtractionResult] into the [ConfirmUiState] the review screen

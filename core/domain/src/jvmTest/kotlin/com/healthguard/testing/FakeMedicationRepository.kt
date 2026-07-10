@@ -2,15 +2,15 @@
 
 package com.healthguard.testing
 
-import com.healthguard.shared.data.DoseLogWithMedication
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.MedicationWithSchedule
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.data.StoredMedication
-import com.healthguard.shared.data.StoredSchedule
-import com.healthguard.shared.data.TakenDose
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseLogWithMedication
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.model.MedicationWithSchedule
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.model.StoredMedication
+import com.healthguard.domain.model.StoredSchedule
+import com.healthguard.domain.model.TakenDose
+import com.healthguard.domain.extraction.Frequency
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow

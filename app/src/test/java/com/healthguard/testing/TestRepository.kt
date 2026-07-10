@@ -3,14 +3,14 @@
 package com.healthguard.testing
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.SqlDelightMedicationRepository
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.data.StoredMedication
-import com.healthguard.shared.data.StoredSchedule
-import com.healthguard.shared.db.HealthGuardDb
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.data.SqlDelightMedicationRepository
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.model.StoredMedication
+import com.healthguard.domain.model.StoredSchedule
+import com.healthguard.data.db.HealthGuardDb
+import com.healthguard.domain.extraction.Frequency
 import java.util.Properties
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant

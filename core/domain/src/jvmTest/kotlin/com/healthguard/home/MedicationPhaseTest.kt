@@ -2,7 +2,7 @@
 
 package com.healthguard.home
 
-import com.healthguard.shared.data.StoredSchedule
+import com.healthguard.domain.model.StoredSchedule
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.ExperimentalTime

@@ -2,10 +2,10 @@
 
 package com.healthguard.activity
 
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.data.StoredSchedule
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.model.StoredSchedule
+import com.healthguard.domain.extraction.Frequency
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

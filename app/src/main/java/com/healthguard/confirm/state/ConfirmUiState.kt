@@ -1,6 +1,6 @@
 package com.healthguard.confirm.state
 
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.extraction.Frequency
 
 /** One display row on the confirmation screen. */
 data class ReviewField(

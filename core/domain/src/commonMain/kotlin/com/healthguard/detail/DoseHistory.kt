@@ -2,7 +2,7 @@
 
 package com.healthguard.detail
 
-import com.healthguard.shared.data.StoredDoseLog
+import com.healthguard.domain.model.StoredDoseLog
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant

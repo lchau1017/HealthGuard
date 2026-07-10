@@ -7,9 +7,9 @@ import com.healthguard.home.WeekDay
 import com.healthguard.home.isActive
 import com.healthguard.home.todayHasPendingSlots
 import com.healthguard.home.weekDayStates
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.MedicationWithSchedule
-import com.healthguard.shared.domain.nextDose
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.model.MedicationWithSchedule
+import com.healthguard.domain.schedule.nextDose
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant

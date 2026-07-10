@@ -2,7 +2,7 @@
 
 package com.healthguard.home.domain
 
-import com.healthguard.shared.data.MedicationRepository
+import com.healthguard.domain.repository.MedicationRepository
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 

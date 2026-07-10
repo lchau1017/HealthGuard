@@ -5,7 +5,7 @@ package com.healthguard.home.domain
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.activity.adherenceResult
 import com.healthguard.home.weekDayStates
-import com.healthguard.shared.data.DoseStatus
+import com.healthguard.domain.model.DoseStatus
 import com.healthguard.testing.FakeMedicationRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals

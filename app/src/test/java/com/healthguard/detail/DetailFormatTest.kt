@@ -6,7 +6,7 @@ import com.healthguard.detail.format.dayTimeLabel
 import com.healthguard.detail.format.doseAnnotation
 import com.healthguard.detail.format.lastTakenLabel
 import com.healthguard.detail.format.mediumDateLabel
-import com.healthguard.shared.data.DoseStatus
+import com.healthguard.domain.model.DoseStatus
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant

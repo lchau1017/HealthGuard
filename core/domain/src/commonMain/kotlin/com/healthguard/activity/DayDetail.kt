@@ -3,8 +3,8 @@
 package com.healthguard.activity
 
 import com.healthguard.detail.unansweredSlots
-import com.healthguard.shared.data.DoseLogWithMedication
-import com.healthguard.shared.data.DoseStatus
+import com.healthguard.domain.model.DoseLogWithMedication
+import com.healthguard.domain.model.DoseStatus
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate

@@ -12,9 +12,9 @@ import com.healthguard.detail.format.doseAnnotation
 import com.healthguard.detail.format.mediumDateLabel
 import com.healthguard.home.isActive
 import com.healthguard.home.phase
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.domain.doseSlots
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.schedule.doseSlots
+import com.healthguard.domain.extraction.Frequency
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone

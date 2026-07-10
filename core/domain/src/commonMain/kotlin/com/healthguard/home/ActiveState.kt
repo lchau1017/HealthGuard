@@ -2,7 +2,7 @@
 
 package com.healthguard.home
 
-import com.healthguard.shared.data.MedicationWithSchedule
+import com.healthguard.domain.model.MedicationWithSchedule
 import kotlin.time.ExperimentalTime
 
 /** A schedule the user has started and not stopped. */

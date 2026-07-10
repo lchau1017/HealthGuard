@@ -2,10 +2,10 @@
 
 package com.healthguard.confirm.domain
 
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.StoredMedication
-import com.healthguard.shared.data.StoredSchedule
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.model.StoredMedication
+import com.healthguard.domain.model.StoredSchedule
+import com.healthguard.domain.extraction.Frequency
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi

@@ -7,11 +7,11 @@ import com.healthguard.activity.domain.LoadActivityDayDetailUseCase
 import com.healthguard.activity.state.ActivityIntent
 import com.healthguard.activity.state.MedicationAdherence
 import com.healthguard.home.MedicationPhase
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.domain.ObserveDataChangesUseCase
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.usecase.ObserveDataChangesUseCase
+import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.inMemoryRepository
 import com.healthguard.testing.logTaken
 import com.healthguard.testing.seedMedication

@@ -12,8 +12,8 @@ import com.healthguard.activity.adherenceResult
 import com.healthguard.activity.dayCounts
 import com.healthguard.home.MedicationPhase
 import com.healthguard.home.phase
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.extraction.Frequency
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant

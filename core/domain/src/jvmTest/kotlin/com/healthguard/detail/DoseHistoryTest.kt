@@ -2,8 +2,8 @@
 
 package com.healthguard.detail
 
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.StoredDoseLog
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.StoredDoseLog
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.test.Test

@@ -1,6 +1,6 @@
 package com.healthguard.common.format
 
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.extraction.Frequency
 
 /**
  * Human-readable rendering of a dosing frequency, shared by the review dialog

@@ -2,10 +2,10 @@
 
 package com.healthguard.activity
 
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.data.StoredSchedule
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.model.StoredSchedule
+import com.healthguard.domain.extraction.Frequency
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.ExperimentalTime
@@ -127,7 +127,7 @@ class DoseDayStatusTest {
         // `schedule` documents where the expected instants come from in prod.
         assertEquals(
             expected,
-            com.healthguard.shared.domain.expectedDoseTimes(
+            com.healthguard.domain.schedule.expectedDoseTimes(
                 schedule,
                 Instant.parse("2026-06-02T00:00:00Z"),
                 Instant.parse("2026-06-06T00:00:00Z"),

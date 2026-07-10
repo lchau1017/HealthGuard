@@ -12,10 +12,10 @@ import com.healthguard.home.domain.UndoDoseUseCase
 import com.healthguard.home.format.DoseRowStatus
 import com.healthguard.home.state.HomeEffect
 import com.healthguard.home.state.HomeIntent
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.domain.ObserveMedicationsUseCase
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.usecase.ObserveMedicationsUseCase
+import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.collectEffects
 import com.healthguard.testing.collectState
 import com.healthguard.testing.inMemoryRepository

@@ -18,7 +18,7 @@ import com.healthguard.home.state.HomeIntent
 import com.healthguard.home.state.HomeUiState
 import com.healthguard.home.state.TakeConfirmation
 import com.healthguard.home.state.toUiState
-import com.healthguard.shared.domain.ObserveMedicationsUseCase
+import com.healthguard.domain.usecase.ObserveMedicationsUseCase
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.channels.Channel

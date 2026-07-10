@@ -4,7 +4,7 @@ package com.healthguard.activity.domain
 
 import com.healthguard.activity.DayDetail
 import com.healthguard.activity.DayMedicineLine
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.FakeMedicationRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals

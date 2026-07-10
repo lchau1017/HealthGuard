@@ -10,7 +10,7 @@ plugins {
 sqldelight {
     databases {
         create("HealthGuardDb") {
-            packageName.set("com.healthguard.shared.db")
+            packageName.set("com.healthguard.data.db")
         }
     }
 }

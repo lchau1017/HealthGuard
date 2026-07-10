@@ -5,8 +5,8 @@ package com.healthguard.activity.domain
 import com.healthguard.activity.DayDetail
 import com.healthguard.activity.dayDetail
 import com.healthguard.detail.SLOT_MATCH_WINDOW
-import com.healthguard.shared.data.MedicationRepository
-import com.healthguard.shared.domain.expectedDoseTimes
+import com.healthguard.domain.repository.MedicationRepository
+import com.healthguard.domain.schedule.expectedDoseTimes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.first

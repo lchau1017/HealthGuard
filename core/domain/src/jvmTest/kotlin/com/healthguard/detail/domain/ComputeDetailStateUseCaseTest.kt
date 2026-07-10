@@ -5,9 +5,9 @@ package com.healthguard.detail.domain
 import com.healthguard.activity.AdherenceResult
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.detail.HistoryEntry
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.StoredDoseLog
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.DoseStatus
+import com.healthguard.domain.model.StoredDoseLog
+import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.FakeMedicationRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals

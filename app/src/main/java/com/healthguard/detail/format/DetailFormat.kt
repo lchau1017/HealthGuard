@@ -5,7 +5,7 @@ package com.healthguard.detail.format
 import com.healthguard.common.format.shortDayName
 import com.healthguard.common.format.shortName
 import com.healthguard.common.format.timeLabel
-import com.healthguard.shared.data.DoseStatus
+import com.healthguard.domain.model.DoseStatus
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds

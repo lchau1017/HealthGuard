@@ -3,8 +3,8 @@
 package com.healthguard.home.domain
 
 import com.healthguard.activity.DoseDayStatus
-import com.healthguard.shared.data.MedicationWithSchedule
-import com.healthguard.shared.extraction.Frequency
+import com.healthguard.domain.model.MedicationWithSchedule
+import com.healthguard.domain.extraction.Frequency
 import com.healthguard.testing.FakeMedicationRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals

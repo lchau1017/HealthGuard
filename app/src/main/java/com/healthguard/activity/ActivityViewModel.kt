@@ -10,7 +10,7 @@ import com.healthguard.activity.domain.LoadActivityDayDetailUseCase
 import com.healthguard.activity.state.ActivityIntent
 import com.healthguard.activity.state.ActivityUiState
 import com.healthguard.activity.state.toUiState
-import com.healthguard.shared.domain.ObserveDataChangesUseCase
+import com.healthguard.domain.usecase.ObserveDataChangesUseCase
 import kotlin.time.ExperimentalTime
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
