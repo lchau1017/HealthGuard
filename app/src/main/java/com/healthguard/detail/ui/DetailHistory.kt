@@ -32,11 +32,8 @@ import com.healthguard.common.theme.Spacing
 import com.healthguard.common.theme.heatRamp
 import com.healthguard.common.ui.ActivityHeatMap
 import com.healthguard.common.ui.HeatMapGrid
-import com.healthguard.detail.HistoryEntry
-import com.healthguard.detail.format.dayTimeLabel
-import com.healthguard.detail.format.doseAnnotation
-import com.healthguard.shared.data.DoseStatus
-import com.healthguard.shared.data.StoredDoseLog
+import com.healthguard.detail.state.HistoryRowData
+import com.healthguard.detail.state.HistoryRowKind
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
@@ -51,7 +48,7 @@ import kotlinx.datetime.TimeZone
  */
 @Composable
 fun HistorySection(
-    history: List<HistoryEntry>,
+    history: List<HistoryRowData>,
     dayStatuses: Map<LocalDate, DoseDayStatus>,
     dayTakeCounts: List<DayCount>,
     adherence: AdherenceResult,
@@ -123,11 +120,10 @@ fun HistorySection(
             }
         }
         Spacer(Modifier.height(Spacing.sm))
-        history.forEach { entry ->
-            when (entry) {
-                is HistoryEntry.Logged -> HistoryRow(log = entry.log, now = now, zone = zone)
-                is HistoryEntry.NotRecorded ->
-                    NotRecordedRow(slotAt = entry.slotAt, now = now, zone = zone)
+        history.forEach { row ->
+            when (row.kind) {
+                HistoryRowKind.NOT_RECORDED -> NotRecordedRow(row = row)
+                else -> HistoryRow(row = row)
             }
         }
     }
@@ -245,12 +241,10 @@ private fun LegendChip(
 /** One recent dose: status circle, timestamp, and the on-time annotation. */
 @Composable
 private fun HistoryRow(
-    log: StoredDoseLog,
-    now: Instant,
-    zone: TimeZone,
+    row: HistoryRowData,
     modifier: Modifier = Modifier,
 ) {
-    val taken = log.status == DoseStatus.TAKEN
+    val taken = row.kind == HistoryRowKind.TAKEN
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -280,14 +274,14 @@ private fun HistoryRow(
         Spacer(Modifier.width(10.dp))
         Column {
             Text(
-                text = dayTimeLabel(log.takenAt ?: log.plannedAt, now, zone),
+                text = row.title,
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                text = doseAnnotation(log.status, log.plannedAt, log.takenAt),
+                text = row.annotation,
                 style = MaterialTheme.typography.bodySmall,
-                color = when (log.status) {
-                    DoseStatus.MISSED -> MaterialTheme.colorScheme.error
+                color = when (row.kind) {
+                    HistoryRowKind.MISSED -> MaterialTheme.colorScheme.error
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
@@ -301,9 +295,7 @@ private fun HistoryRow(
  */
 @Composable
 private fun NotRecordedRow(
-    slotAt: Instant,
-    now: Instant,
-    zone: TimeZone,
+    row: HistoryRowData,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -327,12 +319,12 @@ private fun NotRecordedRow(
         Spacer(Modifier.width(10.dp))
         Column {
             Text(
-                text = dayTimeLabel(slotAt, now, zone),
+                text = row.title,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "Not recorded",
+                text = row.annotation,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
             )

@@ -41,9 +41,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
-import com.healthguard.common.format.phaseChipText
-import com.healthguard.common.format.timeLabel
-import com.healthguard.common.format.toHumanText
 import com.healthguard.common.theme.Spacing
 import com.healthguard.common.ui.CategoryChip
 import com.healthguard.common.ui.DayDetailSheet
@@ -52,14 +49,11 @@ import com.healthguard.common.ui.StatusChip
 import com.healthguard.common.ui.showUndoTakeSnackbar
 import com.healthguard.detail.format.countdownTextSeconds
 import com.healthguard.detail.format.lastTakenLabel
-import com.healthguard.detail.format.mediumDateLabel
 import com.healthguard.detail.state.DetailEffect
 import com.healthguard.detail.state.DetailFinished
 import com.healthguard.detail.state.DetailIntent
 import com.healthguard.detail.state.DetailUiState
 import com.healthguard.home.MedicationPhase
-import com.healthguard.shared.domain.doseSlots
-import com.healthguard.shared.extraction.Frequency
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -149,7 +143,7 @@ fun DetailScreen(
                 .padding(horizontal = Spacing.xl),
             verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
-            HeaderBlock(state = state, now = state.now, zone = zone)
+            HeaderBlock(state = state)
 
             if (state.isActive) {
                 StatusCard(
@@ -159,7 +153,7 @@ fun DetailScreen(
                 )
             }
 
-            ScheduleCard(state = state, zone = zone)
+            ScheduleCard(state = state)
 
             DetailForm(state = state, onIntent = onIntent)
 
@@ -207,7 +201,7 @@ fun DetailScreen(
 
     state.takeConfirm?.let { minutesAgo ->
         DoubleDoseDialog(
-            drugName = state.item?.medication?.drugName ?: "this medication",
+            drugName = state.drugName ?: "this medication",
             minutesAgo = minutesAgo,
             onConfirm = { onIntent(DetailIntent.ConfirmTakeAnyway) },
             onDismiss = { onIntent(DetailIntent.DismissTakeConfirm) },
@@ -223,7 +217,7 @@ fun DetailScreen(
 
     if (confirmingDelete) {
         DeleteConfirmationDialog(
-            medicationName = state.item?.medication?.drugName ?: "this medication",
+            medicationName = state.drugName ?: "this medication",
             isActive = state.isActive,
             onConfirm = {
                 confirmingDelete = false
@@ -242,32 +236,25 @@ fun DetailScreen(
 @Composable
 private fun HeaderBlock(
     state: DetailUiState,
-    now: Instant,
-    zone: TimeZone,
     modifier: Modifier = Modifier,
 ) {
-    val medication = state.item?.medication
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = medication?.drugName ?: "Medication",
+            text = state.drugName ?: "Medication",
             style = MaterialTheme.typography.headlineMedium,
         )
-        val subtitle = listOfNotNull(
-            medication?.dosage,
-            medication?.form?.replaceFirstChar { it.uppercase() },
-        ).joinToString(" · ")
-        if (subtitle.isNotEmpty()) {
+        if (state.subtitle.isNotEmpty()) {
             Text(
-                text = subtitle,
+                text = state.subtitle,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        val phaseText = state.item?.schedule?.let { phaseChipText(it, now, zone) }
-        if (medication?.label != null || phaseText != null) {
+        val phaseText = state.phaseChipText
+        if (state.categoryLabel != null || phaseText != null) {
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                medication?.label?.let { label ->
+                state.categoryLabel?.let { label ->
                     CategoryChip(label)
                     Spacer(Modifier.width(6.dp))
                 }
@@ -356,20 +343,10 @@ private fun LiveCountdown(
 @Composable
 private fun ScheduleCard(
     state: DetailUiState,
-    zone: TimeZone,
     modifier: Modifier = Modifier,
 ) {
-    val schedule = state.item?.schedule ?: return
-    val frequency = schedule.frequency
-    val timesText = when (frequency) {
-        null -> null
-        is Frequency.EveryHours -> frequency.toHumanText().replaceFirstChar { it.uppercase() }
-        is Frequency.TimesPerDay ->
-            doseSlots(frequency).joinToString(" · ") { timeLabel(it) }
-    }
-    val startedText = schedule.startedAt
-        ?.takeIf { state.isActive }
-        ?.let { mediumDateLabel(it.toLocalDate(zone)) }
+    val timesText = state.scheduleTimesText
+    val startedText = state.scheduleStartedText
     if (timesText == null && startedText == null) return
 
     Card(modifier = modifier.fillMaxWidth()) {

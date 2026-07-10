@@ -7,31 +7,45 @@ import com.healthguard.activity.DayCount
 import com.healthguard.activity.DayDetail
 import com.healthguard.activity.DoseDayStatus
 import com.healthguard.common.format.parseFrequency
-import com.healthguard.detail.HistoryEntry
 import com.healthguard.home.MedicationPhase
-import com.healthguard.home.isActive
-import com.healthguard.home.phase
-import com.healthguard.shared.data.MedicationWithSchedule
-import com.healthguard.shared.extraction.Frequency
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 
 /**
- * Editable detail form plus the live persisted [item] — the single immutable
- * ViewState. Field values are seeded from the first repository emission and
- * never overwritten afterwards (a background re-emission must not clobber
- * typing); [item], [isActive] and [nextDoseAt] track the repository
- * continuously.
+ * Editable detail form plus the tracked, render-ready facts — the single
+ * immutable ViewState, all view data (pre-formatted strings, ids and value
+ * types; no domain entities). Field values are seeded from the first
+ * repository emission and never overwritten afterwards (a background
+ * re-emission must not clobber typing); everything else tracks the
+ * repository continuously through the mapper.
  */
 data class DetailUiState(
-    val item: MedicationWithSchedule? = null,
+    /** True once the first repository emission for this medication landed. */
+    val isLoaded: Boolean = false,
+    /** The PERSISTED drug name (header/dialogs) — not the edited form field. */
+    val drugName: String? = null,
+    /** Pre-formatted header subtitle: "500 mg · Capsule"; empty = none. */
+    val subtitle: String = "",
+    /** Persisted category label; null = uncategorised. */
+    val categoryLabel: String? = null,
+    /** Pre-formatted phase chip ("Not started" / "Stopped 3 Jul"); null = no chip. */
+    val phaseChipText: String? = null,
+    /** Treatment lifecycle phase; an unloaded item reads as not started. */
+    val phase: MedicationPhase = MedicationPhase.NOT_STARTED,
+    val isActive: Boolean = false,
+    /** Interval dosing ("every N hours") is an as-needed ceiling, not a plan. */
+    val isAsNeeded: Boolean = false,
+    /** Pre-formatted schedule "Times" row; null = none. */
+    val scheduleTimesText: String? = null,
+    /** Pre-formatted schedule "Started" row (active schedules only); null = none. */
+    val scheduleStartedText: String? = null,
     /**
      * The wall-clock instant the tracked facts were computed against (from
-     * `DetailContent.now`). Minute-grained rendering (phase chip, last-taken
-     * line, history timestamps) reads this one clock, so the labels never
-     * drift from the derived facts; only the countdown text owns a live
-     * per-second ticker (`LiveCountdown`).
+     * `DetailContent.now`). Minute-grained rendering (last-taken line, heat
+     * map today) reads this one clock, so the labels never drift from the
+     * derived facts; only the countdown text owns a live per-second ticker
+     * (`LiveCountdown`).
      */
     val now: Instant = Instant.DISTANT_PAST,
     val name: String = "",
@@ -48,9 +62,9 @@ data class DetailUiState(
     /**
      * Latest dose logs newest first, interleaved with derived "Not
      * recorded" rows for recent expected slots nothing answered, capped
-     * at 30 entries.
+     * at 30 entries — pre-formatted view rows.
      */
-    val history: List<HistoryEntry> = emptyList(),
+    val history: List<HistoryRowData> = emptyList(),
     /** Non-null while the day-detail sheet for a tapped heat-map day shows. */
     val dayDetail: DayDetail? = null,
     /**
@@ -71,16 +85,8 @@ data class DetailUiState(
     /** Minutes since the last take while the double-dose dialog should show. */
     val takeConfirm: Long? = null,
 ) {
-    val isActive: Boolean get() = item?.isActive == true
-
-    /** Treatment lifecycle phase; an unloaded item reads as not started. */
-    val phase: MedicationPhase
-        get() = item?.schedule?.phase ?: MedicationPhase.NOT_STARTED
-
-    /** Interval dosing ("every N hours") is an as-needed ceiling, not a plan. */
-    val isAsNeeded: Boolean get() = item?.schedule?.frequency is Frequency.EveryHours
-    val nameError: Boolean get() = item != null && name.isBlank()
+    val nameError: Boolean get() = isLoaded && name.isBlank()
     val frequencyError: Boolean
         get() = frequencyText.isNotBlank() && parseFrequency(frequencyText) == null
-    val canSave: Boolean get() = item != null && !nameError && !frequencyError
+    val canSave: Boolean get() = isLoaded && !nameError && !frequencyError
 }

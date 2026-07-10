@@ -12,6 +12,7 @@ import com.healthguard.detail.domain.SaveMedicationUseCase
 import com.healthguard.detail.state.DetailEffect
 import com.healthguard.detail.state.DetailFinished
 import com.healthguard.detail.state.DetailIntent
+import com.healthguard.detail.state.HistoryRowKind
 import com.healthguard.home.MedicationPhase
 import com.healthguard.home.domain.ActivateMedicationUseCase
 import com.healthguard.home.domain.DeleteMedicationUseCase
@@ -81,6 +82,7 @@ class DetailViewModelTest {
         observeMedications = ObserveMedicationsUseCase(repository),
         clock = { fixedNow },
         medicationId = id,
+        zone = TimeZone.UTC,
     )
 
     /** The one detail medication under test: Cetirizine on schedule "sch-1". */
@@ -118,7 +120,7 @@ class DetailViewModelTest {
         assertEquals("cetirizine hydrochloride, lactose", state.ingredients)
         assertEquals("2 times a day", state.frequencyText)
         assertEquals(true, state.withFood)
-        assertNotNull(state.item)
+        assertTrue(state.isLoaded)
     }
 
     @Test
@@ -258,13 +260,13 @@ class DetailViewModelTest {
         vm.onIntent(DetailIntent.ToggleTaking)
         dispatcher.scheduler.advanceUntilIdle()
         assertTrue(vm.state.value.isActive)
-        assertEquals(fixedNow, vm.state.value.item?.schedule?.startedAt)
+        assertEquals(fixedNow, repository.getMedication("med-1")!!.schedule.startedAt)
         assertEquals(MedicationPhase.TAKING, vm.state.value.phase)
 
         vm.onIntent(DetailIntent.ToggleTaking)
         dispatcher.scheduler.advanceUntilIdle()
         assertFalse(vm.state.value.isActive)
-        assertEquals(fixedNow, vm.state.value.item?.schedule?.stoppedAt)
+        assertEquals(fixedNow, repository.getMedication("med-1")!!.schedule.stoppedAt)
         assertEquals(MedicationPhase.STOPPED, vm.state.value.phase)
     }
 
@@ -375,7 +377,9 @@ class DetailViewModelTest {
     }
 
     private fun loggedIds(vm: DetailViewModel): List<String> =
-        vm.state.value.history.filterIsInstance<HistoryEntry.Logged>().map { it.log.id }
+        vm.state.value.history
+            .filterNot { it.kind == HistoryRowKind.NOT_RECORDED }
+            .map { it.id }
 
     @Test
     fun `history lists recent dose logs newest first`() = runTest(dispatcher) {
@@ -403,17 +407,19 @@ class DetailViewModelTest {
 
         assertEquals(
             listOf(
-                HistoryEntry.NotRecorded(Instant.parse("2024-07-02T21:00:00Z")),
-                HistoryEntry.NotRecorded(Instant.parse("2024-07-02T09:00:00Z")),
-                HistoryEntry.NotRecorded(Instant.parse("2024-07-01T21:00:00Z")),
+                "slot-2024-07-02T21:00:00Z",
+                "slot-2024-07-02T09:00:00Z",
+                "slot-2024-07-01T21:00:00Z",
             ),
-            vm.state.value.history.filterIsInstance<HistoryEntry.NotRecorded>(),
+            vm.state.value.history
+                .filter { it.kind == HistoryRowKind.NOT_RECORDED }
+                .map { it.id },
         )
         assertEquals(listOf("d-3", "d-2", "d-1"), loggedIds(vm))
         // Interleaved chronologically: the three gaps precede the logged rows.
         assertEquals(
             listOf(true, true, true, false, false, false),
-            vm.state.value.history.map { it is HistoryEntry.NotRecorded },
+            vm.state.value.history.map { it.kind == HistoryRowKind.NOT_RECORDED },
         )
     }
 
@@ -492,7 +498,7 @@ class DetailViewModelTest {
         // No expectations: no completeness cells and no not-recorded rows —
         // the heat map falls back to take counts per day.
         assertTrue(state.dayStatuses.isEmpty())
-        assertTrue(state.history.filterIsInstance<HistoryEntry.NotRecorded>().isEmpty())
+        assertTrue(state.history.none { it.kind == HistoryRowKind.NOT_RECORDED })
         assertEquals(
             listOf(1, 1),
             state.dayTakeCounts.map { it.count },
