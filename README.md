@@ -17,10 +17,10 @@ Android medication tracker with AI label scanning.
 
 ## Demo
 
-Scan a label → confirm the extracted fields → take a dose → it lands in the
-record (2× speed; [full-quality video](docs/demo/scan-take-record.mp4)):
+Scan a label → confirm the extracted fields → take a dose → ask the
+assistant about it (2× speed; [full-quality video](docs/demo/scan-take-ask.mp4)):
 
-<img src="docs/demo/scan-take-record.gif" width="300">
+<img src="docs/demo/scan-take-ask.gif" width="300">
 
 ## Screenshots
 
