@@ -41,6 +41,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.healthguard.common.format.todayLabel
 import com.healthguard.common.theme.Spacing
 import com.healthguard.common.ui.DoubleDoseDialog
+import com.healthguard.common.ui.PhotoSourceSheet
 import com.healthguard.common.ui.semanticsLabel
 import com.healthguard.common.ui.showUndoTakeSnackbar
 import com.healthguard.domain.model.MedicationId
