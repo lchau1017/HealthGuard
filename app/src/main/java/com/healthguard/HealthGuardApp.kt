@@ -46,7 +46,7 @@ import org.koin.core.parameter.parametersOf
 fun HealthGuardApp(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var detailMedicationId by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedTab by rememberSaveable { mutableStateOf(AppTab.HOME) }
+    var selectedTab by rememberSaveable { mutableStateOf(AppTab.ASSISTANT) }
 
     val confirmViewModel: ConfirmViewModel = koinViewModel()
     val homeViewModel: HomeViewModel = koinViewModel()
@@ -111,10 +111,9 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
                 modifier = modifier,
             )
         }
-    } else if (selectedTab == AppTab.CHAT) {
+    } else if (selectedTab == AppTab.ASSISTANT) {
         val chatViewModel: ChatViewModel = koinViewModel()
         val chatState by chatViewModel.state.collectAsStateWithLifecycle()
-        BackHandler { selectedTab = AppTab.HOME }
         ChatScreen(
             state = chatState,
             onIntent = chatViewModel::onIntent,
@@ -124,7 +123,7 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
     } else if (selectedTab == AppTab.ACTIVITY) {
         val activityViewModel: ActivityViewModel = koinViewModel()
         val activityState by activityViewModel.state.collectAsStateWithLifecycle()
-        BackHandler { selectedTab = AppTab.HOME }
+        BackHandler { selectedTab = AppTab.ASSISTANT }
         ActivityScreen(
             state = activityState,
             onIntent = activityViewModel::onIntent,
@@ -132,6 +131,9 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
             modifier = modifier,
         )
     } else {
+        // The assistant is the shell's root: backing out of a side tab
+        // returns there, and only the assistant hands back to the system.
+        BackHandler { selectedTab = AppTab.ASSISTANT }
         HomeScreen(
             state = homeState,
             onIntent = homeViewModel::onIntent,
