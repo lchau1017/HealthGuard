@@ -6,16 +6,23 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,15 +36,20 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.healthguard.chat.ChatRole
+import com.healthguard.chat.state.AssistantSnapshot
 import com.healthguard.chat.state.ChatIntent
 import com.healthguard.chat.state.ChatMessage
 import com.healthguard.chat.state.ChatUiState
 import com.healthguard.common.theme.Spacing
+import com.healthguard.common.ui.PhotoSourceSheet
 
 /** Empty-state starter questions; tapping one sends it as-is. */
 private val SUGGESTIONS = listOf(
@@ -48,21 +60,28 @@ private val SUGGESTIONS = listOf(
 )
 
 /**
- * The Chat tab: the conversation list (or starter suggestions while empty),
- * an inline retry row after a failed send, and the input bar with a standing
- * not-medical-advice caption. Stateless — everything renders from [state]
- * and every interaction goes through [onIntent].
+ * The Assistant tab — the app's landing screen. Empty state is a hub: the
+ * today snapshot card (tap through to Home), a scan action card into the
+ * import flow, and starter questions. Once a conversation starts it becomes
+ * the bubble list; scanning stays one tap away on the input bar. Stateless —
+ * everything renders from [state] and every interaction goes through
+ * [onIntent] or a shell callback.
  */
 @Composable
 fun ChatScreen(
     state: ChatUiState,
     onIntent: (ChatIntent) -> Unit,
+    onOpenHome: () -> Unit,
+    onTakePhoto: () -> Unit,
+    onPickFromGallery: () -> Unit,
     modifier: Modifier = Modifier,
     bottomBar: @Composable () -> Unit = {},
 ) {
+    var showSourceSheet by rememberSaveable { mutableStateOf(false) }
+
     Scaffold(
         modifier = modifier,
-        topBar = { TopAppBar(title = { Text("Chat") }) },
+        topBar = { TopAppBar(title = { Text("Assistant") }) },
         bottomBar = bottomBar,
     ) { innerPadding ->
         Column(
@@ -72,7 +91,10 @@ fun ChatScreen(
                 .imePadding(),
         ) {
             if (state.messages.isEmpty()) {
-                EmptyChat(
+                LandingHub(
+                    snapshot = state.snapshot,
+                    onOpenHome = onOpenHome,
+                    onScan = { showSourceSheet = true },
                     onSuggestion = { onIntent(ChatIntent.SendSuggestion(it)) },
                     modifier = Modifier.weight(1f),
                 )
@@ -86,42 +108,124 @@ fun ChatScreen(
             if (state.failed) {
                 FailedRow(onRetry = { onIntent(ChatIntent.Retry) })
             }
-            InputBar(state = state, onIntent = onIntent)
+            InputBar(
+                state = state,
+                onIntent = onIntent,
+                onScan = { showSourceSheet = true },
+            )
         }
+    }
+
+    if (showSourceSheet) {
+        PhotoSourceSheet(
+            onDismiss = { showSourceSheet = false },
+            onTakePhoto = onTakePhoto,
+            onPickFromGallery = onPickFromGallery,
+        )
     }
 }
 
 @Composable
-private fun EmptyChat(
+private fun LandingHub(
+    snapshot: AssistantSnapshot?,
+    onOpenHome: () -> Unit,
+    onScan: () -> Unit,
     onSuggestion: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = Spacing.xl),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = Spacing.xl, vertical = Spacing.lg),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Text(
             text = "Ask about your medications",
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.headlineSmall,
         )
         Text(
             text = "Answers come from your own dose log.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.lg),
+        )
+        Spacer(Modifier.height(Spacing.xs))
+        if (snapshot != null) {
+            SnapshotCard(snapshot = snapshot, onClick = onOpenHome)
+        }
+        ScanCard(onClick = onScan)
+        Spacer(Modifier.height(Spacing.xs))
+        Text(
+            text = "Try asking",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         SUGGESTIONS.forEach { suggestion ->
             OutlinedButton(
                 onClick = { onSuggestion(suggestion) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = Spacing.xs),
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(suggestion)
+            }
+        }
+    }
+}
+
+/** Today at a glance; taps through to the Home tab for the full picture. */
+@Composable
+private fun SnapshotCard(
+    snapshot: AssistantSnapshot,
+    onClick: () -> Unit,
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(Spacing.lg)) {
+            Text(
+                text = "Today",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Text(
+                text = snapshot.headline,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            snapshot.caption?.let { caption ->
+                Text(
+                    text = caption,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(top = Spacing.xs),
+                )
+            }
+        }
+    }
+}
+
+/** The import entry on the landing hub: straight into the scan flow. */
+@Composable
+private fun ScanCard(onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(Spacing.lg),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = null)
+            Column(modifier = Modifier.padding(start = Spacing.md)) {
+                Text(
+                    text = "Scan a medication",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = "Photograph a box or label to add it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -206,9 +310,13 @@ private fun FailedRow(onRetry: () -> Unit) {
 private fun InputBar(
     state: ChatUiState,
     onIntent: (ChatIntent) -> Unit,
+    onScan: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onScan) {
+                Icon(Icons.Filled.Add, contentDescription = "Scan a medication label")
+            }
             OutlinedTextField(
                 value = state.input,
                 onValueChange = { onIntent(ChatIntent.InputChanged(it)) },

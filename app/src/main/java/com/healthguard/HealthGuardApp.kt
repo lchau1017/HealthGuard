@@ -117,6 +117,9 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
         ChatScreen(
             state = chatState,
             onIntent = chatViewModel::onIntent,
+            onOpenHome = { selectedTab = AppTab.HOME },
+            onTakePhoto = scanImageLauncher::takePhoto,
+            onPickFromGallery = scanImageLauncher::pickFromGallery,
             bottomBar = { AppNavBar(selected = selectedTab, onSelect = { selectedTab = it }) },
             modifier = modifier,
         )

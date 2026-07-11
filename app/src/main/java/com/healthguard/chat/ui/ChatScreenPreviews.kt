@@ -3,6 +3,7 @@ package com.healthguard.chat.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.healthguard.chat.ChatRole
+import com.healthguard.chat.state.AssistantSnapshot
 import com.healthguard.chat.state.ChatMessage
 import com.healthguard.chat.state.ChatUiState
 import com.healthguard.common.theme.HealthGuardTheme
@@ -12,6 +13,25 @@ import com.healthguard.common.theme.HealthGuardTheme
  * so renders are reproducible. The populated conversation gets a light and
  * a dark variant.
  */
+
+/** Landing hub with a populated snapshot card. */
+private val previewLanding = ChatUiState(
+    snapshot = AssistantSnapshot(
+        headline = "Aspirin — next at 9:00 PM",
+        caption = "5 of 6 days on track. Today still to come.",
+    ),
+)
+
+@Composable
+private fun ChatScreenSample(state: ChatUiState) {
+    ChatScreen(
+        state = state,
+        onIntent = {},
+        onOpenHome = {},
+        onTakePhoto = {},
+        onPickFromGallery = {},
+    )
+}
 
 private val previewConversation = ChatUiState(
     messages = listOf(
@@ -30,7 +50,7 @@ private val previewConversation = ChatUiState(
 @Composable
 private fun ChatScreenPreview() {
     HealthGuardTheme(darkTheme = false) {
-        ChatScreen(state = previewConversation, onIntent = {})
+        ChatScreenSample(previewConversation)
     }
 }
 
@@ -38,7 +58,7 @@ private fun ChatScreenPreview() {
 @Composable
 private fun ChatScreenPreviewDark() {
     HealthGuardTheme(darkTheme = true) {
-        ChatScreen(state = previewConversation, onIntent = {})
+        ChatScreenSample(previewConversation)
     }
 }
 
@@ -46,7 +66,7 @@ private fun ChatScreenPreviewDark() {
 @Composable
 private fun ChatScreenEmptyPreview() {
     HealthGuardTheme(darkTheme = false) {
-        ChatScreen(state = ChatUiState(), onIntent = {})
+        ChatScreenSample(previewLanding)
     }
 }
 
@@ -54,9 +74,6 @@ private fun ChatScreenEmptyPreview() {
 @Composable
 private fun ChatScreenFailedPreview() {
     HealthGuardTheme(darkTheme = false) {
-        ChatScreen(
-            state = previewConversation.copy(sending = false, failed = true),
-            onIntent = {},
-        )
+        ChatScreenSample(previewConversation.copy(sending = false, failed = true))
     }
 }

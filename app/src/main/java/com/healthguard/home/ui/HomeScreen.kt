@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,7 +41,6 @@ import com.healthguard.common.format.todayLabel
 import com.healthguard.common.theme.Spacing
 import com.healthguard.common.ui.DoubleDoseDialog
 import com.healthguard.common.ui.PhotoSourceSheet
-import com.healthguard.common.ui.semanticsLabel
 import com.healthguard.common.ui.showUndoTakeSnackbar
 import com.healthguard.domain.model.MedicationId
 import com.healthguard.home.state.HomeEffect
@@ -56,7 +54,7 @@ import kotlinx.datetime.toLocalDateTime
 /**
  * The home tab: a "Today" header, the due-dose alert card, the "This week"
  * circles, the active "Taking now" list and the dormant "My cabinet" below,
- * with the scan flow on an extended FAB. Every card and row opens the
+ * with the scan flow behind the app-bar camera action. Every card and row opens the
  * medication detail page; deleting lives there too.
  */
 @Composable
@@ -110,6 +108,12 @@ fun HomeScreen(
                     Text("HealthGuard", style = MaterialTheme.typography.titleMedium)
                 },
                 actions = {
+                    IconButton(onClick = { showSourceSheet = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "Scan a medication label",
+                        )
+                    }
                     IconButton(onClick = { showDisclaimer = true }) {
                         Icon(
                             imageVector = Icons.Filled.Info,
@@ -121,14 +125,6 @@ fun HomeScreen(
             )
         },
         bottomBar = bottomBar,
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showSourceSheet = true },
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("Scan medication") },
-                modifier = Modifier.semanticsLabel("Scan a medication label"),
-            )
-        },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
