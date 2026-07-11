@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -69,9 +68,8 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     bottomBar: @Composable () -> Unit = {},
 ) {
-    // Saveable so rotation (or process death) keeps an open sheet/dialog open.
+    // Saveable so rotation (or process death) keeps an open sheet open.
     var showSourceSheet by rememberSaveable { mutableStateOf(false) }
-    var showDisclaimer by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     // The wall clock the state was computed against: the view model re-emits
@@ -112,12 +110,6 @@ fun HomeScreen(
                         Icon(
                             imageVector = Icons.Filled.PhotoCamera,
                             contentDescription = "Scan a medication label",
-                        )
-                    }
-                    IconButton(onClick = { showDisclaimer = true }) {
-                        Icon(
-                            imageVector = Icons.Filled.Info,
-                            contentDescription = "About HealthGuard and medical disclaimer",
                         )
                     }
                     DemoDataMenu(onIntent)
@@ -220,10 +212,6 @@ fun HomeScreen(
             onConfirm = { onIntent(HomeIntent.ConfirmTakeAnyway) },
             onDismiss = { onIntent(HomeIntent.DismissTakeConfirm) },
         )
-    }
-
-    if (showDisclaimer) {
-        DisclaimerDialog(onDismiss = { showDisclaimer = false })
     }
 
     if (showSourceSheet) {
