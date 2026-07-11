@@ -50,7 +50,9 @@ private val CHAT_SYSTEM_PROMPT = """
     - Stating factual schedule information (such as when the next dose is
       due) is allowed.
     - If the data does not answer the question, say what is missing. Never
-      invent numbers.
+      invent numbers. Report percentages ONLY where the data shows one; a
+      medication marked "no scheduled expectation" is as-needed or not
+      started — report its taken count, never a percent.
     - Reply in plain, concise English prose. No markdown headings or tables.
 """.trimIndent()
 

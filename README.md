@@ -24,15 +24,20 @@ record (2× speed; [full-quality video](docs/demo/scan-take-record.mp4)):
 
 ## Screenshots
 
+| Assistant | Ask a question |
+|---|---|
+| <img src="docs/screenshots/assistant-hub.png" width="380"> | <img src="docs/screenshots/assistant-chat.png" width="380"> |
+| The landing screen: today's status at a glance, scan entry, and starter questions. | Answers phrase the app's own adherence math — never invented numbers, never medical advice. |
+
 | Scan | Home |
 |---|---|
 | <img src="docs/screenshots/scan-review.png" width="380"> | <img src="docs/screenshots/home.png" width="380"> |
-| Extraction from a real ibuprofen box — the low-confidence "take with food" field is locked until reviewed. | Due alert only when a dose is due; week circles with an honest "5 of 6 days on track". |
+| Extraction from a real ibuprofen box — the low-confidence "take with food" field is locked until reviewed. | Due alert only when a dose is due; week circles with an honest "4 of 7 days on track"; scan lives on the camera action. |
 
 | Activity | Tap a day |
 |---|---|
-| <img src="docs/screenshots/activity-12-months.png" width="380"> | <img src="docs/screenshots/day-detail-sheet.png" width="380"> |
-| 12-month record, GitHub-style, plus each medicine's own adherence with the 80% clinical threshold marked. | Per-day breakdown — which medicines, what times, and what was expected but never recorded. |
+| <img src="docs/screenshots/activity-30-days.png" width="380"> | <img src="docs/screenshots/day-detail-sheet.png" width="380"> |
+| The 30-day record, GitHub-style, plus each medicine's own adherence with the 80% clinical threshold marked. | Per-day breakdown — which medicines, what times, and what was expected but never recorded. |
 
 | Medication detail | Dose history |
 |---|---|
