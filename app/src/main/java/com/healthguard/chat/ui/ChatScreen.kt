@@ -1,9 +1,11 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 
 package com.healthguard.chat.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,16 +22,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -108,11 +110,7 @@ fun ChatScreen(
             if (state.failed) {
                 FailedRow(onRetry = { onIntent(ChatIntent.Retry) })
             }
-            InputBar(
-                state = state,
-                onIntent = onIntent,
-                onScan = { showSourceSheet = true },
-            )
+            InputBar(state = state, onIntent = onIntent)
         }
     }
 
@@ -160,12 +158,12 @@ private fun LandingHub(
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        SUGGESTIONS.forEach { suggestion ->
-            OutlinedButton(
-                onClick = { onSuggestion(suggestion) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(suggestion)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            SUGGESTIONS.forEach { suggestion ->
+                SuggestionChip(
+                    onClick = { onSuggestion(suggestion) },
+                    label = { Text(suggestion) },
+                )
             }
         }
     }
@@ -215,7 +213,7 @@ private fun ScanCard(onClick: () -> Unit) {
             modifier = Modifier.padding(Spacing.lg),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.Add, contentDescription = null)
+            Icon(Icons.Filled.PhotoCamera, contentDescription = null)
             Column(modifier = Modifier.padding(start = Spacing.md)) {
                 Text(
                     text = "Scan a medication",
@@ -306,17 +304,17 @@ private fun FailedRow(onRetry: () -> Unit) {
     }
 }
 
+// Deliberately no "+" attachment button here: in the assistant apps users
+// know, "+" means "attach media to this conversation". Until the chat can
+// actually answer photo questions, scanning stays behind the explicit,
+// labeled entries (landing card, Home app bar) instead of a misleading "+".
 @Composable
 private fun InputBar(
     state: ChatUiState,
     onIntent: (ChatIntent) -> Unit,
-    onScan: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onScan) {
-                Icon(Icons.Filled.Add, contentDescription = "Scan a medication label")
-            }
             OutlinedTextField(
                 value = state.input,
                 onValueChange = { onIntent(ChatIntent.InputChanged(it)) },

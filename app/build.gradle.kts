@@ -66,6 +66,8 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     // Play/Delete list icons; material3 no longer brings the icon set along.
     implementation(libs.androidx.compose.material.icons.core)
+    // Camera/assistant glyphs; R8 strips the unused rest in release builds.
+    implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)

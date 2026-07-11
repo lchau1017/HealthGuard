@@ -1,9 +1,9 @@
 package com.healthguard.common.ui
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Assistant
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -31,13 +31,13 @@ fun AppNavBar(
         NavigationBarItem(
             selected = selected == AppTab.ASSISTANT,
             onClick = { onSelect(AppTab.ASSISTANT) },
-            icon = { Icon(Icons.Filled.Face, contentDescription = null) },
+            icon = { Icon(Icons.Filled.Assistant, contentDescription = null) },
             label = { Text("Assistant") },
         )
         NavigationBarItem(
             selected = selected == AppTab.ACTIVITY,
             onClick = { onSelect(AppTab.ACTIVITY) },
-            icon = { Icon(Icons.Filled.DateRange, contentDescription = null) },
+            icon = { Icon(Icons.Filled.Insights, contentDescription = null) },
             label = { Text("Activity") },
         )
     }
