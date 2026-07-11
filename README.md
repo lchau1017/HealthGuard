@@ -6,8 +6,10 @@ Android medication tracker with AI label scanning.
   ingredients and frequency into a dosing schedule
 - One-tap dose logging with undo and a double-dose guard
 - GitHub-style activity heat map and schedule-based adherence analytics
-- Chat tab that answers adherence questions ("What's my adherence rate?")
-  in plain English — the app computes the numbers, the model only phrases them
+- Assistant-first design: the landing screen is an assistant hub — today's
+  status at a glance, scan entry, and adherence questions answered in plain
+  English ("What's my adherence rate?"). The app computes the numbers, the
+  model only phrases them. Home and Activity sit one tap away on the nav bar
 - Kotlin Multiplatform app + Ktor backend
 
 > **HealthGuard is an informational and reminder tool, not medical advice.**
