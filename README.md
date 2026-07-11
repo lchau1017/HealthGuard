@@ -224,7 +224,7 @@ An environment variable still wins over `.env` if you prefer:
 
 Optional model overrides (env or `.env`): `MODEL_ID` for `/extract`
 (default `qwen/qwen2.5-vl-72b-instruct`), `CHAT_MODEL_ID` for `/chat`
-(default `qwen/qwen2.5-72b-instruct`).
+(default `qwen/qwen3-30b-a3b-instruct-2507`).
 
 **Stopping the server:**
 

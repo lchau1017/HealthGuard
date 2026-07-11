@@ -28,7 +28,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
 /** A cheap text model is enough: the app precomputes every number; the model only phrases. */
-const val DEFAULT_CHAT_MODEL = "qwen/qwen2.5-72b-instruct"
+const val DEFAULT_CHAT_MODEL = "qwen/qwen3-30b-a3b-instruct-2507"
 
 /** Largest accepted /chat body: a message, capped history and a rendered context block. */
 internal const val MAX_CHAT_BODY_BYTES: Long = 256L * 1024
