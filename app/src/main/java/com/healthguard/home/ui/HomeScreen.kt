@@ -12,10 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,7 +39,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.healthguard.common.format.todayLabel
 import com.healthguard.common.theme.Spacing
 import com.healthguard.common.ui.DoubleDoseDialog
-import com.healthguard.common.ui.semanticsLabel
+import com.healthguard.common.ui.PhotoSourceSheet
 import com.healthguard.common.ui.showUndoTakeSnackbar
 import com.healthguard.domain.model.MedicationId
 import com.healthguard.home.state.HomeEffect
@@ -55,7 +53,7 @@ import kotlinx.datetime.toLocalDateTime
 /**
  * The home tab: a "Today" header, the due-dose alert card, the "This week"
  * circles, the active "Taking now" list and the dormant "My cabinet" below,
- * with the scan flow on an extended FAB. Every card and row opens the
+ * with the scan flow behind the app-bar camera action. Every card and row opens the
  * medication detail page; deleting lives there too.
  */
 @Composable
@@ -70,9 +68,8 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     bottomBar: @Composable () -> Unit = {},
 ) {
-    // Saveable so rotation (or process death) keeps an open sheet/dialog open.
+    // Saveable so rotation (or process death) keeps an open sheet open.
     var showSourceSheet by rememberSaveable { mutableStateOf(false) }
-    var showDisclaimer by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     // The wall clock the state was computed against: the view model re-emits
@@ -109,10 +106,10 @@ fun HomeScreen(
                     Text("HealthGuard", style = MaterialTheme.typography.titleMedium)
                 },
                 actions = {
-                    IconButton(onClick = { showDisclaimer = true }) {
+                    IconButton(onClick = { showSourceSheet = true }) {
                         Icon(
-                            imageVector = Icons.Filled.Info,
-                            contentDescription = "About HealthGuard and medical disclaimer",
+                            imageVector = Icons.Filled.PhotoCamera,
+                            contentDescription = "Scan a medication label",
                         )
                     }
                     DemoDataMenu(onIntent)
@@ -120,14 +117,6 @@ fun HomeScreen(
             )
         },
         bottomBar = bottomBar,
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showSourceSheet = true },
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("Scan medication") },
-                modifier = Modifier.semanticsLabel("Scan a medication label"),
-            )
-        },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -223,10 +212,6 @@ fun HomeScreen(
             onConfirm = { onIntent(HomeIntent.ConfirmTakeAnyway) },
             onDismiss = { onIntent(HomeIntent.DismissTakeConfirm) },
         )
-    }
-
-    if (showDisclaimer) {
-        DisclaimerDialog(onDismiss = { showDisclaimer = false })
     }
 
     if (showSourceSheet) {

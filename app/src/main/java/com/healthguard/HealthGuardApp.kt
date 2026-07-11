@@ -18,6 +18,8 @@ import com.healthguard.activity.ActivityViewModel
 import com.healthguard.activity.ui.ActivityScreen
 import com.healthguard.common.ui.AppNavBar
 import com.healthguard.common.ui.AppTab
+import com.healthguard.chat.ChatViewModel
+import com.healthguard.chat.ui.ChatScreen
 import com.healthguard.confirm.ConfirmViewModel
 import com.healthguard.confirm.state.ConfirmIntent
 import com.healthguard.confirm.ui.ConfirmFlowHost
@@ -33,9 +35,9 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 /**
- * Tab shell driven by plain saveable state: two bottom-bar tabs (Home and
- * Activity) with the medication detail page pushed above whichever tab is
- * current when [detailMedicationId] is set — so rotation and process death
+ * Tab shell driven by plain saveable state: three bottom-bar tabs (Home,
+ * Activity and Chat) with the medication detail page pushed above whichever
+ * tab is current when [detailMedicationId] is set — so rotation and process death
  * keep the open screen, and backing out of the detail returns to the
  * previous tab. The import/confirm flow floats above whichever screen is
  * showing via [ConfirmFlowHost].
@@ -44,7 +46,7 @@ import org.koin.core.parameter.parametersOf
 fun HealthGuardApp(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var detailMedicationId by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedTab by rememberSaveable { mutableStateOf(AppTab.HOME) }
+    var selectedTab by rememberSaveable { mutableStateOf(AppTab.ASSISTANT) }
 
     val confirmViewModel: ConfirmViewModel = koinViewModel()
     val homeViewModel: HomeViewModel = koinViewModel()
@@ -109,10 +111,22 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
                 modifier = modifier,
             )
         }
+    } else if (selectedTab == AppTab.ASSISTANT) {
+        val chatViewModel: ChatViewModel = koinViewModel()
+        val chatState by chatViewModel.state.collectAsStateWithLifecycle()
+        ChatScreen(
+            state = chatState,
+            onIntent = chatViewModel::onIntent,
+            onOpenHome = { selectedTab = AppTab.HOME },
+            onTakePhoto = scanImageLauncher::takePhoto,
+            onPickFromGallery = scanImageLauncher::pickFromGallery,
+            bottomBar = { AppNavBar(selected = selectedTab, onSelect = { selectedTab = it }) },
+            modifier = modifier,
+        )
     } else if (selectedTab == AppTab.ACTIVITY) {
         val activityViewModel: ActivityViewModel = koinViewModel()
         val activityState by activityViewModel.state.collectAsStateWithLifecycle()
-        BackHandler { selectedTab = AppTab.HOME }
+        BackHandler { selectedTab = AppTab.ASSISTANT }
         ActivityScreen(
             state = activityState,
             onIntent = activityViewModel::onIntent,
@@ -120,6 +134,9 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
             modifier = modifier,
         )
     } else {
+        // The assistant is the shell's root: backing out of a side tab
+        // returns there, and only the assistant hands back to the system.
+        BackHandler { selectedTab = AppTab.ASSISTANT }
         HomeScreen(
             state = homeState,
             onIntent = homeViewModel::onIntent,

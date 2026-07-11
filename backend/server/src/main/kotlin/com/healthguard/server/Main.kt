@@ -18,6 +18,7 @@ fun main() {
         "OPENROUTER_API_KEY environment variable is not set"
     }
     val modelId = System.getenv("MODEL_ID") ?: DEFAULT_MODEL
+    val chatModelId = System.getenv("CHAT_MODEL_ID") ?: DEFAULT_CHAT_MODEL
     val port = System.getenv("PORT")?.toIntOrNull() ?: DEFAULT_PORT
 
     // Bound every upstream call: without a timeout a hung provider would pin
@@ -32,5 +33,6 @@ fun main() {
 
     embeddedServer(CIO, port = port) {
         extractionProxy(upstream = upstream, apiKey = apiKey, modelId = modelId)
+        chatProxy(upstream = upstream, apiKey = apiKey, modelId = chatModelId)
     }.start(wait = true)
 }
