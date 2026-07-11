@@ -4,8 +4,11 @@ package com.healthguard.chat
 
 import com.healthguard.chat.domain.BuildChatContextUseCase
 import com.healthguard.chat.state.ChatIntent
+import com.healthguard.domain.usecase.ObserveMedicationsUseCase
+import com.healthguard.home.domain.ComputeHomeStateUseCase
 import com.healthguard.data.SqlDelightMedicationRepository
 import com.healthguard.domain.extraction.Frequency
+import com.healthguard.testing.collectState
 import com.healthguard.testing.inMemoryRepository
 import com.healthguard.testing.logTaken
 import com.healthguard.testing.seedMedication
@@ -57,6 +60,13 @@ class ChatViewModelTest {
             zone = TimeZone.of("UTC"),
         ),
         assistant = assistant,
+        observeMedications = ObserveMedicationsUseCase(repository),
+        computeHomeState = ComputeHomeStateUseCase(
+            repository = repository,
+            clock = { fixedNow },
+            zone = TimeZone.of("UTC"),
+        ),
+        zone = TimeZone.of("UTC"),
     )
 
     @Test
@@ -126,6 +136,35 @@ class ChatViewModelTest {
         assertEquals("hello?", assistant.sent.last().first)
         // The retried turn is not its own history entry.
         assertTrue(assistant.sent.last().second.isEmpty())
+    }
+
+    @Test
+    fun `snapshot is null while nothing is tracked`() = runTest {
+        val viewModel = viewModel()
+        collectState(viewModel.state)
+
+        assertEquals(null, viewModel.state.value.snapshot)
+    }
+
+    @Test
+    fun `snapshot shows the due dose and refreshes when it is taken elsewhere`() = runTest {
+        // Started yesterday, 1x/day: today's 09:00 slot is due at fixedNow (10:00).
+        repository.seedMedication(
+            "a",
+            drugName = "Aspirin",
+            frequency = Frequency.TimesPerDay(1),
+            startedAt = fixedNow - 1.days,
+        )
+        val viewModel = viewModel()
+        collectState(viewModel.state)
+
+        assertEquals("1 dose due now", viewModel.state.value.snapshot?.headline)
+
+        // A take recorded on another screen fires dataChanges; the card follows.
+        repository.logTaken("a", fixedNow)
+        advanceUntilIdle()
+
+        assertEquals("All caught up", viewModel.state.value.snapshot?.headline)
     }
 
     @Test

@@ -6,11 +6,15 @@ import com.healthguard.chat.domain.BuildChatContextUseCase
 import com.healthguard.chat.state.ChatIntent
 import com.healthguard.chat.state.ChatMessage
 import com.healthguard.chat.state.ChatUiState
+import com.healthguard.chat.state.toAssistantSnapshot
+import com.healthguard.domain.usecase.ObserveMedicationsUseCase
+import com.healthguard.home.domain.ComputeHomeStateUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
 
 /**
  * The chat tab's MVI holder. It owns no adherence logic: every send snapshots
@@ -23,12 +27,27 @@ import kotlinx.coroutines.launch
 class ChatViewModel(
     private val buildChatContext: BuildChatContextUseCase,
     private val assistant: ChatAssistant,
+    observeMedications: ObserveMedicationsUseCase,
+    computeHomeState: ComputeHomeStateUseCase,
+    zone: TimeZone = TimeZone.currentSystemDefault(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private var nextId = 0L
+
+    init {
+        // The landing snapshot reuses Home's math and refreshes on any
+        // repository write (observeMedications folds dataChanges in), so a
+        // take recorded on Home flips this card without any host plumbing.
+        viewModelScope.launch {
+            observeMedications().collect { rows ->
+                val snapshot = computeHomeState(rows).toAssistantSnapshot(zone)
+                _state.update { it.copy(snapshot = snapshot) }
+            }
+        }
+    }
 
     /** The single MVI entry point: each branch delegates to a send or a state edit. */
     fun onIntent(intent: ChatIntent) {

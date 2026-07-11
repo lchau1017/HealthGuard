@@ -14,6 +14,8 @@ data class ChatMessage(
  * in-memory only: it lives and dies with this state, never on disk.
  */
 data class ChatUiState(
+    /** Today's status card on the landing state; null while nothing is tracked. */
+    val snapshot: AssistantSnapshot? = null,
     val messages: List<ChatMessage> = emptyList(),
     /** The draft in the input field. */
     val input: String = "",

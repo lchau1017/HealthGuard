@@ -109,7 +109,7 @@ val appModule = module {
     viewModel { ConfirmViewModel(get(), get(), get()) }
     viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { ActivityViewModel(get(), get(), get()) }
-    viewModel { ChatViewModel(get(), get()) }
+    viewModel { ChatViewModel(get(), get(), get(), get(), TimeZone.currentSystemDefault()) }
     viewModel { (medicationId: MedicationId) ->
         DetailViewModel(
             computeDetailState = get(),
