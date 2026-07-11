@@ -6,6 +6,9 @@ import com.healthguard.BuildConfig
 import com.healthguard.activity.ActivityViewModel
 import com.healthguard.activity.domain.ComputeActivityStateUseCase
 import com.healthguard.activity.domain.LoadActivityDayDetailUseCase
+import com.healthguard.chat.ChatAssistant
+import com.healthguard.chat.ChatViewModel
+import com.healthguard.chat.domain.BuildChatContextUseCase
 import com.healthguard.confirm.AndroidImageEncoder
 import com.healthguard.confirm.ConfirmViewModel
 import com.healthguard.confirm.ImageEncoder
@@ -32,6 +35,8 @@ import com.healthguard.data.SqlDelightMedicationRepository
 import com.healthguard.data.db.HealthGuardDb
 import com.healthguard.domain.usecase.ObserveDataChangesUseCase
 import com.healthguard.domain.usecase.ObserveMedicationsUseCase
+import com.healthguard.data.ChatContextRenderer
+import com.healthguard.data.ProxyChatAssistant
 import com.healthguard.data.ProxyVisionExtractor
 import com.healthguard.domain.extraction.VisionExtractor
 import io.ktor.client.HttpClient
@@ -60,6 +65,13 @@ val appModule = module {
     }
 
     single<VisionExtractor> { ProxyVisionExtractor(get(), BuildConfig.PROXY_BASE_URL) }
+    single<ChatAssistant> {
+        ProxyChatAssistant(
+            get(),
+            BuildConfig.PROXY_BASE_URL,
+            ChatContextRenderer(TimeZone.currentSystemDefault()),
+        )
+    }
 
     single { DriverFactory(androidContext()) }
     single { HealthGuardDb(get<DriverFactory>().createDriver()) }
@@ -88,6 +100,8 @@ val appModule = module {
     factory { ComputeActivityStateUseCase(get(), get(), get(), TimeZone.currentSystemDefault()) }
     factory { LoadActivityDayDetailUseCase(get(), get(), get(), TimeZone.currentSystemDefault()) }
 
+    factory { BuildChatContextUseCase(get(), get(), get(), TimeZone.currentSystemDefault()) }
+
     factory { ExtractMedicationUseCase(get(), Dispatchers.IO) }
     factory { SaveNewMedicationUseCase(get(), get()) }
     single<ImageEncoder> { AndroidImageEncoder(androidContext(), Dispatchers.IO) }
@@ -95,6 +109,7 @@ val appModule = module {
     viewModel { ConfirmViewModel(get(), get(), get()) }
     viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { ActivityViewModel(get(), get(), get()) }
+    viewModel { ChatViewModel(get(), get(), get(), get(), TimeZone.currentSystemDefault()) }
     viewModel { (medicationId: MedicationId) ->
         DetailViewModel(
             computeDetailState = get(),

@@ -36,6 +36,8 @@ dependencies {
     api(libs.androidx.compose.material3)
     api(libs.kotlinx.datetime)
     implementation(libs.androidx.compose.material.icons.core)
+    // Camera/assistant glyphs; R8 strips the unused rest in release builds.
+    implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.ui.tooling.preview)
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)

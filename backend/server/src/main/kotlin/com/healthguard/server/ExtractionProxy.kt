@@ -11,7 +11,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.post
@@ -204,14 +203,3 @@ fun Application.extractionProxy(upstream: HttpClient, apiKey: String, modelId: S
         }
     }
 }
-
-/**
- * The proxy's only error shape: a fixed short reason, never an upstream body —
- * provider error text could leak details the client has no business seeing.
- */
-private suspend fun ApplicationCall.respondError(status: HttpStatusCode, reason: String) =
-    respondText(
-        buildJsonObject { put("error", reason) }.toString(),
-        ContentType.Application.Json,
-        status,
-    )

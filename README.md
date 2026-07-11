@@ -6,6 +6,10 @@ Android medication tracker with AI label scanning.
   ingredients and frequency into a dosing schedule
 - One-tap dose logging with undo and a double-dose guard
 - GitHub-style activity heat map and schedule-based adherence analytics
+- Assistant-first design: the landing screen is an assistant hub — today's
+  status at a glance, scan entry, and adherence questions answered in plain
+  English ("What's my adherence rate?"). The app computes the numbers, the
+  model only phrases them. Home and Activity sit one tap away on the nav bar
 - Kotlin Multiplatform app + Ktor backend
 
 > **HealthGuard is an informational and reminder tool, not medical advice.**
@@ -13,22 +17,27 @@ Android medication tracker with AI label scanning.
 
 ## Demo
 
-Scan a label → confirm the extracted fields → take a dose → it lands in the
-record (2× speed; [full-quality video](docs/demo/scan-take-record.mp4)):
+Scan a label → confirm the extracted fields → take a dose → ask the
+assistant about it (2× speed; [full-quality video](docs/demo/scan-take-ask.mp4)):
 
-<img src="docs/demo/scan-take-record.gif" width="300">
+<img src="docs/demo/scan-take-ask.gif" width="300">
 
 ## Screenshots
+
+| Assistant | Ask a question |
+|---|---|
+| <img src="docs/screenshots/assistant-hub.png" width="380"> | <img src="docs/screenshots/assistant-chat.png" width="380"> |
+| The landing screen: today's status at a glance, scan entry, and starter questions. | Answers phrase the app's own adherence math — never invented numbers, never medical advice. |
 
 | Scan | Home |
 |---|---|
 | <img src="docs/screenshots/scan-review.png" width="380"> | <img src="docs/screenshots/home.png" width="380"> |
-| Extraction from a real ibuprofen box — the low-confidence "take with food" field is locked until reviewed. | Due alert only when a dose is due; week circles with an honest "5 of 6 days on track". |
+| Extraction from a real ibuprofen box — the low-confidence "take with food" field is locked until reviewed. | Due alert only when a dose is due; week circles with an honest "4 of 7 days on track"; scan lives on the camera action. |
 
 | Activity | Tap a day |
 |---|---|
-| <img src="docs/screenshots/activity-12-months.png" width="380"> | <img src="docs/screenshots/day-detail-sheet.png" width="380"> |
-| 12-month record, GitHub-style, plus each medicine's own adherence with the 80% clinical threshold marked. | Per-day breakdown — which medicines, what times, and what was expected but never recorded. |
+| <img src="docs/screenshots/activity-30-days.png" width="380"> | <img src="docs/screenshots/day-detail-sheet.png" width="380"> |
+| The 30-day record, GitHub-style, plus each medicine's own adherence with the 80% clinical threshold marked. | Per-day breakdown — which medicines, what times, and what was expected but never recorded. |
 
 | Medication detail | Dose history |
 |---|---|
@@ -147,8 +156,8 @@ Cross-cutting choices:
 | `app/` | Android presentation — feature packages with MVI ViewModels, mappers, and screens, plus the Koin composition root |
 | `core/ui/` | Shared presentation library — theme, reusable Compose components (heat maps, chips, dialogs), shared formatters, previews |
 | `core/domain/` | Pure Kotlin Multiplatform — entities, use cases, repository interface, dose scheduling and adherence maths |
-| `core/data/` | KMP data layer — SQLDelight repository implementation, vision-extraction client and parser |
-| `backend/server/` | Small Ktor server with one endpoint. It exists so the API key never ships inside the app |
+| `core/data/` | KMP data layer — SQLDelight repository implementation, vision-extraction and chat clients |
+| `backend/server/` | Small Ktor server with two endpoints (`/extract`, `/chat`). It exists so the API key never ships inside the app |
 
 ## How adherence is counted
 
@@ -181,6 +190,10 @@ Cross-cutting choices:
 - Health data stays on the device — no account, no cloud sync.
 - Photos go to the model provider for extraction and nowhere else; the
   backend never stores or logs them.
+- Chat works the same way: an adherence snapshot travels with each question
+  and is never stored or logged off-device. Conversations live in memory
+  only and vanish when the app process ends. The assistant reports your
+  data; it never gives medical advice.
 - Deleting a medication wipes its whole history.
 
 ## Prerequisites
@@ -215,6 +228,10 @@ dropdown after a project reload.)
 
 An environment variable still wins over `.env` if you prefer:
 `OPENROUTER_API_KEY=sk-or-v1-... ./gradlew :backend:server:run`
+
+Optional model overrides (env or `.env`): `MODEL_ID` for `/extract`
+(default `qwen/qwen2.5-vl-72b-instruct`), `CHAT_MODEL_ID` for `/chat`
+(default `qwen/qwen3-30b-a3b-instruct-2507`).
 
 **Stopping the server:**
 
