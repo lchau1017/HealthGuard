@@ -1,6 +1,7 @@
 package com.healthguard.common.ui
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Icon
@@ -10,10 +11,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
-/** The app's two top-level tabs. */
-enum class AppTab { HOME, ACTIVITY }
+/** The app's three top-level tabs. */
+enum class AppTab { HOME, ACTIVITY, CHAT }
 
-/** Bottom navigation shared by the tab screens: Home and Activity. */
+/** Bottom navigation shared by the tab screens: Home, Activity and Chat. */
 @Composable
 fun AppNavBar(
     selected: AppTab,
@@ -32,6 +33,12 @@ fun AppNavBar(
             onClick = { onSelect(AppTab.ACTIVITY) },
             icon = { Icon(Icons.Filled.DateRange, contentDescription = null) },
             label = { Text("Activity") },
+        )
+        NavigationBarItem(
+            selected = selected == AppTab.CHAT,
+            onClick = { onSelect(AppTab.CHAT) },
+            icon = { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null) },
+            label = { Text("Chat") },
         )
     }
 }

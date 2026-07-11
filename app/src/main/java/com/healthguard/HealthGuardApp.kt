@@ -18,6 +18,8 @@ import com.healthguard.activity.ActivityViewModel
 import com.healthguard.activity.ui.ActivityScreen
 import com.healthguard.common.ui.AppNavBar
 import com.healthguard.common.ui.AppTab
+import com.healthguard.chat.ChatViewModel
+import com.healthguard.chat.ui.ChatScreen
 import com.healthguard.confirm.ConfirmViewModel
 import com.healthguard.confirm.state.ConfirmIntent
 import com.healthguard.confirm.ui.ConfirmFlowHost
@@ -33,9 +35,9 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 /**
- * Tab shell driven by plain saveable state: two bottom-bar tabs (Home and
- * Activity) with the medication detail page pushed above whichever tab is
- * current when [detailMedicationId] is set — so rotation and process death
+ * Tab shell driven by plain saveable state: three bottom-bar tabs (Home,
+ * Activity and Chat) with the medication detail page pushed above whichever
+ * tab is current when [detailMedicationId] is set — so rotation and process death
  * keep the open screen, and backing out of the detail returns to the
  * previous tab. The import/confirm flow floats above whichever screen is
  * showing via [ConfirmFlowHost].
@@ -109,6 +111,16 @@ fun HealthGuardApp(modifier: Modifier = Modifier) {
                 modifier = modifier,
             )
         }
+    } else if (selectedTab == AppTab.CHAT) {
+        val chatViewModel: ChatViewModel = koinViewModel()
+        val chatState by chatViewModel.state.collectAsStateWithLifecycle()
+        BackHandler { selectedTab = AppTab.HOME }
+        ChatScreen(
+            state = chatState,
+            onIntent = chatViewModel::onIntent,
+            bottomBar = { AppNavBar(selected = selectedTab, onSelect = { selectedTab = it }) },
+            modifier = modifier,
+        )
     } else if (selectedTab == AppTab.ACTIVITY) {
         val activityViewModel: ActivityViewModel = koinViewModel()
         val activityState by activityViewModel.state.collectAsStateWithLifecycle()
